@@ -1,19 +1,6 @@
-{
-  "name": "genius-crm",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.0.0",
-    "vite": "^4.4.0"
-  }
-}
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+})
