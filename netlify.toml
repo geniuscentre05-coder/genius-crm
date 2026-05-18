@@ -1,8 +1,6 @@
 [build]
-  base = "genius-crm-deploy"
   command = "npm run build"
-  publish = "genius-crm-deploy/dist"
-  functions = "genius-crm-deploy/netlify/functions"
+  publish = "dist"
 
 [[redirects]]
   from = "/*"
