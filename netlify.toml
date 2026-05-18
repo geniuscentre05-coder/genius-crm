@@ -1,4 +1,10 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-ReactDOM.createRoot(document.getElementById('root')).render(<App />)
+[build]
+  base = "genius-crm-deploy"
+  command = "npm run build"
+  publish = "genius-crm-deploy/dist"
+  functions = "genius-crm-deploy/netlify/functions"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
