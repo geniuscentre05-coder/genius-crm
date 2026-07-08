@@ -1,0 +1,95 @@
+import React, { useEffect, useMemo, useState } from 'react'
+import { createRoot } from 'react-dom/client'
+import { Search, Plus, Trash2, Users, CalendarDays, GraduationCap, WalletCards, FileText } from 'lucide-react'
+import { supabase } from './supabase'
+import './style.css'
+
+const tabs = [
+  { id: 'dashboard', name: 'Главная', icon: Users },
+  { id: 'students', name: 'Ученики', icon: GraduationCap },
+  { id: 'teachers', name: 'Педагоги', icon: Users },
+  { id: 'schedule', name: 'Расписание', icon: CalendarDays },
+  { id: 'payments', name: 'Оплаты', icon: WalletCards },
+  { id: 'docs', name: 'Документы', icon: FileText }
+]
+
+function App() {
+  const [activeTab, setActiveTab] = useState('students')
+  const [students, setStudents] = useState([])
+  const [teachers, setTeachers] = useState([])
+  const [subjects, setSubjects] = useState([])
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [form, setForm] = useState({ full_name: '', birth_date: '', school: '', class_name: '', address: '', source: '', notes: '' })
+  const [teacherForm, setTeacherForm] = useState({ full_name: '', phone: '', subject_main: '', notes: '' })
+
+  async function loadData() {
+    setLoading(true)
+    const [studentsRes, teachersRes, subjectsRes] = await Promise.all([
+      supabase.from('students').select('*').order('created_at', { ascending: false }),
+      supabase.from('teachers').select('*').order('created_at', { ascending: false }),
+      supabase.from('subjects').select('*').order('name', { ascending: true })
+    ])
+    if (studentsRes.error) setMessage('Ошибка загрузки учеников: ' + studentsRes.error.message)
+    else setStudents(studentsRes.data || [])
+    if (!teachersRes.error) setTeachers(teachersRes.data || [])
+    if (!subjectsRes.error) setSubjects(subjectsRes.data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { loadData() }, [])
+
+  const filteredStudents = useMemo(() => {
+    const q = query.toLowerCase().trim()
+    if (!q) return students
+    return students.filter(s => [s.full_name, s.school, s.class_name, s.address, s.source, s.notes].filter(Boolean).join(' ').toLowerCase().includes(q))
+  }, [students, query])
+
+  async function addStudent(e) {
+    e.preventDefault()
+    if (!form.full_name.trim()) return setMessage('Введите ФИО ученика')
+    const payload = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v || null]))
+    const { error } = await supabase.from('students').insert(payload)
+    if (error) setMessage('Ошибка: ' + error.message)
+    else { setForm({ full_name: '', birth_date: '', school: '', class_name: '', address: '', source: '', notes: '' }); setMessage('Ученик добавлен'); loadData() }
+  }
+
+  async function deleteStudent(id) {
+    if (!confirm('Удалить ученика?')) return
+    const { error } = await supabase.from('students').delete().eq('id', id)
+    if (error) setMessage('Ошибка удаления: ' + error.message)
+    else { setMessage('Ученик удалён'); loadData() }
+  }
+
+  async function addTeacher(e) {
+    e.preventDefault()
+    if (!teacherForm.full_name.trim()) return setMessage('Введите ФИО педагога')
+    const payload = Object.fromEntries(Object.entries(teacherForm).map(([k, v]) => [k, v || null]))
+    const { error } = await supabase.from('teachers').insert(payload)
+    if (error) setMessage('Ошибка: ' + error.message)
+    else { setTeacherForm({ full_name: '', phone: '', subject_main: '', notes: '' }); setMessage('Педагог добавлен'); loadData() }
+  }
+
+  return <div className="app">
+    <aside className="sidebar"><div className="brand">Genius CRM <span>2.0</span></div>{tabs.map(t => { const Icon=t.icon; return <button key={t.id} className={activeTab===t.id?'active':''} onClick={()=>setActiveTab(t.id)}><Icon size={18}/>{t.name}</button> })}</aside>
+    <main className="main">
+      <header><div><h1>{tabs.find(t=>t.id===activeTab)?.name}</h1><p>CRM для репетиторского центра: ученики, расписание, оплаты, документы и ИИ.</p></div><button className="reload" onClick={loadData}>Обновить</button></header>
+      {message && <div className="message">{message}</div>}
+      {loading && <div className="message">Загрузка...</div>}
+      {activeTab === 'dashboard' && <Dashboard students={students} teachers={teachers} subjects={subjects}/>} 
+      {activeTab === 'students' && <Students form={form} setForm={setForm} addStudent={addStudent} query={query} setQuery={setQuery} students={filteredStudents} deleteStudent={deleteStudent}/>} 
+      {activeTab === 'teachers' && <Teachers teacherForm={teacherForm} setTeacherForm={setTeacherForm} addTeacher={addTeacher} teachers={teachers}/>} 
+      {activeTab === 'schedule' && <Placeholder title="Расписание" text="Следующая версия: календарь занятий, добавление/удаление учеников прямо в расписании, номера родителей и печать расписания."/>}
+      {activeTab === 'payments' && <Placeholder title="Оплаты" text="Следующая версия: абонементы, остаток занятий, долги, история платежей."/>}
+      {activeTab === 'docs' && <Placeholder title="Документы" text="Следующая версия: загрузка договора с родителем в Supabase Storage student_documents."/>}
+    </main>
+  </div>
+}
+
+function Dashboard({students, teachers, subjects}) { return <div className="grid"><div className="card stat"><b>{students.length}</b><span>учеников</span></div><div className="card stat"><b>{teachers.length}</b><span>педагогов</span></div><div className="card stat"><b>{subjects.length}</b><span>предметов</span></div></div> }
+function Students({form,setForm,addStudent,query,setQuery,students,deleteStudent}) { return <><section className="card"><h2>Добавить ученика</h2><form className="form" onSubmit={addStudent}><input placeholder="ФИО ученика *" value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/><input type="date" value={form.birth_date} onChange={e=>setForm({...form,birth_date:e.target.value})}/><input placeholder="Школа" value={form.school} onChange={e=>setForm({...form,school:e.target.value})}/><input placeholder="Класс" value={form.class_name} onChange={e=>setForm({...form,class_name:e.target.value})}/><input placeholder="Адрес" value={form.address} onChange={e=>setForm({...form,address:e.target.value})}/><input placeholder="Источник заявки" value={form.source} onChange={e=>setForm({...form,source:e.target.value})}/><textarea placeholder="Комментарий" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/><button><Plus size={18}/>Добавить</button></form></section><section className="card"><div className="search"><Search size={18}/><input placeholder="Поиск ученика, школы, адреса..." value={query} onChange={e=>setQuery(e.target.value)}/></div><div className="list">{students.map(s=><div className="row" key={s.id}><div><b>{s.full_name}</b><span>{[s.class_name, s.school, s.address].filter(Boolean).join(' · ') || 'нет данных'}</span></div><button className="danger" onClick={()=>deleteStudent(s.id)}><Trash2 size={16}/></button></div>)}</div></section></>}
+function Teachers({teacherForm,setTeacherForm,addTeacher,teachers}) { return <><section className="card"><h2>Добавить педагога</h2><form className="form" onSubmit={addTeacher}><input placeholder="ФИО педагога *" value={teacherForm.full_name} onChange={e=>setTeacherForm({...teacherForm,full_name:e.target.value})}/><input placeholder="Телефон" value={teacherForm.phone} onChange={e=>setTeacherForm({...teacherForm,phone:e.target.value})}/><input placeholder="Основной предмет" value={teacherForm.subject_main} onChange={e=>setTeacherForm({...teacherForm,subject_main:e.target.value})}/><textarea placeholder="Комментарий" value={teacherForm.notes} onChange={e=>setTeacherForm({...teacherForm,notes:e.target.value})}/><button><Plus size={18}/>Добавить</button></form></section><section className="card"><div className="list">{teachers.map(t=><div className="row" key={t.id}><div><b>{t.full_name}</b><span>{[t.phone, t.subject_main].filter(Boolean).join(' · ') || 'нет данных'}</span></div></div>)}</div></section></>}
+function Placeholder({title,text}) { return <section className="card placeholder"><h2>{title}</h2><p>{text}</p></section> }
+
+createRoot(document.getElementById('root')).render(<App />)

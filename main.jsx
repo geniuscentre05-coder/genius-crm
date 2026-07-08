@@ -1,1 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#1da0d4"/><text x="50" y="65" font-size="50" text-anchor="middle" fill="white" font-family="Arial">Г</text></svg>
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  console.warn('Supabase env variables are missing')
+}
+
+export const supabase = createClient(supabaseUrl || '', supabaseKey || '')
