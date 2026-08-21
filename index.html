@@ -4,12 +4,13 @@ html
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Genius CRM</title>
+    <title>GENIUS CRM</title>
     <style>
       body {
         margin: 0;
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: Arial, sans-serif;
         background-color: #f4f6f9;
+        color: #333;
       }
       header {
         background-color: #a1a4b4;
@@ -18,15 +19,46 @@ html
         display: flex;
         justify-content: space-between;
         align-items: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       }
-      header h1 { margin: 0; }
-      .main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+      header h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .main {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        padding: 20px;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
       .card {
         background-color: white;
+        border-radius: 12px;
         padding: 20px;
-        border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         margin-bottom: 20px;
+      }
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .student-card {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        border: 1px solid #dee2ef;
+        margin-bottom: 10px;
+      }
+      .status {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        color: white;
+        background-color: #28a745;
       }
       .button {
         background-color: #5a6b23;
@@ -35,6 +67,70 @@ html
         padding: 8px 16px;
         border-radius: 6px;
         cursor: pointer;
+        font-size: 14px;
+      }
+      .button-gray {
+        background-color: #6c757d;
+      }
+      .input {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      .ai-assistant {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 400px;
+        max-height: 500px;
+        background-color: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        display: flex;
+        flex-direction: column;
+        z-index: 1000;
+      }
+      .ai-header {
+        padding: 15px;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .ai-chat {
+        display: flex;
+        flex-direction: column;
+        height: 300px;
+      }
+      .ai-messages {
+        flex: 1;
+        padding: 15px;
+        overflow-y: auto;
+        background-color: #f8f9fa;
+      }
+      .ai-message {
+        background-color: white;
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+      .ai-input {
+        padding: 15px;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        gap: 10px;
+      }
+      .ai-input input {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
       }
     </style>
   </head>
@@ -43,16 +139,58 @@ html
       <h1>GENIUS CRM</h1>
       <span>Синхронизировано</span>
     </header>
+
     <main class="main">
       <div class="card">
-        <h2>Студенты</h2>
-        <p>Иван Петров - Активен</p>
+        <div class="card-header">
+          <h2>Студенты</h2>
+          <button class="button">+ Добавить</button>
+        </div>
+        <div class="student-card">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>Иван Петров</strong>
+            <span class="status">Активен</span>
+          </div>
+          <p style="margin: 5px 0; font-size: 14px; color: #666;">Email: ivan@example.com</p>
+          <p style="margin: 5px 0; font-size: 14px; color: #666;">Телефон: +7 (999) 123-45-67</p>
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button class="button" style="font-size: 12px;">Редактировать</button>
+            <button class="button button-gray" style="font-size: 12px;">Удалить</button>
+          </div>
+        </div>
       </div>
+
       <div class="card">
         <h2>Редактирование студента</h2>
-        <input placeholder="Имя" style="width:100%; margin-bottom:10px; padding:10px;" />
-        <button class="button">Сохранить</button>
+        <input class="input" type="text" placeholder="Имя" />
+        <input class="input" type="email" placeholder="Email" />
+        <input class="input" type="tel" placeholder="Телефон" />
+        <select class="input">
+          <option value="active">Активен</option>
+          <option value="inactive">Неактивен</option>
+        </select>
+        <textarea class="input" placeholder="Заметки" rows="4"></textarea>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+          <button class="button">Сохранить</button>
+          <button class="button button-gray">Отмена</button>
+        </div>
       </div>
     </main>
+
+    <div class="ai-assistant">
+      <div class="ai-header">
+        <h3 style="margin: 0;">ИИ-ассистент</h3>
+        <button style="background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+      </div>
+      <div class="ai-chat">
+        <div class="ai-messages">
+          <div class="ai-message">Здравствуйте! Чем я могу помочь?</div>
+        </div>
+        <div class="ai-input">
+          <input type="text" placeholder="Введите сообщение..." />
+          <button class="button">Отправить</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
