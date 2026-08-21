@@ -1,4 +1,3 @@
-
 html
 <!DOCTYPE html>
 <html lang="ru">
@@ -6,9 +5,54 @@ html
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Genius CRM</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background-color: #f4f6f9;
+      }
+      header {
+        background-color: #a1a4b4;
+        color: white;
+        padding: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      header h1 { margin: 0; }
+      .main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+      .card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+      }
+      .button {
+        background-color: #5a6b23;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/main.jsx"></script>
+    <header>
+      <h1>GENIUS CRM</h1>
+      <span>Синхронизировано</span>
+    </header>
+    <main class="main">
+      <div class="card">
+        <h2>Студенты</h2>
+        <p>Иван Петров - Активен</p>
+      </div>
+      <div class="card">
+        <h2>Редактирование студента</h2>
+        <input placeholder="Имя" style="width:100%; margin-bottom:10px; padding:10px;" />
+        <button class="button">Сохранить</button>
+      </div>
+    </main>
   </body>
 </html>
