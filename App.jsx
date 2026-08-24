@@ -1,522 +1,2859 @@
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from './supabaseClient';
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "./supabaseClient";
 
-// ---------- Облачное хранение данных (Supabase) ----------
-const RECORD_ID = 'educrmData_v1';
-const LOCAL_CACHE_KEY = 'educrmData_v1_cache';
-const SAVE_DEBOUNCE_MS = 800;
+// ─── CLOUD + LOCAL STORAGE HELPERS ───────────────────────────────────────────
+const LS_KEY = "educrmData_v1";
+const CLOUD_ID = "educrmData_v1";
+function saveToLS(data) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e) {}
+}
+function loadFromLS() {
+  try { const d = localStorage.getItem(LS_KEY); return d ? JSON.parse(d) : null; } catch(e) { return null; }
+}
 
-const DEFAULT_DATA = { students: [] };
+// ─── PRINT HELPERS ───────────────────────────────────────────────────────────
+function printSchedule(lessons, tutors, students, weekLabel) {
+  const rows = lessons.sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:a.time>b.time?1:-1).map(l => {
+    const t = tutors.find(x=>x.id===l.tutorId);
+    return `<tr><td>${l.date}</td><td>${l.time||"—"}</td><td>${l.studentName}</td><td>${l.subject}</td><td>${t?.short||"—"}</td><td>${l.duration} мин</td><td>${l.price}₽</td><td>${l.status==="completed"?"✓ Проведено":l.status==="cancelled"?"✗ Отменено":"Запланировано"}</td></tr>`;
+  }).join("");
+  const w = window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Расписание</title><style>
+    body{font-family:Arial,sans-serif;padding:20px;color:#111}
+    h1{font-size:20px;margin-bottom:4px}
+    p{color:#555;margin:0 0 16px;font-size:13px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{background:#f3f4f6;padding:8px 10px;text-align:left;border-bottom:2px solid #e5e7eb;font-weight:600}
+    td{padding:7px 10px;border-bottom:1px solid #e5e7eb}
+    tr:nth-child(even){background:#fafafa}
+    @media print{button{display:none}}
+  </style></head><body>
+    <h1>📅 Расписание занятий</h1>
+    <p>${weekLabel} · Всего занятий: ${lessons.length}</p>
+    <button onclick="window.print()" style="margin-bottom:16px;padding:8px 20px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">🖨️ Распечатать</button>
+    <table><thead><tr><th>Дата</th><th>Время</th><th>Ученик</th><th>Предмет</th><th>Преподаватель</th><th>Длит.</th><th>Цена</th><th>Статус</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+  </body></html>`);
+  w.document.close();
+}
 
-function useCloudData(defaultData) {
-  const [data, setData] = useState(() => {
-    const cached = localStorage.getItem(LOCAL_CACHE_KEY);
-    return cached ? JSON.parse(cached) : defaultData;
-  });
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+function printReceipt(student, payment) {
+  const w = window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Квитанция</title><style>
+    body{font-family:Arial,sans-serif;padding:40px;max-width:500px;margin:0 auto;color:#111}
+    .logo{font-size:22px;font-weight:bold;color:#6366f1;margin-bottom:4px}
+    .subtitle{color:#888;font-size:13px;margin-bottom:30px}
+    h2{font-size:18px;border-bottom:2px solid #e5e7eb;padding-bottom:10px;margin-bottom:20px}
+    .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:14px}
+    .label{color:#666}.value{font-weight:600}
+    .total{display:flex;justify-content:space-between;padding:14px 0;font-size:18px;font-weight:bold;color:#6366f1;border-top:2px solid #6366f1;margin-top:8px}
+    .footer{margin-top:30px;font-size:11px;color:#aaa;text-align:center}
+    @media print{button{display:none}}
+  </style></head><body>
+    <div class="logo">EduCRM</div>
+    <div class="subtitle">Репетиторский центр</div>
+    <h2>Квитанция об оплате</h2>
+    <div class="row"><span class="label">Дата</span><span class="value">${payment.date}</span></div>
+    <div class="row"><span class="label">Ученик</span><span class="value">${student?.name||payment.studentName}</span></div>
+    ${student?.parentName?`<div class="row"><span class="label">Родитель</span><span class="value">${student.parentName}</span></div>`:""}
+    ${student?.school?`<div class="row"><span class="label">Школа</span><span class="value">${student.school}</span></div>`:""}
+    <div class="row"><span class="label">Способ оплаты</span><span class="value">${payment.method==="card"?"Банковская карта":payment.method==="cash"?"Наличные":"Перевод"}</span></div>
+    ${payment.comment?`<div class="row"><span class="label">Комментарий</span><span class="value">${payment.comment}</span></div>`:""}
+    <div class="total"><span>Итого</span><span>${payment.amount.toLocaleString("ru")} ₽</span></div>
+    <button onclick="window.print()" style="margin-top:20px;width:100%;padding:10px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">🖨️ Распечатать</button>
+    <div class="footer">Квитанция сформирована автоматически · EduCRM</div>
+  </body></html>`);
+  w.document.close();
+}
 
-  const saveTimeout = useRef(null);
+// ─── EXCEL IMPORT PARSER ─────────────────────────────────────────────────────
+function parseExcelStudents(rows) {
+  if (!rows || rows.length < 2) return [];
+  const header = rows[0].map(h => String(h||"").toLowerCase().trim());
+  const find = (...keys) => keys.map(k=>header.findIndex(h=>h.includes(k))).find(i=>i>=0) ?? -1;
+  const iName    = find("имя","фио","ученик","name");
+  const iPhone   = find("телефон","phone","тел");
+  const iParent  = find("родитель","parent","мама","папа");
+  const iSchool  = find("школ","лицей","гимназия");
+  const iSubject = find("предмет","subject");
+  const iStatus  = find("статус","status");
+  const iAge     = find("возраст","age","лет");
+  const iAddress = find("адрес","address");
+  const iBalance = find("баланс","balance","оплат");
+  const result = [];
+  for (let i=1; i<rows.length; i++) {
+    const r = rows[i];
+    const name = iName>=0 ? String(r[iName]||"").trim() : "";
+    if (!name) continue;
+    const subjects = iSubject>=0 ? String(r[iSubject]||"").split(/[,;\/]/).map(s=>s.trim()).filter(Boolean) : [];
+    result.push({
+      id: Date.now()+i,
+      name,
+      phone:       iPhone>=0   ? String(r[iPhone]||"").trim()   : "",
+      parentName:  iParent>=0  ? String(r[iParent]||"").trim()  : "",
+      school:      iSchool>=0  ? String(r[iSchool]||"").trim()  : "",
+      subjects,
+      status:      iStatus>=0  ? String(r[iStatus]||"trial").toLowerCase().trim() : "trial",
+      age:         iAge>=0     ? Number(r[iAge])||0 : 0,
+      address:     iAddress>=0 ? String(r[iAddress]||"").trim() : "",
+      balance:     iBalance>=0 ? Number(r[iBalance])||0 : 0,
+      totalLessons: 0,
+    });
+  }
+  return result;
+}
+
+const initialTutors = [
+  { id: 1, name: "Иванова Наталья Владимировна",  short: "Иванова Н.В.",   phone: "+7 905 111-11-11", subjects: ["Математика", "Физика"],          rateType: "percent", rateValue: 50, status: "active", color: "#6366f1" },
+  { id: 2, name: "Сидорова Елена Андреевна",      short: "Сидорова Е.А.", phone: "+7 916 222-22-22", subjects: ["Русский язык", "Литература"],     rateType: "fixed",   rateValue: 500,status: "active", color: "#ec4899" },
+  { id: 3, name: "Петров Константин Михайлович",  short: "Петров К.М.",   phone: "+7 926 333-33-33", subjects: ["Английский язык"],                rateType: "percent", rateValue: 55, status: "active", color: "#22c55e" },
+  { id: 4, name: "Орлов Дмитрий Сергеевич",       short: "Орлов Д.С.",    phone: "+7 903 444-44-44", subjects: ["Физика", "Химия"],                rateType: "fixed",   rateValue: 600,status: "active", color: "#f59e0b" },
+  { id: 5, name: "Кузнецова Людмила Борисовна",   short: "Кузнецова Л.Б.",phone: "+7 915 555-55-55", subjects: ["Биология", "Химия"],              rateType: "percent", rateValue: 45, status: "active", color: "#06b6d4" },
+];
+
+const initialStudents = [
+  { id: 1, name: "Анна Петрова",   age: 14, phone: "+7 905 123-45-67", parentName: "Петрова Мария Ивановна",          subjects: ["Математика","Физика"],   status: "active", balance: 2400, totalLessons: 12, address: "ул. Ленина, д. 12, кв. 34", school: "Школа №15" },
+  { id: 2, name: "Дмитрий Козлов", age: 11, phone: "+7 916 234-56-78", parentName: "Козлов Игорь Петрович",           subjects: ["Русский язык"],          status: "active", balance: 0,    totalLessons: 8,  address: "пр. Мира, д. 5, кв. 78",   school: "Школа №3"  },
+  { id: 3, name: "Елена Смирнова", age: 16, phone: "+7 926 345-67-89", parentName: "Смирнова Ольга Андреевна",        subjects: ["Английский язык"],       status: "trial",  balance: 1200, totalLessons: 2,  address: "ул. Садовая, д. 7, кв. 2",  school: "Гимназия №1" },
+  { id: 4, name: "Иван Новиков",   age: 13, phone: "+7 903 456-78-90", parentName: "Новиков Александр Вячеславович", subjects: ["Математика"],             status: "paused", balance: -600, totalLessons: 20, address: "",                           school: "Школа №22" },
+  { id: 5, name: "Мария Белова",   age: 15, phone: "+7 912 567-89-01", parentName: "Белова Светлана Николаевна",      subjects: ["Физика","Химия"],         status: "active", balance: 3600, totalLessons: 9,  address: "ул. Пушкина, д. 18, кв. 9", school: "Лицей №7"  },
+];
+
+const initialLessons = [
+  { id: 1, studentId: 1, studentName: "Анна Петрова",   subject: "Математика",      tutorId: 1, tutorShort: "Иванова Н.В.",   date: "2026-03-10", time: "15:00", duration: 60, price: 1200, status: "scheduled" },
+  { id: 2, studentId: 2, studentName: "Дмитрий Козлов", subject: "Русский язык",    tutorId: 2, tutorShort: "Сидорова Е.А.",  date: "2026-03-11", time: "14:00", duration: 60, price: 1000, status: "scheduled" },
+  { id: 3, studentId: 3, studentName: "Елена Смирнова", subject: "Английский язык", tutorId: 3, tutorShort: "Петров К.М.",    date: "2026-03-12", time: "16:30", duration: 90, price: 1500, status: "scheduled" },
+  { id: 4, studentId: 1, studentName: "Анна Петрова",   subject: "Физика",          tutorId: 4, tutorShort: "Орлов Д.С.",     date: "2026-03-07", time: "15:00", duration: 60, price: 1200, status: "completed" },
+  { id: 5, studentId: 2, studentName: "Дмитрий Козлов", subject: "Русский язык",    tutorId: 2, tutorShort: "Сидорова Е.А.",  date: "2026-03-05", time: "14:00", duration: 60, price: 1000, status: "completed" },
+  { id: 6, studentId: 5, studentName: "Мария Белова",   subject: "Физика",          tutorId: 4, tutorShort: "Орлов Д.С.",     date: "2026-03-08", time: "16:00", duration: 60, price: 1200, status: "completed" },
+  { id: 7, studentId: 5, studentName: "Мария Белова",   subject: "Химия",           tutorId: 5, tutorShort: "Кузнецова Л.Б.", date: "2026-03-09", time: "11:00", duration: 60, price: 1100, status: "completed" },
+  { id: 8, studentId: 4, studentName: "Иван Новиков",   subject: "Математика",      tutorId: 1, tutorShort: "Иванова Н.В.",   date: "2026-03-01", time: "13:00", duration: 60, price: 1200, status: "completed" },
+];
+
+const initialPayments = [
+  { id: 1, studentId: 1, studentName: "Анна Петрова",   amount: 4800, date: "2026-03-01", method: "card",     comment: "Абонемент 4 занятия" },
+  { id: 2, studentId: 2, studentName: "Дмитрий Козлов", amount: 2000, date: "2026-03-03", method: "cash",     comment: "2 занятия" },
+  { id: 3, studentId: 3, studentName: "Елена Смирнова", amount: 1500, date: "2026-03-08", method: "transfer", comment: "Пробное занятие" },
+  { id: 4, studentId: 5, studentName: "Мария Белова",   amount: 3600, date: "2026-03-06", method: "card",     comment: "Абонемент" },
+];
+
+const initialSalaryPayouts = [
+  { id: 1, tutorId: 1, amount: 3600, date: "2026-03-01", comment: "Аванс за февраль", month: "2026-02" },
+  { id: 2, tutorId: 2, amount: 2000, date: "2026-03-05", comment: "Зарплата февраль",  month: "2026-02" },
+];
+
+const courseCategories = [
+  { id:"prep",     label:"🎓 Подготовка к экзаменам", color:"#ef4444", courses:["Подготовка к ОГЭ","Подготовка к ЕГЭ (базовый)","Подготовка к ЕГЭ (профильный)","Подготовка к ВПР"] },
+  { id:"math",     label:"📐 Математика и IT",       color:"#6366f1", courses:["Математика","Базовая математика","Профильная математика","Геометрия","Информатика","Программирование"] },
+  { id:"sciences", label:"🔬 Естественные науки",     color:"#22c55e", courses:["Физика","Химия","Биология","География"] },
+  { id:"lang",     label:"🗣️ Языки и литература",     color:"#f59e0b", courses:["Русский язык","Английский язык","Арабский язык","Литература","Литературный клуб"] },
+  { id:"social",   label:"📚 Гуманитарные",           color:"#ec4899", courses:["История","Обществознание"] },
+  { id:"school",   label:"🏫 По классам",             color:"#8b5cf6", courses:["1 класс","2 класс","3 класс","4 класс","5 класс","6 класс","7 класс","8 класс","9 класс","10 класс","11 класс"] },
+  { id:"early",    label:"🌱 Дошкольное",             color:"#06b6d4", courses:["Дошкольная подготовка","Каллиграфия","Скорочтение"] },
+  { id:"special",  label:"🧠 Специалисты",            color:"#a855f7", courses:["Логопед","Психолог"] },
+  { id:"creative", label:"🎨 Творчество и клубы",     color:"#f97316", courses:["Живопись","Шахматы","Путешественники во времени","Онлайн занятия"] },
+];
+const allSubjects = courseCategories.flatMap(c => c.courses);
+const subjectColor = s => courseCategories.find(c=>c.courses.includes(s))?.color || "#6366f1";
+const subjectCategory = s => courseCategories.find(c=>c.courses.includes(s)) || {};
+const COLORS = ["#6366f1","#ec4899","#22c55e","#f59e0b","#06b6d4","#a855f7","#ef4444","#84cc16"];
+const initialPricing = [
+  { id:1, category:"📐 Математика и IT",          course:"Математика (базовая)",            price45:600,  price60:800,  price90:1100, price120:1450, groupPrice:400,  note:"" },
+  { id:2, category:"📐 Математика и IT",          course:"Профильная математика",           price45:700,  price60:900,  price90:1200, price120:1550, groupPrice:500,  note:"" },
+  { id:3, category:"📐 Математика и IT",          course:"Геометрия",                       price45:600,  price60:800,  price90:1100, price120:1450, groupPrice:400,  note:"" },
+  { id:4, category:"📐 Математика и IT",          course:"Информатика / Программирование",  price45:700,  price60:900,  price90:1200, price120:1550, groupPrice:500,  note:"" },
+  { id:5, category:"🔬 Естественные науки",       course:"Физика",                          price45:600,  price60:900,  price90:1200, price120:1550, groupPrice:450,  note:"" },
+  { id:6, category:"🔬 Естественные науки",       course:"Химия",                           price45:600,  price60:900,  price90:1200, price120:1550, groupPrice:450,  note:"" },
+  { id:7, category:"🔬 Естественные науки",       course:"Биология / География",            price45:600,  price60:800,  price90:1100, price120:1450, groupPrice:400,  note:"" },
+  { id:8, category:"🗣️ Языки",                    course:"Русский язык",                    price45:600,  price60:800,  price90:1100, price120:1450, groupPrice:400,  note:"" },
+  { id:9, category:"🗣️ Языки",                    course:"Английский язык",                 price45:700,  price60:1000, price90:1400, price120:1800, groupPrice:500,  note:"" },
+  { id:10,category:"🗣️ Языки",                   course:"Арабский язык",                   price45:700,  price60:1000, price90:1400, price120:1800, groupPrice:500,  note:"" },
+  { id:11,category:"📚 Гуманитарные",             course:"История / Обществознание",        price45:600,  price60:800,  price90:1100, price120:1450, groupPrice:400,  note:"" },
+  { id:12,category:"📚 Гуманитарные",             course:"Литература",                      price45:600,  price60:800,  price90:1100, price120:1450, groupPrice:400,  note:"" },
+  { id:13,category:"🎓 Подготовка к экзаменам",   course:"Подготовка к ОГЭ",               price45:700,  price60:1000, price90:1400, price120:1800, groupPrice:500,  note:"Интенсив в мае–июне +20%" },
+  { id:14,category:"🎓 Подготовка к экзаменам",   course:"Подготовка к ЕГЭ (базовый)",     price45:800,  price60:1100, price90:1500, price120:1950, groupPrice:600,  note:"Интенсив в мае–июне +20%" },
+  { id:15,category:"🎓 Подготовка к экзаменам",   course:"Подготовка к ЕГЭ (профильный)",  price45:900,  price60:1200, price90:1600, price120:2100, groupPrice:700,  note:"Интенсив в мае–июне +20%" },
+  { id:16,category:"🎓 Подготовка к экзаменам",   course:"Подготовка к ВПР",               price45:600,  price60:800,  price90:1100, price120:1450, groupPrice:400,  note:"" },
+  { id:17,category:"🌱 Дошкольное",               course:"Дошкольная подготовка",           price45:500,  price60:700,  price90:1000, price120:1300, groupPrice:350,  note:"" },
+  { id:18,category:"🌱 Дошкольное",               course:"Каллиграфия",                     price45:400,  price60:600,  price90:null, price120:null, groupPrice:300,  note:"" },
+  { id:19,category:"🌱 Дошкольное",               course:"Скорочтение",                     price45:500,  price60:700,  price90:null, price120:null, groupPrice:350,  note:"" },
+  { id:20,category:"🧠 Специалисты",              course:"Логопед",                         price45:800,  price60:1000, price90:null, price120:null, groupPrice:null, note:"Только индивидуально" },
+  { id:21,category:"🧠 Специалисты",              course:"Психолог",                        price45:null, price60:1200, price90:null, price120:null, groupPrice:null, note:"Только индивидуально" },
+  { id:22,category:"🎨 Творчество и клубы",       course:"Живопись",                        price45:500,  price60:700,  price90:null, price120:null, groupPrice:350,  note:"" },
+  { id:23,category:"🎨 Творчество и клубы",       course:"Шахматы",                         price45:400,  price60:600,  price90:null, price120:null, groupPrice:300,  note:"" },
+  { id:24,category:"🎨 Творчество и клубы",       course:"Путешественники во времени",      price45:null, price60:600,  price90:null, price120:null, groupPrice:350,  note:"Только групповые" },
+  { id:25,category:"🎨 Творчество и клубы",       course:"Онлайн занятия",                  price45:500,  price60:700,  price90:1000, price120:1300, groupPrice:400,  note:"-10% к очной цене" },
+];
+
+const initialRules = [
+  { id:1, section:"📋 Запись и пробное занятие", text:"Первое пробное занятие — бесплатно для новых учеников центра." },
+  { id:2, section:"📋 Запись и пробное занятие", text:"Запись на занятия осуществляется по телефону, WhatsApp или лично в центре." },
+  { id:3, section:"📋 Запись и пробное занятие", text:"При записи необходимо указать имя ребёнка, класс, предмет и удобное время." },
+  { id:4, section:"💳 Оплата", text:"Оплата производится авансом — за месяц или за 4 занятия." },
+  { id:5, section:"💳 Оплата", text:"Принимается оплата наличными, банковской картой и переводом на карту." },
+  { id:6, section:"💳 Оплата", text:"При оплате 8 и более занятий вперёд — скидка 5%." },
+  { id:7, section:"💳 Оплата", text:"Абонемент действителен 1 месяц с момента первого занятия." },
+  { id:8, section:"❌ Отмена и перенос", text:"Отмена занятия принимается не позднее чем за 3 часа до начала." },
+  { id:9, section:"❌ Отмена и перенос", text:"При отмене менее чем за 3 часа — занятие считается проведённым и не возвращается." },
+  { id:10,section:"❌ Отмена и перенос", text:"Перенос занятия возможен 1 раз в месяц по уважительной причине." },
+  { id:11,section:"❌ Отмена и перенос", text:"Занятия, пропущенные без предупреждения, не переносятся и не возвращаются." },
+  { id:12,section:"📐 Порядок проведения занятий", text:"Ученик должен приходить на занятие с тетрадью, учебником и необходимыми принадлежностями." },
+  { id:13,section:"📐 Порядок проведения занятий", text:"Опоздание ученика более чем на 15 минут не компенсируется дополнительным временем." },
+  { id:14,section:"📐 Порядок проведения занятий", text:"Домашние задания, заданные преподавателем, обязательны для выполнения." },
+  { id:15,section:"👨‍👩‍👧 Для родителей", text:"Родители получают информацию об успеваемости ребёнка по запросу или раз в месяц." },
+  { id:16,section:"👨‍👩‍👧 Для родителей", text:"Вопросы по расписанию и оплате решаются с администратором центра." },
+  { id:17,section:"👨‍👩‍👧 Для родителей", text:"Центр не несёт ответственности за личные вещи учеников, оставленные в помещении." },
+];
+const initialRequests = [
+  { id:1, parentName:"Козлова Ирина",   phone:"+7 900 111-22-33", course:"Подготовка к ОГЭ",     studentName:"Козлов Артём",   age:15, comment:"Нужна подготовка к ОГЭ по математике, хотим с апреля", status:"new",       date:"2026-03-08", assignedTutorId:null },
+  { id:2, parentName:"Петров Андрей",   phone:"+7 900 222-33-44", course:"Английский язык",      studentName:"Петрова Алина",   age:9,  comment:"Дочь хочет учить английский, уровень нулевой",          status:"contacted", date:"2026-03-07", assignedTutorId:3 },
+  { id:3, parentName:"Смирнова Татьяна",phone:"+7 900 333-44-55", course:"Дошкольная подготовка",studentName:"Смирнов Миша",    age:6,  comment:"Готовимся к школе, интересует подготовительная группа",status:"trial",     date:"2026-03-06", assignedTutorId:null },
+  { id:4, parentName:"Алиев Руслан",    phone:"+7 900 444-55-66", course:"Шахматы",              studentName:"Алиева Зарина",   age:10, comment:"Ребёнок увлекается шахматами, хотим записать в секцию",status:"new",       date:"2026-03-09", assignedTutorId:null },
+  { id:5, parentName:"Захарова Мария",  phone:"+7 900 555-66-77", course:"Логопед",              studentName:"Захаров Никита",  age:7,  comment:"Проблемы с произношением, нужна консультация логопеда",status:"enrolled",  date:"2026-03-05", assignedTutorId:null },
+];
+
+const statusCfg = {
+  active:   { label:"Активен",   color:"#22c55e", bg:"rgba(34,197,94,0.12)"   },
+  trial:    { label:"Пробный",   color:"#f59e0b", bg:"rgba(245,158,11,0.12)"  },
+  paused:   { label:"Пауза",     color:"#94a3b8", bg:"rgba(148,163,184,0.12)" },
+  inactive: { label:"Неактивен", color:"#ef4444", bg:"rgba(239,68,68,0.12)"   },
+};
+const lsnCfg = {
+  scheduled:{ label:"Запланировано", color:"#6366f1" },
+  completed: { label:"Проведено",    color:"#22c55e" },
+  cancelled: { label:"Отменено",     color:"#ef4444" },
+  noshow:    { label:"Не явился",    color:"#f59e0b" },
+};
+const channelCfg = {
+  whatsapp:{ label:"WhatsApp", icon:"💬", color:"#25d366" },
+  sms:     { label:"SMS",      icon:"📱", color:"#6366f1" },
+  telegram:{ label:"Telegram", icon:"✈️", color:"#229ed9" },
+  email:   { label:"Email",    icon:"📧", color:"#f59e0b" },
+};
+const audLabels = { all:"Все ученики", active:"Активные", debtors:"Должники", zeroblance:"Нулевой баланс", trial:"На пробном", paused:"На паузе", inactive:"Неактивные", math:"Математика", english:"Английский язык" };
+const audIcons  = { all:"👥", active:"✅", debtors:"💸", zeroblance:"⚠️", trial:"🔍", paused:"⏸️", inactive:"❌", math:"📐", english:"🇬🇧" };
+
+function calcEarning(lesson, tutor) {
+  if (!tutor) return 0;
+  return tutor.rateType === "percent" ? Math.round(lesson.price * tutor.rateValue / 100) : tutor.rateValue;
+}
+
+function Av({ name, color, size = 36 }) {
+  const i = name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  return <div style={{ width:size, height:size, borderRadius:size*0.28, background:color||"#6366f1", display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*0.35, fontWeight:700, color:"white", flexShrink:0 }}>{i}</div>;
+}
+function Tag({ c, bg, children }) {
+  return <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, margin:2, color:c, background:bg }}>{children}</span>;
+}
+
+export default function App() {
+  // ── Load from localStorage or use defaults (instant local cache) ──
+  const saved = loadFromLS();
+  const [view, setView]         = useState("dashboard");
+  const [tutors, setTutors]     = useState(saved?.tutors     || initialTutors);
+  const [students, setStudents] = useState(saved?.students   || initialStudents);
+  const [lessons, setLessons]   = useState(saved?.lessons    || initialLessons);
+  const [payments, setPayments] = useState(saved?.payments   || initialPayments);
+  const [salaries, setSalaries] = useState(saved?.salaries   || initialSalaryPayouts);
+  const [mailings,  setMailings]  = useState(saved?.mailings  || [
+    { id:1, title:"Напоминание об оплате", channel:"whatsapp", audience:"debtors", status:"sent", sentAt:"2026-03-07", sentCount:1, text:"Здравствуйте, {{parentName}}! У {{studentName}} задолженность {{balance}}₽. Просим оплатить до конца недели." },
+    { id:2, title:"Поздравление 8 марта",  channel:"sms",      audience:"all",     status:"sent", sentAt:"2026-03-08", sentCount:5, text:"Дорогой {{studentName}} и {{parentName}}! Поздравляем с праздником! 🌸" },
+  ]);
+  const [requests,  setRequests]  = useState(saved?.requests  || initialRequests);
+  const [nRequest,  setNRequest]  = useState({ parentName:"", phone:"", studentName:"", age:"", course:"", comment:"", status:"new" });
+  const [pricing,    setPricing]    = useState(saved?.pricing   || initialPricing);
+  const [rules,      setRules]      = useState(saved?.rules     || initialRules);
+  const [editPricing,setEditPricing]= useState(null);
+  const [editRule,   setEditRule]   = useState(null);
+  const [pricingTab, setPricingTab] = useState("prices");
+  const [reqSearch, setReqSearch] = useState("");
+  const [reqFilter, setReqFilter] = useState("all");
+
+  const [selTutor,  setSelTutor]   = useState(null);
+  const [selStudent,setSelStudent] = useState(null);
+  const [modal,  setModal]  = useState(null);
+  const [notif,  setNotif]  = useState(null);
+  const [search, setSearch] = useState("");
+  const [fStatus,setFStatus]= useState("all");
+  const [tTab,   setTTab]   = useState("overview");
+  const [weekOffset,    setWeekOffset]    = useState(0);
+  const [schedView,     setSchedView]     = useState("week");
+  const [editLesson,    setEditLesson]    = useState(null);
+  const [schedTutorFilter, setSchedTutorFilter] = useState("all");
+  const [recurModal,    setRecurModal]    = useState(false);
+  const [recurCount,    setRecurCount]    = useState(4);
+  const [recurInterval, setRecurInterval] = useState(7);
+  const [saveIndicator, setSaveIndicator] = useState(false);
+  const [importModal,   setImportModal]   = useState(false);
+  const [importPreview, setImportPreview] = useState([]);
+  const [importMode,    setImportMode]    = useState("merge"); // merge | replace
+  const fileInputRef = useRef(null);
+
+  // ── Cloud sync state ──
+  const [cloudLoading, setCloudLoading] = useState(true);
+  const [cloudSyncing, setCloudSyncing] = useState(false);
   const isRemoteUpdate = useRef(false);
+  const cloudSaveTimeout = useRef(null);
 
+  // ── Helper: apply a full cloud snapshot to all local state pieces ──
+  function applyCloudSnapshot(data) {
+    if (!data) return;
+    isRemoteUpdate.current = true;
+    if (data.tutors) setTutors(data.tutors);
+    if (data.students) setStudents(data.students);
+    if (data.lessons) setLessons(data.lessons);
+    if (data.payments) setPayments(data.payments);
+    if (data.salaries) setSalaries(data.salaries);
+    if (data.mailings) setMailings(data.mailings);
+    if (data.requests) setRequests(data.requests);
+    if (data.pricing) setPricing(data.pricing);
+    if (data.rules) setRules(data.rules);
+    saveToLS(data);
+  }
+
+  // ── Initial load from Supabase (runs once on mount) ──
   useEffect(() => {
     let cancelled = false;
-
     async function loadInitial() {
-      const { data: row, error } = await supabase
-        .from('crm_state')
-        .select('data')
-        .eq('id', RECORD_ID)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      if (error) {
-        console.error('Supabase load error:', error);
-      } else if (row) {
-        isRemoteUpdate.current = true;
-        setData(row.data);
-        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(row.data));
-      } else {
-        await supabase.from('crm_state').upsert({
-          id: RECORD_ID,
-          data,
-          updated_at: new Date().toISOString(),
-        });
+      try {
+        const { data: row, error } = await supabase
+          .from("crm_state")
+          .select("data")
+          .eq("id", CLOUD_ID)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) {
+          console.error("Supabase load error:", error);
+        } else if (row?.data) {
+          applyCloudSnapshot(row.data);
+        } else {
+          // No cloud record yet — push current (local/demo) data as the first snapshot
+          await supabase.from("crm_state").upsert({
+            id: CLOUD_ID,
+            data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules },
+            updated_at: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.error("Supabase init error:", e);
       }
-      setLoading(false);
+      if (!cancelled) setCloudLoading(false);
     }
-
     loadInitial();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Realtime subscription: pick up changes made from other devices/browsers ──
   useEffect(() => {
     const channel = supabase
-      .channel('crm_state_changes')
+      .channel("crm_state_changes")
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'crm_state', filter: `id=eq.${RECORD_ID}` },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "crm_state", filter: `id=eq.${CLOUD_ID}` },
         (payload) => {
-          const incoming = payload.new?.data;
-          if (incoming) {
-            isRemoteUpdate.current = true;
-            setData(incoming);
-            localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(incoming));
-          }
+          if (payload.new?.data) applyCloudSnapshot(payload.new.data);
         }
       )
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // ── Auto-save to localStorage + Supabase (debounced) ──
   useEffect(() => {
+    saveToLS({ tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules });
+    setSaveIndicator(true);
+    const t = setTimeout(() => setSaveIndicator(false), 1500);
+
+    // Skip pushing to cloud if this render was triggered by an incoming remote update
     if (isRemoteUpdate.current) {
       isRemoteUpdate.current = false;
-      return;
+      return () => clearTimeout(t);
     }
-    if (loading) return;
+    if (cloudLoading) return () => clearTimeout(t);
 
-    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(data));
+    if (cloudSaveTimeout.current) clearTimeout(cloudSaveTimeout.current);
+    cloudSaveTimeout.current = setTimeout(async () => {
+      setCloudSyncing(true);
+      try {
+        const { error } = await supabase.from("crm_state").upsert({
+          id: CLOUD_ID,
+          data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules },
+          updated_at: new Date().toISOString(),
+        });
+        if (error) console.error("Supabase save error:", error);
+      } catch (e) {
+        console.error("Supabase save exception:", e);
+      }
+      setCloudSyncing(false);
+    }, 800);
 
-    if (saveTimeout.current) clearTimeout(saveTimeout.current);
-    saveTimeout.current = setTimeout(async () => {
-      setSyncing(true);
-      const { error } = await supabase.from('crm_state').upsert({
-        id: RECORD_ID,
-        data,
-        updated_at: new Date().toISOString(),
-      });
-      if (error) console.error('Supabase save error:', error);
-      setSyncing(false);
-    }, SAVE_DEBOUNCE_MS);
-
-    return () => clearTimeout(saveTimeout.current);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(cloudSaveTimeout.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules]);
 
-  return [data, setData, { loading, syncing }];
-}
+  const [nStudent,  setNStudent]  = useState({ name:"", age:"", phone:"", parentName:"", subjects:[], status:"trial", balance:0, address:"", school:"" });
+  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#6366f1" });
+  const [nLesson,   setNLesson]   = useState({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
+  const [lessonType,  setLessonType]  = useState("individual"); // individual | group
+  const [groupStudents, setGroupStudents] = useState([]); // [{studentId, price}]
+  const [groupName,   setGroupName]   = useState("");
+  const [nPayment,  setNPayment]  = useState({ studentId:"", amount:"", method:"card", comment:"" });
+  const [nSalary,   setNSalary]   = useState({ tutorId:"", amount:"", comment:"", month:"2026-03" });
+  const [mDraft,    setMDraft]    = useState({ title:"", channel:"whatsapp", audience:"all", text:"" });
+  const [mStep,     setMStep]     = useState(1);
 
-// ---------- Пустой шаблон анкеты студента ----------
-function emptyStudent() {
-  return {
-    id: crypto.randomUUID(),
-    status: 'active',
-    // Личные данные
-    fullName: '',
-    birthDate: '',
-    // Контакты
-    phone: '',
-    email: '',
-    parentName: '',
-    parentPhone: '',
-    // Педагоги и предметы
-    teacherSubjects: [{ teacher: '', subject: '' }],
-    // Финансы
-    tuitionAmount: '',
-    paymentStatus: 'unpaid',
-    notes: '',
-  };
-}
-
-function App() {
-  const [data, setData, { loading, syncing }] = useCloudData(DEFAULT_DATA);
-  const [editingStudent, setEditingStudent] = useState(null);
-  const [isNew, setIsNew] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
+  // ── AI assistant state ──
   const [aiMessages, setAiMessages] = useState([
-    { role: 'assistant', content: 'Здравствуйте! Чем я могу помочь?' },
+    { role: "assistant", content: "Здравствуйте! Я ИИ-помощник центра «ГЕНИЙ». Спросите меня об учениках, расписании, финансах или попросите помочь составить сообщение родителю." },
   ]);
-  const [aiInput, setAiInput] = useState('');
+  const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const aiMessagesEndRef = useRef(null);
 
-  const students = data.students || [];
+  useEffect(() => {
+    if (view === "ai") aiMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [aiMessages, view]);
 
-  const styles = {
-    header: { backgroundColor: '#a1a4b4', color: 'white', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
-    title: { margin: '0', fontSize: '24px', fontFamily: '"DM Serif Display", serif' },
-    headerControls: { display: 'flex', gap: '10px', alignItems: 'center' },
-    syncStatus: { fontSize: '14px', opacity: '0.9' },
-    aiButton: { backgroundColor: '#5a6b23', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '14px' },
-    mainContent: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', padding: '20px', maxWidth: '1400px', margin: '0 auto' },
-    studentList: { backgroundColor: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
-    listHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-    addButton: { backgroundColor: '#5c8d5c', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
-    studentCards: { display: 'flex', flexDirection: 'column', gap: '12px' },
-    studentCard: { backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '15px', border: '1px solid #dee2ef' },
-    cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
-    statusBadge: { padding: '4px 8px', borderRadius: '12px', fontSize: '12px', color: 'white' },
-    cardInfo: { fontSize: '14px', color: '#495057' },
-    cardActions: { display: 'flex', gap: '8px', marginTop: '8px' },
-    editButton: { backgroundColor: '#5a6b23', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' },
-    deleteButton: { backgroundColor: '#6c757d', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' },
-    editForm: { backgroundColor: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', maxHeight: '80vh', overflowY: 'auto' },
-    formSection: { marginBottom: '20px' },
-    sectionTitle: { fontSize: '15px', fontWeight: 'bold', color: '#1da0d4', marginBottom: '8px', marginTop: '0' },
-    input: { width: '100%', padding: '10px', marginBottom: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' },
-    select: { width: '100%', padding: '10px', marginBottom: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' },
-    textarea: { width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', minHeight: '80px', boxSizing: 'border-box' },
-    formButtons: { display: 'flex', gap: '10px', marginTop: '20px' },
-    saveButton: { backgroundColor: '#5c8d5c', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
-    cancelButton: { backgroundColor: '#6c757d', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
-    teacherRow: { display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' },
-    smallRemoveButton: { backgroundColor: '#f5a623', color: 'white', border: 'none', borderRadius: '4px', padding: '8px 10px', cursor: 'pointer', fontSize: '12px', flexShrink: 0 },
-    addRowButton: { backgroundColor: 'transparent', color: '#1da0d4', border: '1px dashed #1da0d4', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px', marginBottom: '10px' },
-    aiAssistant: { position: 'fixed', bottom: '20px', right: '20px', width: '400px', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', zIndex: '1000', maxHeight: '500px', display: 'flex', flexDirection: 'column' },
-    aiHeader: { padding: '15px', borderBottom: '1px solid #e9ecef', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    closeButton: { background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#6c757d' },
-    aiChat: { display: 'flex', flexDirection: 'column', height: '400px' },
-    aiMessages: { flex: 1, padding: '15px', overflowY: 'auto', backgroundColor: '#f8f9fa' },
-    aiMessage: { backgroundColor: 'white', padding: '10px', borderRadius: '8px', marginBottom: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
-    aiMessageUser: { backgroundColor: '#e7f5ff', padding: '10px', borderRadius: '8px', marginBottom: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', textAlign: 'right' },
-    aiInput: { padding: '15px', borderTop: '1px solid #e9ecef', display: 'flex', gap: '10px' },
-    aiInputField: { flex: 1, padding: '8px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px' },
-    aiSendButton: { backgroundColor: '#5a6b23', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' },
-    loading: { textAlign: 'center', padding: '40px', color: '#6c757d' },
-    emptyState: { textAlign: 'center', padding: '30px', color: '#6c757d', fontSize: '14px' },
-  };
-
-  // ---------- CRUD студентов ----------
-  function handleAddNew() {
-    setEditingStudent(emptyStudent());
-    setIsNew(true);
-  }
-
-  function handleEdit(student) {
-    setEditingStudent({ ...student, teacherSubjects: student.teacherSubjects?.length ? student.teacherSubjects : [{ teacher: '', subject: '' }] });
-    setIsNew(false);
-  }
-
-  function handleDelete(id) {
-    if (!window.confirm('Удалить этого студента?')) return;
-    setData((prev) => ({ ...prev, students: (prev.students || []).filter((s) => s.id !== id) }));
-    if (editingStudent?.id === id) setEditingStudent(null);
-  }
-
-  function handleSave() {
-    if (!editingStudent.fullName.trim()) {
-      alert('Укажите ФИО студента');
-      return;
-    }
-    setData((prev) => {
-      const list = prev.students || [];
-      const exists = list.some((s) => s.id === editingStudent.id);
-      return {
-        ...prev,
-        students: exists
-          ? list.map((s) => (s.id === editingStudent.id ? editingStudent : s))
-          : [...list, editingStudent],
-      };
-    });
-    setEditingStudent(null);
-  }
-
-  function handleCancel() {
-    setEditingStudent(null);
-  }
-
-  function updateField(field, value) {
-    setEditingStudent((prev) => ({ ...prev, [field]: value }));
-  }
-
-  function updateTeacherSubject(index, field, value) {
-    setEditingStudent((prev) => {
-      const list = [...prev.teacherSubjects];
-      list[index] = { ...list[index], [field]: value };
-      return { ...prev, teacherSubjects: list };
-    });
-  }
-
-  function addTeacherRow() {
-    setEditingStudent((prev) => ({
-      ...prev,
-      teacherSubjects: [...prev.teacherSubjects, { teacher: '', subject: '' }],
-    }));
-  }
-
-  function removeTeacherRow(index) {
-    setEditingStudent((prev) => ({
-      ...prev,
-      teacherSubjects: prev.teacherSubjects.filter((_, i) => i !== index),
-    }));
-  }
-
-  // ---------- ИИ-помощник ----------
   async function sendAiMessage() {
     const text = aiInput.trim();
     if (!text || aiLoading) return;
-
-    const newMessages = [...aiMessages, { role: 'user', content: text }];
+    const newMessages = [...aiMessages, { role: "user", content: text }];
     setAiMessages(newMessages);
-    setAiInput('');
+    setAiInput("");
     setAiLoading(true);
 
+    // Give the assistant a compact snapshot of current CRM data for context
+    const contextSummary = `Контекст CRM центра "ГЕНИЙ" (для справки, не показывай пользователю сырые данные без необходимости):
+- Учеников: ${students.length} (активных: ${students.filter(s=>s.status==="active").length}, должников: ${students.filter(s=>s.balance<0).length})
+- Преподавателей: ${tutors.length}
+- Занятий запланировано: ${lessons.filter(l=>l.status==="scheduled").length}
+- Новых запросов от родителей: ${requests.filter(r=>r.status==="new").length}`;
+
     try {
-      const response = await fetch('/api/ai-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/ai-proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [
-            {
-              role: 'system',
-              content: 'Ты — ИИ-помощник CRM образовательного центра "ГЕНИЙ". Помогай администратору с вопросами по ученикам, расписанию и организации.',
-            },
-            ...newMessages.map((m) => ({ role: m.role, content: m.content })),
+            { role: "system", content: `Ты — ИИ-помощник CRM образовательного центра "ГЕНИЙ". Помогай администратору центра: отвечай на вопросы об учениках, преподавателях, расписании, финансах, помогай составлять сообщения родителям, объясняй как пользоваться разделами CRM. Отвечай кратко и по делу, на русском языке.\n\n${contextSummary}` },
+            ...newMessages.map(m => ({ role: m.role, content: m.content })),
           ],
         }),
       });
-
       const result = await response.json();
-
       if (!response.ok) {
-        setAiMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: `Ошибка: ${result.error || 'не удалось получить ответ'}` },
-        ]);
-        return;
+        setAiMessages(prev => [...prev, { role: "assistant", content: `⚠️ Ошибка: ${result.error || "не удалось получить ответ от ИИ"}` }]);
+      } else {
+        const reply = result.choices?.[0]?.message?.content || "Не удалось получить ответ.";
+        setAiMessages(prev => [...prev, { role: "assistant", content: reply }]);
       }
-
-      const reply = result.choices?.[0]?.message?.content || 'Не удалось получить ответ.';
-      setAiMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
-    } catch (err) {
-      setAiMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'Не удалось связаться с ИИ-помощником. Проверьте подключение.' },
-      ]);
+    } catch (e) {
+      setAiMessages(prev => [...prev, { role: "assistant", content: "⚠️ Не удалось связаться с ИИ-помощником. Проверьте подключение к интернету." }]);
     } finally {
       setAiLoading(false);
     }
   }
-
   function handleAiKeyDown(e) {
-    if (e.key === 'Enter') sendAiMessage();
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAiMessage(); }
   }
 
-  const statusColors = { active: '#28a745', inactive: '#6c757d' };
-  const statusLabels = { active: 'Активен', inactive: 'Неактивен' };
-  const paymentLabels = { paid: 'Оплачено', unpaid: 'Не оплачено', partial: 'Частично' };
+  const notify = (msg, type = "success") => { setNotif({ msg, type }); setTimeout(() => setNotif(null), 3000); };
 
-  if (loading) {
-    return <div style={styles.loading}>Загрузка данных из облака...</div>;
+  // ── Excel import ──
+  const handleExcelFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs");
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const wb = XLSX.read(ev.target.result, { type:"array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:"" });
+      const parsed = parseExcelStudents(rows);
+      setImportPreview(parsed);
+      setImportModal(true);
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = "";
+  };
+
+  const confirmImport = () => {
+    if (importMode === "replace") {
+      setStudents(importPreview);
+    } else {
+      const existingNames = students.map(s=>s.name.toLowerCase());
+      const newOnes = importPreview.filter(s=>!existingNames.includes(s.name.toLowerCase()));
+      setStudents([...students, ...newOnes]);
+      notify(`Добавлено ${newOnes.length} учеников, пропущено ${importPreview.length-newOnes.length} дублей`);
+    }
+    setImportModal(false);
+    setImportPreview([]);
+    if (importMode==="replace") notify(`Загружено ${importPreview.length} учеников`);
+  };
+
+  // ── Reset all data ──
+  const resetAllData = () => {
+    if (!window.confirm("Сбросить все данные до демо-версии? Это нельзя отменить.")) return;
+    setTutors(initialTutors); setStudents(initialStudents); setLessons(initialLessons);
+    setPayments(initialPayments); setSalaries(initialSalaryPayouts);
+    notify("Данные сброшены");
+  };
+
+  const audMap = {
+    all: students, active: students.filter(s=>s.status==="active"),
+    debtors: students.filter(s=>s.balance<0), zeroblance: students.filter(s=>s.balance===0),
+    trial: students.filter(s=>s.status==="trial"), paused: students.filter(s=>s.status==="paused"),
+    inactive: students.filter(s=>s.status==="inactive"),
+    math: students.filter(s=>s.subjects.includes("Математика")),
+    english: students.filter(s=>s.subjects.includes("Английский язык")),
+  };
+
+  const tLessons   = id => lessons.filter(l => l.tutorId === id);
+  const tCompleted = id => lessons.filter(l => l.tutorId === id && l.status === "completed");
+  const tStudents  = id => { const ids = [...new Set(tCompleted(id).map(l=>l.studentId))]; return students.filter(s=>ids.includes(s.id)); };
+  const tEarned    = id => { const t=tutors.find(x=>x.id===id); return tCompleted(id).reduce((s,l)=>s+calcEarning(l,t),0); };
+  const tPaid      = id => salaries.filter(p=>p.tutorId===id).reduce((s,p)=>s+p.amount,0);
+  const tDebt      = id => tEarned(id) - tPaid(id);
+
+  const addStudent = () => {
+    if (!nStudent.name || !nStudent.phone) return;
+    setStudents([...students, { ...nStudent, id:Date.now(), age:Number(nStudent.age), totalLessons:0 }]);
+    setNStudent({ name:"", age:"", phone:"", parentName:"", subjects:[], status:"trial", balance:0, address:"", school:"" });
+    setModal(null); notify("Ученик добавлен");
+  };
+  const addTutor = () => {
+    if (!nTutor.name || !nTutor.phone) return;
+    const parts = nTutor.name.trim().split(" ");
+    const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
+    setTutors([...tutors, { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue) }]);
+    setNTutor({ name:"", phone:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#6366f1" });
+    setModal(null); notify("Преподаватель добавлен");
+  };
+  const addLesson = () => {
+    if (!nLesson.studentId || !nLesson.subject || !nLesson.date || !nLesson.tutorId) return;
+    const st = students.find(s=>s.id===Number(nLesson.studentId));
+    const tu = tutors.find(t=>t.id===Number(nLesson.tutorId));
+    setLessons([...lessons, { ...nLesson, id:Date.now(), studentName:st?.name||"", tutorShort:tu?.short||"", price:Number(nLesson.price), duration:Number(nLesson.duration), studentId:Number(nLesson.studentId), tutorId:Number(nLesson.tutorId), status:"scheduled" }]);
+    setNLesson({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
+    setModal(null); notify("Занятие добавлено");
+  };
+  const addPayment = () => {
+    if (!nPayment.studentId || !nPayment.amount) return;
+    const st = students.find(s=>s.id===Number(nPayment.studentId));
+    setPayments([...payments, { ...nPayment, id:Date.now(), studentName:st?.name||"", amount:Number(nPayment.amount), date:new Date().toISOString().split("T")[0] }]);
+    setStudents(students.map(s=>s.id===Number(nPayment.studentId)?{...s,balance:s.balance+Number(nPayment.amount)}:s));
+    setNPayment({ studentId:"", amount:"", method:"card", comment:"" });
+    setModal(null); notify("Платёж записан");
+  };
+  const addSalary = () => {
+    if (!nSalary.tutorId || !nSalary.amount) return;
+    setSalaries([...salaries, { ...nSalary, id:Date.now(), tutorId:Number(nSalary.tutorId), amount:Number(nSalary.amount), date:new Date().toISOString().split("T")[0] }]);
+    setNSalary({ tutorId:"", amount:"", comment:"", month:"2026-03" });
+    setModal(null); notify("Выплата записана");
+  };
+  const completeLesson = id => { setLessons(lessons.map(l=>l.id===id?{...l,status:"completed"}:l)); notify("Занятие проведено"); };
+  const sendMailing = () => {
+    const cnt = audMap[mDraft.audience]?.length||0;
+    setMailings([{ ...mDraft, id:Date.now(), status:"sent", sentAt:new Date().toISOString().split("T")[0], sentCount:cnt }, ...mailings]);
+    setMDraft({ title:"", channel:"whatsapp", audience:"all", text:"" });
+    setModal(null); setMStep(1); notify(`Отправлено ${cnt} получателям`);
+  };
+  const renderText = (text, s) => text.replace(/{{parentName}}/g,s.parentName||"Родитель").replace(/{{studentName}}/g,s.name).replace(/{{balance}}/g,Math.abs(s.balance)+"₽").replace(/{{phone}}/g,s.phone);
+
+  const filteredStudents = students.filter(s => {
+    const q = search.toLowerCase();
+    return (s.name.toLowerCase().includes(q)||s.subjects.some(x=>x.toLowerCase().includes(q))) && (fStatus==="all"||s.status===fStatus);
+  });
+
+  const nav = [
+    { id:"dashboard", icon:"⊞",  label:"Дашборд"        },
+    { id:"tutors",    icon:"🎓",  label:"Преподаватели"  },
+    { id:"students",  icon:"👥",  label:"Ученики"        },
+    { id:"courses",   icon:"📋",  label:"Курсы"          },
+    { id:"schedule",  icon:"📅",  label:"Расписание"     },
+    { id:"pricing",   icon:"💰",  label:"Цены и правила" },
+    { id:"payments",  icon:"💳",  label:"Финансы"        },
+    { id:"reports",   icon:"📊",  label:"Отчёты"         },
+    { id:"requests",  icon:"📩",  label:"Запросы родит." },
+    { id:"mailings",  icon:"📣",  label:"Рассылки"       },
+    { id:"ai",        icon:"✨",  label:"ИИ-Помощник"    },
+  ];
+
+  const goView = v => { setView(v); setSelTutor(null); setSelStudent(null); };
+
+  const totalRevenue = payments.reduce((s,p)=>s+p.amount,0);
+  const totalSalPaid = salaries.reduce((s,p)=>s+p.amount,0);
+
+  if (cloudLoading) {
+    return (
+      <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:"#0f1117", minHeight:"100vh", color:"#e2e8f0", display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ textAlign:"center" }}>
+          <div style={{ fontSize:32, marginBottom:12 }}>☁️</div>
+          <div style={{ fontSize:15, color:"#94a3b8" }}>Загрузка данных из облака...</div>
+        </div>
+      </div>
+    );
   }
 
+  // ── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <div className="App">
-      <header style={styles.header}>
-        <h1 style={styles.title}>GENIUS CRM</h1>
-        <div style={styles.headerControls}>
-          <span style={styles.syncStatus}>{syncing ? 'Сохранение...' : 'Синхронизировано'}</span>
-          <button style={styles.aiButton} onClick={() => setAiOpen(true)}>ИИ-ассистент</button>
-        </div>
-      </header>
+    <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:"#0f1117", minHeight:"100vh", color:"#e2e8f0", display:"flex" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@700;800&display=swap');
+        *{box-sizing:border-box}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#1a1d27}::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+        .nb{transition:all .2s}.nb:hover{background:rgba(99,102,241,.1)!important;color:#818cf8!important}
+        .nb.on{background:rgba(99,102,241,.18)!important;color:#818cf8!important;border-left:3px solid #6366f1!important}
+        .card{transition:transform .2s,box-shadow .2s}.card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.4)!important}
+        .bp{background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;padding:9px 20px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;transition:all .2s}
+        .bp:hover{opacity:.9;transform:translateY(-1px)}.bp:disabled{opacity:.4;cursor:not-allowed}
+        .bg{background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#818cf8;padding:7px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;transition:all .2s}
+        .bg:hover{background:rgba(99,102,241,.2)}
+        input,select,textarea{background:#1e2130;border:1px solid #2d3252;color:#e2e8f0;padding:9px 12px;border-radius:9px;font-family:inherit;font-size:14px;outline:none;transition:border .2s;width:100%}
+        input:focus,select:focus,textarea:focus{border-color:#6366f1}
+        select option{background:#1e2130}
+        .ov{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center}
+        .mo{background:#161925;border:1px solid #2d3252;border-radius:18px;padding:28px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto}
+        .rh{transition:background .15s;cursor:pointer}.rh:hover{background:rgba(99,102,241,.05)!important}
+        .notif{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:500;z-index:999;animation:si .3s ease}
+        @keyframes si{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+        .stab{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all .2s}
+      `}</style>
 
-      <main style={styles.mainContent}>
-        <div style={styles.studentList}>
-          <div style={styles.listHeader}>
-            <h2>Студенты</h2>
-            <button style={styles.addButton} onClick={handleAddNew}>+ Добавить</button>
-          </div>
-          <div style={styles.studentCards}>
-            {students.length === 0 && (
-              <div style={styles.emptyState}>Пока нет ни одного студента — нажмите «+ Добавить»</div>
+      {/* SIDEBAR */}
+      <div style={{ width:220, background:"#13151f", borderRight:"1px solid #1e2433", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
+        <div style={{ padding:"0 20px 28px" }}>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:800, color:"#818cf8" }}>EduCRM</div>
+          <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>Репетиторский центр</div>
+        </div>
+        {nav.map(n=>(
+          <button key={n.id} className={`nb ${view===n.id?"on":""}`} onClick={()=>goView(n.id)}
+            style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 20px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"#64748b", fontSize:14, fontWeight:500, cursor:"pointer", width:"100%", textAlign:"left" }}>
+            <span style={{ fontSize:16 }}>{n.icon}</span>{n.label}
+            {n.id==="requests" && requests.filter(r=>r.status==="new").length>0 && (
+              <span style={{ marginLeft:"auto", background:"#ef4444", color:"white", fontSize:10, fontWeight:700, borderRadius:10, padding:"1px 6px" }}>{requests.filter(r=>r.status==="new").length}</span>
             )}
-            {students.map((student) => (
-              <div style={styles.studentCard} key={student.id}>
-                <div style={styles.cardHeader}>
-                  <strong>{student.fullName || 'Без имени'}</strong>
-                  <span style={{ ...styles.statusBadge, backgroundColor: statusColors[student.status] || '#6c757d' }}>
-                    {statusLabels[student.status] || student.status}
-                  </span>
-                </div>
-                <div style={styles.cardInfo}>
-                  {student.email && <p>Email: {student.email}</p>}
-                  {student.phone && <p>Телефон: {student.phone}</p>}
-                  {student.teacherSubjects?.some((t) => t.teacher || t.subject) && (
-                    <p>
-                      Предметы:{' '}
-                      {student.teacherSubjects
-                        .filter((t) => t.teacher || t.subject)
-                        .map((t, i) => `${t.subject || '—'} (${t.teacher || '—'})`)
-                        .join(', ')}
-                    </p>
-                  )}
-                  {student.tuitionAmount && (
-                    <p>Оплата: {student.tuitionAmount} — {paymentLabels[student.paymentStatus] || student.paymentStatus}</p>
-                  )}
-                </div>
-                <div style={styles.cardActions}>
-                  <button style={styles.editButton} onClick={() => handleEdit(student)}>Редактировать</button>
-                  <button style={styles.deleteButton} onClick={() => handleDelete(student.id)}>Удалить</button>
-                </div>
-              </div>
-            ))}
+          </button>
+        ))}
+        <div style={{ marginTop:"auto", padding:16 }}>
+          {/* Save / cloud sync indicator */}
+          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10, padding:"6px 10px", background: (saveIndicator||cloudSyncing)?"rgba(34,197,94,0.1)":"rgba(99,102,241,0.06)", border:`1px solid ${(saveIndicator||cloudSyncing)?"rgba(34,197,94,0.3)":"rgba(99,102,241,0.12)"}`, borderRadius:8, transition:"all .5s" }}>
+            <div style={{ width:7, height:7, borderRadius:"50%", background:(saveIndicator||cloudSyncing)?"#22c55e":"#334155", transition:"all .5s" }} />
+            <span style={{ fontSize:11, color:(saveIndicator||cloudSyncing)?"#22c55e":"#475569", fontWeight:500 }}>{cloudSyncing?"Синхронизация...":saveIndicator?"Сохранено ✓":"Облако · синхронизировано"}</span>
+          </div>
+          {/* Import Excel */}
+          <button onClick={()=>fileInputRef.current?.click()} style={{ width:"100%", padding:"8px", background:"rgba(99,102,241,0.1)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:9, color:"#818cf8", fontSize:12, fontWeight:600, cursor:"pointer", marginBottom:8, fontFamily:"inherit" }}>
+            📥 Импорт из Excel
+          </button>
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display:"none" }} onChange={handleExcelFile} />
+          <div style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.18)", borderRadius:12, padding:12, textAlign:"center" }}>
+            <div style={{ fontSize:10, color:"#64748b" }}>Должники</div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#ef4444" }}>{students.filter(s=>s.balance<0).length}</div>
+            <div style={{ fontSize:10, color:"#475569" }}>учеников</div>
           </div>
         </div>
+      </div>
 
-        <div style={styles.editForm}>
-          <h2>{editingStudent ? (isNew ? 'Новый студент' : 'Редактирование студента') : 'Анкета студента'}</h2>
+      {/* MAIN */}
+      <div style={{ flex:1, padding:32, overflowY:"auto", maxHeight:"100vh" }}>
 
-          {!editingStudent && (
-            <p style={{ color: '#6c757d', fontSize: '14px' }}>
-              Выберите студента для редактирования слева или нажмите «+ Добавить».
-            </p>
-          )}
-
-          {editingStudent && (
-            <>
-              <div style={styles.formSection}>
-                <p style={styles.sectionTitle}>Личные данные</p>
-                <input
-                  type="text"
-                  placeholder="ФИО"
-                  style={styles.input}
-                  value={editingStudent.fullName}
-                  onChange={(e) => updateField('fullName', e.target.value)}
-                />
-                <input
-                  type="date"
-                  placeholder="Дата рождения"
-                  style={styles.input}
-                  value={editingStudent.birthDate}
-                  onChange={(e) => updateField('birthDate', e.target.value)}
-                />
-                <select
-                  style={styles.select}
-                  value={editingStudent.status}
-                  onChange={(e) => updateField('status', e.target.value)}
-                >
-                  <option value="active">Активен</option>
-                  <option value="inactive">Неактивен</option>
-                </select>
-              </div>
-
-              <div style={styles.formSection}>
-                <p style={styles.sectionTitle}>Контакты</p>
-                <input
-                  type="tel"
-                  placeholder="Телефон студента"
-                  style={styles.input}
-                  value={editingStudent.phone}
-                  onChange={(e) => updateField('phone', e.target.value)}
-                />
-                <input
-                  type="email"
-                  placeholder="Email"
-                  style={styles.input}
-                  value={editingStudent.email}
-                  onChange={(e) => updateField('email', e.target.value)}
-                />
-                <input
-                  type="text"
-                  placeholder="ФИО родителя"
-                  style={styles.input}
-                  value={editingStudent.parentName}
-                  onChange={(e) => updateField('parentName', e.target.value)}
-                />
-                <input
-                  type="tel"
-                  placeholder="Телефон родителя"
-                  style={styles.input}
-                  value={editingStudent.parentPhone}
-                  onChange={(e) => updateField('parentPhone', e.target.value)}
-                />
-              </div>
-
-              <div style={styles.formSection}>
-                <p style={styles.sectionTitle}>Педагоги и предметы</p>
-                {editingStudent.teacherSubjects.map((row, index) => (
-                  <div style={styles.teacherRow} key={index}>
-                    <input
-                      type="text"
-                      placeholder="Предмет"
-                      style={{ ...styles.input, marginBottom: 0 }}
-                      value={row.subject}
-                      onChange={(e) => updateTeacherSubject(index, 'subject', e.target.value)}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Педагог"
-                      style={{ ...styles.input, marginBottom: 0 }}
-                      value={row.teacher}
-                      onChange={(e) => updateTeacherSubject(index, 'teacher', e.target.value)}
-                    />
-                    {editingStudent.teacherSubjects.length > 1 && (
-                      <button style={styles.smallRemoveButton} onClick={() => removeTeacherRow(index)}>✕</button>
-                    )}
+        {/* ── DASHBOARD ── */}
+        {view==="dashboard" && (
+          <div>
+            <div style={{ marginBottom:28 }}>
+              <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:800, color:"#f1f5f9", margin:0 }}>Дашборд</h1>
+              <div style={{ color:"#475569", fontSize:14, marginTop:4 }}>Понедельник, 9 марта 2026</div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:28 }}>
+              {[
+                { label:"Активных учеников", value:students.filter(s=>s.status==="active").length, icon:"👥", color:"#6366f1" },
+                { label:"Преподавателей",    value:tutors.filter(t=>t.status==="active").length,   icon:"🎓", color:"#22c55e" },
+                { label:"Занятий впереди",   value:lessons.filter(l=>l.status==="scheduled").length,icon:"📅",color:"#f59e0b" },
+                { label:"Выручка в марте",   value:`${(totalRevenue/1000).toFixed(1)}к`,           icon:"💰", color:"#ec4899" },
+              ].map((s,i)=>(
+                <div key={i} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                    <div>
+                      <div style={{ fontSize:12, color:"#475569", marginBottom:8 }}>{s.label}</div>
+                      <div style={{ fontSize:30, fontWeight:700, color:s.color, fontFamily:"'Syne',sans-serif" }}>{s.value}</div>
+                    </div>
+                    <div style={{ fontSize:28, opacity:.6 }}>{s.icon}</div>
                   </div>
-                ))}
-                <button style={styles.addRowButton} onClick={addTeacherRow}>+ Добавить предмет</button>
-              </div>
-
-              <div style={styles.formSection}>
-                <p style={styles.sectionTitle}>Финансы</p>
-                <input
-                  type="text"
-                  placeholder="Сумма оплаты (например, 5000 руб/мес)"
-                  style={styles.input}
-                  value={editingStudent.tuitionAmount}
-                  onChange={(e) => updateField('tuitionAmount', e.target.value)}
-                />
-                <select
-                  style={styles.select}
-                  value={editingStudent.paymentStatus}
-                  onChange={(e) => updateField('paymentStatus', e.target.value)}
-                >
-                  <option value="paid">Оплачено</option>
-                  <option value="unpaid">Не оплачено</option>
-                  <option value="partial">Частично</option>
-                </select>
-                <textarea
-                  placeholder="Заметки"
-                  style={styles.textarea}
-                  value={editingStudent.notes}
-                  onChange={(e) => updateField('notes', e.target.value)}
-                />
-              </div>
-
-              <div style={styles.formButtons}>
-                <button style={styles.saveButton} onClick={handleSave}>Сохранить</button>
-                <button style={styles.cancelButton} onClick={handleCancel}>Отмена</button>
-              </div>
-            </>
-          )}
-        </div>
-      </main>
-
-      {aiOpen && (
-        <div style={styles.aiAssistant}>
-          <div style={styles.aiHeader}>
-            <h3 style={{ margin: 0 }}>ИИ-ассистент</h3>
-            <button style={styles.closeButton} onClick={() => setAiOpen(false)}>&times;</button>
-          </div>
-          <div style={styles.aiChat}>
-            <div style={styles.aiMessages}>
-              {aiMessages.map((m, i) => (
-                <div key={i} style={m.role === 'user' ? styles.aiMessageUser : styles.aiMessage}>
-                  {m.content}
                 </div>
               ))}
-              {aiLoading && <div style={styles.aiMessage}>Печатает...</div>}
             </div>
-            <div style={styles.aiInput}>
-              <input
-                type="text"
-                placeholder="Введите сообщение..."
-                style={styles.aiInputField}
-                value={aiInput}
-                onChange={(e) => setAiInput(e.target.value)}
-                onKeyDown={handleAiKeyDown}
-              />
-              <button style={styles.aiSendButton} onClick={sendAiMessage} disabled={aiLoading}>Отправить</button>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+              <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:22 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+                  <h3 style={{ margin:0, fontSize:15, fontWeight:600 }}>Ближайшие занятия</h3>
+                  <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>goView("schedule")}>Все</button>
+                </div>
+                {lessons.filter(l=>l.status==="scheduled").slice(0,5).map(l=>(
+                  <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid #1a1e2e" }}>
+                    <div style={{ width:38, height:38, borderRadius:10, background:"rgba(99,102,241,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>📖</div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.studentName}</div>
+                      <div style={{ fontSize:11, color:"#475569" }}>{l.subject} · {l.tutorShort}</div>
+                    </div>
+                    <div style={{ textAlign:"right", flexShrink:0 }}>
+                      <div style={{ fontSize:12, color:"#6366f1", fontWeight:600 }}>{l.date}</div>
+                      <div style={{ fontSize:11, color:"#475569" }}>{l.time}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:22 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+                  <h3 style={{ margin:0, fontSize:15, fontWeight:600 }}>💼 Зарплаты к выплате</h3>
+                  <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>goView("tutors")}>Все</button>
+                </div>
+                {tutors.map(t=>{ const d=tDebt(t.id); if(d<=0) return null; return (
+                  <div key={t.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid #1a1e2e", cursor:"pointer" }} onClick={()=>{ setSelTutor(t); setView("tutors"); }}>
+                    <Av name={t.name} color={t.color} size={34} />
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{t.short}</div>
+                      <div style={{ fontSize:11, color:"#475569" }}>{tCompleted(t.id).length} занятий</div>
+                    </div>
+                    <div style={{ fontSize:15, fontWeight:700, color:"#f59e0b" }}>{d.toLocaleString("ru")}₽</div>
+                  </div>
+                ); })}
+                {tutors.every(t=>tDebt(t.id)<=0) && <div style={{ color:"#475569", fontSize:13, textAlign:"center", padding:"20px 0" }}>🎉 Все выплаты сделаны!</div>}
+              </div>
             </div>
           </div>
+        )}
+
+        {/* ── TUTORS LIST ── */}
+        {view==="tutors" && !selTutor && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
+              <div>
+                <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Преподаватели</h1>
+                <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>{tutors.length} в базе</div>
+              </div>
+              <button className="bp" onClick={()=>setModal("addTutor")}>+ Добавить преподавателя</button>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+              {tutors.map(t=>{
+                const earned=tEarned(t.id), paid=tPaid(t.id), debt=earned-paid;
+                return (
+                  <div key={t.id} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:22, cursor:"pointer" }} onClick={()=>{ setSelTutor(t); setTTab("overview"); }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+                      <Av name={t.name} color={t.color} size={46} />
+                      <div>
+                        <div style={{ fontSize:14, fontWeight:700 }}>{t.short}</div>
+                        <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{t.subjects.join(", ")}</div>
+                      </div>
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
+                      {[
+                        { l:"Учеников",  v:tStudents(t.id).length,          c:"#6366f1" },
+                        { l:"Занятий",   v:tCompleted(t.id).length,         c:"#22c55e" },
+                        { l:"К выдаче",  v:`${debt.toLocaleString("ru")}₽`, c:debt>0?"#f59e0b":"#94a3b8" },
+                      ].map((m,i)=>(
+                        <div key={i} style={{ background:"#1a1e2e", borderRadius:10, padding:8, textAlign:"center" }}>
+                          <div style={{ fontSize:10, color:"#475569", marginBottom:3 }}>{m.l}</div>
+                          <div style={{ fontSize:13, fontWeight:700, color:m.c }}>{m.v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <div style={{ fontSize:11, color:"#475569" }}>{t.rateType==="percent"?`${t.rateValue}% от занятия`:`${t.rateValue}₽/занятие`}</div>
+                      <Tag c={statusCfg[t.status]?.color} bg={statusCfg[t.status]?.bg}>{statusCfg[t.status]?.label}</Tag>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── TUTOR PROFILE ── */}
+        {view==="tutors" && selTutor && (()=>{
+          const t = tutors.find(x=>x.id===selTutor.id)||selTutor;
+          const myL=tLessons(t.id), myC=tCompleted(t.id), mySt=tStudents(t.id), myPay=salaries.filter(p=>p.tutorId===t.id);
+          const earned=tEarned(t.id), paid=tPaid(t.id), debt=earned-paid;
+          return (
+            <div>
+              <button className="bg" style={{ marginBottom:20 }} onClick={()=>setSelTutor(null)}>← Назад</button>
+              {/* header card */}
+              <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:18, padding:28, marginBottom:20 }}>
+                <div style={{ display:"flex", gap:20, alignItems:"flex-start", marginBottom:22 }}>
+                  <Av name={t.name} color={t.color} size={64} />
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:22, fontWeight:700, color:"#f1f5f9" }}>{t.name}</div>
+                    <div style={{ fontSize:13, color:"#475569", marginTop:4 }}>{t.phone}</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8 }}>
+                      {t.subjects.map(s=><Tag key={s} c="#818cf8" bg="rgba(99,102,241,0.15)">{s}</Tag>)}
+                      <Tag c={statusCfg[t.status]?.color} bg={statusCfg[t.status]?.bg}>{statusCfg[t.status]?.label}</Tag>
+                    </div>
+                  </div>
+                  <button className="bp" onClick={()=>{ setNSalary({...nSalary,tutorId:String(t.id)}); setModal("addSalary"); }}>💰 Выплатить зарплату</button>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
+                  {[
+                    { l:"Учеников",      v:mySt.length,                     c:"#6366f1" },
+                    { l:"Всего занятий", v:myL.length,                      c:"#94a3b8" },
+                    { l:"Проведено",     v:myC.length,                      c:"#22c55e" },
+                    { l:"Заработано",    v:`${earned.toLocaleString("ru")}₽`,c:"#f59e0b"},
+                    { l:"К выплате",     v:`${debt.toLocaleString("ru")}₽`, c:debt>0?"#ef4444":"#22c55e" },
+                  ].map((m,i)=>(
+                    <div key={i} style={{ background:"#1a1e2e", borderRadius:12, padding:14, textAlign:"center" }}>
+                      <div style={{ fontSize:11, color:"#475569", marginBottom:4 }}>{m.l}</div>
+                      <div style={{ fontSize:18, fontWeight:700, color:m.c }}>{m.v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* tabs */}
+              <div style={{ display:"flex", gap:4, marginBottom:20, background:"#161925", border:"1px solid #1e2433", borderRadius:12, padding:6, width:"fit-content" }}>
+                {[["overview","📊 Обзор"],["students","👥 Ученики"],["lessons","📚 Занятия"],["salary","💼 Зарплата"]].map(([k,l])=>(
+                  <button key={k} className="stab" onClick={()=>setTTab(k)}
+                    style={{ background:tTab===k?"rgba(99,102,241,0.25)":"transparent", color:tTab===k?"#818cf8":"#64748b" }}>{l}</button>
+                ))}
+              </div>
+
+              {/* TAB overview */}
+              {tTab==="overview" && (
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:20 }}>
+                    <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#94a3b8", fontWeight:600 }}>Последние занятия</h4>
+                    {myC.length===0 && <div style={{ color:"#475569", fontSize:13 }}>Нет проведённых занятий</div>}
+                    {myC.slice(-5).reverse().map(l=>(
+                      <div key={l.id} style={{ display:"flex", gap:10, padding:"9px 0", borderBottom:"1px solid #1a1e2e", alignItems:"center" }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:13, fontWeight:600 }}>{l.studentName}</div>
+                          <div style={{ fontSize:11, color:"#475569" }}>{l.subject} · {l.date}</div>
+                        </div>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ fontSize:13, fontWeight:700 }}>{l.price}₽</div>
+                          <div style={{ fontSize:11, color:"#22c55e" }}>+{calcEarning(l,t)}₽</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:20 }}>
+                    <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#94a3b8", fontWeight:600 }}>Ставка оплаты</h4>
+                    <div style={{ background:"#1a1e2e", borderRadius:10, padding:14, marginBottom:12 }}>
+                      <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Тип</div>
+                      <div style={{ fontSize:16, fontWeight:700, color:"#818cf8" }}>
+                        {t.rateType==="percent"?`${t.rateValue}% от стоимости занятия`:`Фиксированно ${t.rateValue}₽ за занятие`}
+                      </div>
+                    </div>
+                    <div style={{ fontSize:12, color:"#64748b", marginBottom:8 }}>Примеры расчёта:</div>
+                    {[800,1000,1200,1500,2000].map(price=>(
+                      <div key={price} style={{ display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom:"1px solid #1a1e2e", fontSize:13 }}>
+                        <span style={{ color:"#94a3b8" }}>Занятие {price}₽</span>
+                        <span style={{ color:"#22c55e", fontWeight:700 }}>→ {calcEarning({price},t)}₽</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB students */}
+              {tTab==="students" && (
+                <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, overflow:"hidden" }}>
+                  {mySt.length===0 ? <div style={{ padding:40, textAlign:"center", color:"#475569" }}>Нет учеников</div> : (
+                    <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                      <thead>
+                        <tr style={{ borderBottom:"1px solid #1e2433" }}>
+                          {["Ученик","Предметы","Статус","Баланс","Занятий с преп."].map(h=>(
+                            <th key={h} style={{ padding:"13px 16px", textAlign:"left", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mySt.map(s=>{
+                          const cnt = myC.filter(l=>l.studentId===s.id).length;
+                          return (
+                            <tr key={s.id} style={{ borderBottom:"1px solid #1a1e2e" }}>
+                              <td style={{ padding:"12px 16px" }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                                  <Av name={s.name} color="#6366f1" size={32} />
+                                  <div>
+                                    <div style={{ fontSize:13, fontWeight:600 }}>{s.name}</div>
+                                    <div style={{ fontSize:11, color:"#475569" }}>{s.age} лет</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ padding:"12px 16px" }}>{s.subjects.map(sub=><Tag key={sub} c="#818cf8" bg="rgba(99,102,241,0.12)">{sub}</Tag>)}</td>
+                              <td style={{ padding:"12px 16px" }}><Tag c={statusCfg[s.status]?.color} bg={statusCfg[s.status]?.bg}>{statusCfg[s.status]?.label}</Tag></td>
+                              <td style={{ padding:"12px 16px", fontWeight:700, color:s.balance>=0?"#22c55e":"#ef4444" }}>{s.balance}₽</td>
+                              <td style={{ padding:"12px 16px", color:"#94a3b8", fontWeight:600 }}>{cnt}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+
+              {/* TAB lessons */}
+              {tTab==="lessons" && (
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {myL.length===0 && <div style={{ color:"#475569", padding:"40px", textAlign:"center" }}>Нет занятий</div>}
+                  {myL.sort((a,b)=>a.date>b.date?-1:1).map(l=>(
+                    <div key={l.id} style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:12, padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
+                      <div style={{ width:4, height:36, borderRadius:2, background:lsnCfg[l.status]?.color, flexShrink:0 }} />
+                      <div style={{ width:70, flexShrink:0 }}>
+                        <div style={{ fontSize:13, fontWeight:700 }}>{l.time||"—"}</div>
+                        <div style={{ fontSize:11, color:"#475569" }}>{l.date}</div>
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:600 }}>{l.studentName}</div>
+                        <div style={{ fontSize:11, color:"#475569" }}>{l.subject} · {l.duration} мин</div>
+                      </div>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontSize:14, fontWeight:700 }}>{l.price}₽</div>
+                        <div style={{ fontSize:12, color:"#22c55e", fontWeight:600 }}>+{calcEarning(l,t)}₽ вам</div>
+                      </div>
+                      <Tag c={lsnCfg[l.status]?.color} bg={`${lsnCfg[l.status]?.color}22`}>{lsnCfg[l.status]?.label}</Tag>
+                      {l.status==="scheduled" && <button className="bg" style={{ fontSize:11, padding:"5px 10px" }} onClick={()=>completeLesson(l.id)}>✓</button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* TAB salary */}
+              {tTab==="salary" && (
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                  <div>
+                    <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:20, marginBottom:16 }}>
+                      <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#94a3b8", fontWeight:600 }}>Итого</h4>
+                      {[
+                        { l:"Заработано всего",  v:`${earned.toLocaleString("ru")}₽`, c:"#f59e0b" },
+                        { l:"Выплачено всего",   v:`${paid.toLocaleString("ru")}₽`,   c:"#22c55e" },
+                        { l:"Остаток к выплате", v:`${debt.toLocaleString("ru")}₽`,   c:debt>0?"#ef4444":"#22c55e" },
+                      ].map((m,i)=>(
+                        <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"11px 14px", background:"#1a1e2e", borderRadius:10, marginBottom:8 }}>
+                          <span style={{ fontSize:13, color:"#94a3b8" }}>{m.l}</span>
+                          <span style={{ fontSize:15, fontWeight:700, color:m.c }}>{m.v}</span>
+                        </div>
+                      ))}
+                      <button className="bp" style={{ width:"100%", marginTop:8 }} onClick={()=>{ setNSalary({...nSalary,tutorId:String(t.id)}); setModal("addSalary"); }}>
+                        💰 Выплатить зарплату
+                      </button>
+                    </div>
+                    <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:20 }}>
+                      <h4 style={{ margin:"0 0 12px", fontSize:14, color:"#94a3b8", fontWeight:600 }}>Детализация по занятиям</h4>
+                      {myC.map(l=>(
+                        <div key={l.id} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid #1a1e2e", fontSize:12 }}>
+                          <div>
+                            <div style={{ fontWeight:600, color:"#e2e8f0" }}>{l.studentName} · {l.subject}</div>
+                            <div style={{ color:"#475569" }}>{l.date}</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ color:"#94a3b8" }}>{l.price}₽</div>
+                            <div style={{ color:"#22c55e", fontWeight:700 }}>+{calcEarning(l,t)}₽</div>
+                          </div>
+                        </div>
+                      ))}
+                      {myC.length===0 && <div style={{ color:"#475569", fontSize:13 }}>Нет проведённых занятий</div>}
+                    </div>
+                  </div>
+                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:20 }}>
+                    <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#94a3b8", fontWeight:600 }}>История выплат</h4>
+                    {myPay.length===0 && <div style={{ color:"#475569", fontSize:13 }}>Выплат пока нет</div>}
+                    {myPay.map(p=>(
+                      <div key={p.id} style={{ background:"#1a1e2e", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                          <div>
+                            <div style={{ fontSize:15, fontWeight:700, color:"#22c55e" }}>+{p.amount.toLocaleString("ru")}₽</div>
+                            <div style={{ fontSize:11, color:"#475569", marginTop:3 }}>{p.date} · {p.month}</div>
+                          </div>
+                          <Tag c="#22c55e" bg="rgba(34,197,94,0.12)">Выплачено</Tag>
+                        </div>
+                        {p.comment && <div style={{ fontSize:12, color:"#64748b", marginTop:6 }}>{p.comment}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── STUDENTS ── */}
+        {view==="students" && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
+              <div>
+                <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Ученики</h1>
+                <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>{students.length} в базе</div>
+              </div>
+              <button className="bp" onClick={()=>setModal("addStudent")}>+ Добавить ученика</button>
+            </div>
+            <div style={{ display:"flex", gap:12, marginBottom:20 }}>
+              <input placeholder="🔍  Поиск..." value={search} onChange={e=>setSearch(e.target.value)} style={{ maxWidth:300 }} />
+              <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{ maxWidth:160 }}>
+                <option value="all">Все статусы</option>
+                {Object.entries(statusCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </div>
+            {selStudent ? (
+              <div>
+                <button className="bg" style={{ marginBottom:20 }} onClick={()=>setSelStudent(null)}>← Назад</button>
+                <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:18, padding:28 }}>
+                  <div style={{ display:"flex", gap:20, alignItems:"flex-start", marginBottom:20 }}>
+                    <Av name={selStudent.name} color="#6366f1" size={60} />
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:20, fontWeight:700 }}>{selStudent.name}</div>
+                      <div style={{ fontSize:13, color:"#475569", marginTop:4 }}>{selStudent.age} лет · {selStudent.phone}</div>
+                      <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>👤 Родитель: {selStudent.parentName}</div>
+                      {selStudent.school && <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>🏫 {selStudent.school}{selStudent.grade ? ` · ${selStudent.grade} класс` : ""}</div>}
+                      {selStudent.address && <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>📍 {selStudent.address}</div>}
+                    </div>
+                    <Tag c={statusCfg[selStudent.status]?.color} bg={statusCfg[selStudent.status]?.bg}>{statusCfg[selStudent.status]?.label}</Tag>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
+                    {[
+                      { l:"Баланс",  v:`${selStudent.balance}₽`, c:selStudent.balance>=0?"#22c55e":"#ef4444" },
+                      { l:"Занятий", v:selStudent.totalLessons,   c:"#6366f1" },
+                      { l:"Предметов",v:selStudent.subjects.length,c:"#f59e0b"},
+                    ].map((m,i)=>(
+                      <div key={i} style={{ background:"#1a1e2e", borderRadius:12, padding:14, textAlign:"center" }}>
+                        <div style={{ fontSize:11, color:"#475569", marginBottom:4 }}>{m.l}</div>
+                        <div style={{ fontSize:22, fontWeight:700, color:m.c }}>{m.v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginBottom:16 }}>{selStudent.subjects.map(s=><Tag key={s} c="#818cf8" bg="rgba(99,102,241,0.15)">{s}</Tag>)}</div>
+                  <h4 style={{ color:"#94a3b8", fontSize:13, marginBottom:12, fontWeight:600 }}>История занятий</h4>
+                  {lessons.filter(l=>l.studentId===selStudent.id).map(l=>(
+                    <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"#1a1e2e", borderRadius:10, marginBottom:8 }}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:600 }}>{l.subject}</div>
+                        <div style={{ fontSize:11, color:"#475569" }}>{l.tutorShort} · {l.date} {l.time}</div>
+                      </div>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{l.price}₽</div>
+                      <Tag c={lsnCfg[l.status]?.color} bg={`${lsnCfg[l.status]?.color}22`}>{lsnCfg[l.status]?.label}</Tag>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom:"1px solid #1e2433" }}>
+                      {["Ученик","Предметы","Преподаватель","Статус","Баланс",""].map(h=>(
+                        <th key={h} style={{ padding:"13px 16px", textAlign:"left", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map(s=>{
+                      const myTutors=[...new Set(lessons.filter(l=>l.studentId===s.id).map(l=>l.tutorShort))];
+                      return (
+                        <tr key={s.id} className="rh" style={{ borderBottom:"1px solid #1a1e2e" }} onClick={()=>setSelStudent(s)}>
+                          <td style={{ padding:"13px 16px" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                              <Av name={s.name} color="#6366f1" size={34} />
+                              <div>
+                                <div style={{ fontSize:13, fontWeight:600 }}>{s.name}</div>
+                                <div style={{ fontSize:11, color:"#475569" }}>{s.age} лет</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ padding:"13px 16px" }}>{s.subjects.slice(0,2).map(sub=><Tag key={sub} c="#818cf8" bg="rgba(99,102,241,0.12)">{sub}</Tag>)}</td>
+                          <td style={{ padding:"13px 16px", fontSize:12, color:"#94a3b8" }}>{myTutors.slice(0,2).join(", ")||"—"}</td>
+                          <td style={{ padding:"13px 16px" }}><Tag c={statusCfg[s.status]?.color} bg={statusCfg[s.status]?.bg}>{statusCfg[s.status]?.label}</Tag></td>
+                          <td style={{ padding:"13px 16px", fontWeight:700, fontSize:14, color:s.balance>=0?"#22c55e":"#ef4444" }}>{s.balance}₽</td>
+                          <td style={{ padding:"13px 16px" }} onClick={e=>e.stopPropagation()}>
+                            <button className="bp" style={{ padding:"5px 12px", fontSize:12, borderRadius:7 }} onClick={()=>{ setNPayment({...nPayment,studentId:String(s.id)}); setModal("addPayment"); }}>Оплата</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── SCHEDULE ── */}
+        {view==="schedule" && (()=>{
+          const DAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+          const HOURS = Array.from({length:13},(_,i)=>i+8);
+
+          const today = new Date("2026-03-09");
+          const todayDay = today.getDay() === 0 ? 6 : today.getDay()-1;
+          const weekStart = new Date(today);
+          weekStart.setDate(today.getDate() - todayDay + weekOffset*7);
+          const weekDates = DAYS.map((_,i)=>{ const d=new Date(weekStart); d.setDate(weekStart.getDate()+i); return d; });
+          const fmt = d => d.toISOString().split("T")[0];
+          const fmtLabel = d => `${d.getDate()} ${["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"][d.getMonth()]}`;
+          const weekLessons = lessons.filter(l=> weekDates.some(d=>fmt(d)===l.date) && (schedTutorFilter==="all" || l.tutorId===Number(schedTutorFilter)));
+          const allLessonsFiltered = schedTutorFilter==="all" ? lessons : lessons.filter(l=>l.tutorId===Number(schedTutorFilter));
+
+          const addRecurring = () => {
+            if (!nLesson.studentId || !nLesson.subject || !nLesson.date || !nLesson.tutorId) return;
+            const st = students.find(s=>s.id===Number(nLesson.studentId));
+            const tu = tutors.find(t=>t.id===Number(nLesson.tutorId));
+            const base = { studentName:st?.name||"", tutorShort:tu?.short||"", price:Number(nLesson.price), duration:Number(nLesson.duration), studentId:Number(nLesson.studentId), tutorId:Number(nLesson.tutorId), subject:nLesson.subject, time:nLesson.time, status:"scheduled" };
+            const newLessons = Array.from({length:recurCount}, (_,i) => {
+              const d = new Date(nLesson.date);
+              d.setDate(d.getDate() + i * recurInterval);
+              return { ...base, id: Date.now() + i, date: fmt(d) };
+            });
+            setLessons(prev => [...prev, ...newLessons]);
+            setNLesson({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
+            setModal(null); setRecurModal(false);
+            notify(`Создано ${recurCount} занятий`);
+          };
+
+          const saveEdit = () => {
+            if (!editLesson) return;
+            setLessons(lessons.map(l=>l.id===editLesson.id ? {...l,...editLesson} : l));
+            setEditLesson(null);
+            notify("Занятие обновлено");
+          };
+          const deleteLesson = id => {
+            setLessons(lessons.filter(l=>l.id!==id));
+            setEditLesson(null);
+            notify("Занятие удалено");
+          };
+
+          return (
+            <div>
+              {/* Header */}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+                <div>
+                  <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Расписание</h1>
+                  <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>{fmtLabel(weekDates[0])} — {fmtLabel(weekDates[6])} 2026</div>
+                </div>
+                <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                  <div style={{ display:"flex", gap:4, background:"#161925", border:"1px solid #1e2433", borderRadius:10, padding:4 }}>
+                    <button className="bg" style={{ padding:"5px 12px" }} onClick={()=>setWeekOffset(w=>w-1)}>‹</button>
+                    <button className="bg" style={{ padding:"5px 12px", fontSize:12 }} onClick={()=>setWeekOffset(0)}>Сегодня</button>
+                    <button className="bg" style={{ padding:"5px 12px" }} onClick={()=>setWeekOffset(w=>w+1)}>›</button>
+                  </div>
+                  <div style={{ display:"flex", gap:4, background:"#161925", border:"1px solid #1e2433", borderRadius:10, padding:4 }}>
+                    {[["week","📅 Неделя"],["tutors","👥 По педагогам"],["list","☰ Список"]].map(([k,l])=>(
+                      <button key={k} className="stab" onClick={()=>setSchedView(k)}
+                        style={{ background:schedView===k?"rgba(99,102,241,0.25)":"transparent", color:schedView===k?"#818cf8":"#64748b" }}>{l}</button>
+                    ))}
+                  </div>
+                  <button className="bp" onClick={()=>setModal("addLesson")}>+ Добавить занятие</button>
+                  <button className="bg" onClick={()=>printSchedule(allLessonsFiltered, tutors, students, `${fmtLabel(weekDates[0])} — ${fmtLabel(weekDates[6])}`)}>🖨️ Печать</button>
+                </div>
+              </div>
+
+              {/* Tutor filter */}
+              <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
+                <button onClick={()=>setSchedTutorFilter("all")}
+                  style={{ padding:"5px 14px", borderRadius:20, fontSize:12, fontWeight:600, border:"1px solid", cursor:"pointer", transition:"all .15s",
+                    background:schedTutorFilter==="all"?"rgba(99,102,241,0.2)":"transparent",
+                    borderColor:schedTutorFilter==="all"?"#6366f1":"#2d3252",
+                    color:schedTutorFilter==="all"?"#818cf8":"#64748b" }}>Все преподаватели</button>
+                {tutors.map(t=>(
+                  <button key={t.id} onClick={()=>setSchedTutorFilter(String(t.id))}
+                    style={{ padding:"5px 14px", borderRadius:20, fontSize:12, fontWeight:600, border:"1px solid", cursor:"pointer", display:"flex", alignItems:"center", gap:6, transition:"all .15s",
+                      background:schedTutorFilter===String(t.id)?`${t.color}22`:"transparent",
+                      borderColor:schedTutorFilter===String(t.id)?t.color:"#2d3252",
+                      color:schedTutorFilter===String(t.id)?t.color:"#64748b" }}>
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:t.color }} />{t.short}
+                  </button>
+                ))}
+              </div>
+
+              {/* Edit panel */}
+              {editLesson && (
+                <div style={{ background:"#161925", border:"1px solid #6366f1", borderRadius:14, padding:20, marginBottom:20 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                    <div style={{ fontSize:15, fontWeight:700 }}>✏️ Редактирование занятия</div>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button className="bp" style={{ padding:"6px 16px", fontSize:13 }} onClick={saveEdit}>Сохранить</button>
+                      <button style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", color:"#ef4444", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit" }} onClick={()=>deleteLesson(editLesson.id)}>🗑 Удалить</button>
+                      <button className="bg" style={{ padding:"6px 14px", fontSize:13 }} onClick={()=>setEditLesson(null)}>Отмена</button>
+                    </div>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Ученик</div>
+                      <select value={editLesson.studentId} onChange={e=>{ const s=students.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,studentId:Number(e.target.value),studentName:s?.name||""}); }}>
+                        {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Преподаватель</div>
+                      <select value={editLesson.tutorId} onChange={e=>{ const t=tutors.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,tutorId:Number(e.target.value),tutorShort:t?.short||""}); }}>
+                        {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                      </select>
+                    </div>
+                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Предмет</div>
+                      <select value={editLesson.subject} onChange={e=>setEditLesson({...editLesson,subject:e.target.value})}>
+                        {courseCategories.map(cat=>(
+                    <optgroup key={cat.id} label={cat.label}>
+                      {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
+                    </optgroup>
+                  ))}
+                      </select>
+                    </div>
+                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Статус</div>
+                      <select value={editLesson.status} onChange={e=>setEditLesson({...editLesson,status:e.target.value})}>
+                        {Object.entries(lsnCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </div>
+                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Дата</div>
+                      <input type="date" value={editLesson.date} onChange={e=>setEditLesson({...editLesson,date:e.target.value})} />
+                    </div>
+                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Время</div>
+                      <input type="time" value={editLesson.time} onChange={e=>setEditLesson({...editLesson,time:e.target.value})} />
+                    </div>
+                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Длительность (мин)</div>
+                      <input type="number" value={editLesson.duration} onChange={e=>setEditLesson({...editLesson,duration:Number(e.target.value)})} />
+                    </div>
+                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Стоимость (₽)</div>
+                      <input type="number" value={editLesson.price} onChange={e=>setEditLesson({...editLesson,price:Number(e.target.value)})} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* WEEK GRID */}
+              {schedView==="week" && (
+                <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom:"1px solid #1e2433" }}>
+                    <div style={{ background:"#13151f" }} />
+                    {weekDates.map((d,i)=>{
+                      const isToday = fmt(d)===fmt(today);
+                      const dayCount = weekLessons.filter(l=>l.date===fmt(d)).length;
+                      return (
+                        <div key={i} style={{ padding:"12px 6px", textAlign:"center", background:"#13151f", borderLeft:"1px solid #1e2433" }}>
+                          <div style={{ fontSize:11, color:"#475569", marginBottom:3 }}>{DAYS[i]}</div>
+                          <div style={{ fontSize:17, fontWeight:700, color:isToday?"#818cf8":"#e2e8f0", background:isToday?"rgba(99,102,241,0.18)":"transparent", borderRadius:8, padding:"2px 6px", display:"inline-block" }}>{d.getDate()}</div>
+                          {dayCount>0 && <div style={{ fontSize:10, color:"#6366f1", marginTop:2, fontWeight:600 }}>{dayCount} занят.</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ overflowY:"auto", maxHeight:"58vh" }}>
+                    {HOURS.map(hour=>(
+                      <div key={hour} style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom:"1px solid #1a1e2e", minHeight:52 }}>
+                        <div style={{ padding:"4px 6px", fontSize:11, color:"#334155", textAlign:"right", paddingTop:8, borderRight:"1px solid #1e2433", background:"#13151f" }}>{hour}:00</div>
+                        {weekDates.map((d,di)=>{
+                          const dateStr = fmt(d);
+                          const dayLessons = weekLessons.filter(l=>l.date===dateStr && l.time && parseInt(l.time.split(":")[0])===hour);
+                          const isToday = dateStr===fmt(today);
+                          return (
+                            <div key={di}
+                              style={{ borderLeft:"1px solid #1a1e2e", padding:"3px 4px", background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer" }}
+                              onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:`${String(hour).padStart(2,"0")}:00`})); setModal("addLesson"); }}>
+                              {dayLessons.map(l=>{
+                                const tu=tutors.find(x=>x.id===l.tutorId);
+                                const isActive = editLesson?.id===l.id;
+                                return (
+                                  <div key={l.id} onClick={e=>{ e.stopPropagation(); setEditLesson(isActive?null:{...l}); }}
+                                    style={{ background: isActive?`${tu?.color||"#6366f1"}33`:`${tu?.color||"#6366f1"}18`, border:`1px solid ${isActive?tu?.color||"#6366f1":(tu?.color||"#6366f1")+"33"}`, borderLeft:`3px solid ${tu?.color||"#6366f1"}`, borderRadius:6, padding:"4px 6px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
+                                    <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+                                      {l.isGroup && <span style={{ fontSize:8, background:"#f59e0b", color:"black", borderRadius:3, padding:"1px 4px", fontWeight:700 }}>ГР</span>}
+                                      <div style={{ fontSize:11, fontWeight:700, color:"#e2e8f0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{l.isGroup?l.groupName:l.studentName}</div>
+                                    </div>
+                                    <div style={{ fontSize:10, color:"#94a3b8" }}>{l.subject} · {l.time}</div>
+                                    {l.isGroup && <div style={{ fontSize:9, color:"#f59e0b" }}>{l.studentName}</div>}
+                                    {l.status==="completed" && <div style={{ fontSize:9, color:"#22c55e" }}>✓</div>}
+                                    {l.status==="cancelled" && <div style={{ fontSize:9, color:"#ef4444" }}>✗</div>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ padding:"8px 14px", borderTop:"1px solid #1e2433", fontSize:11, color:"#334155" }}>
+                    💡 Нажмите на занятие — редактировать · Нажмите на пустую ячейку — добавить в это время
+                  </div>
+                </div>
+              )}
+
+              {/* LIST VIEW */}
+              {schedView==="list" && (
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {lessons.length===0 && <div style={{ color:"#475569", textAlign:"center", padding:40 }}>Нет занятий</div>}
+                  {allLessonsFiltered.sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:a.time>b.time?1:-1).map(l=>{
+                    const t=tutors.find(x=>x.id===l.tutorId);
+                    const isEditing = editLesson?.id===l.id;
+                    return (
+                      <div key={l.id} style={{ background:isEditing?"rgba(99,102,241,0.08)":"#161925", border:`1px solid ${isEditing?"#6366f1":"#1e2433"}`, borderRadius:14, padding:"14px 20px", display:"flex", alignItems:"center", gap:14, transition:"all .2s" }}>
+                        <div style={{ width:4, height:40, borderRadius:2, background:lsnCfg[l.status]?.color, flexShrink:0 }} />
+                        <div style={{ width:70, flexShrink:0 }}>
+                          <div style={{ fontSize:14, fontWeight:700 }}>{l.time||"—"}</div>
+                          <div style={{ fontSize:11, color:"#475569" }}>{l.date}</div>
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            {l.isGroup && <span style={{ fontSize:9, background:"#f59e0b22", color:"#f59e0b", border:"1px solid #f59e0b44", borderRadius:4, padding:"1px 6px", fontWeight:700 }}>ГРУППА</span>}
+                            <div style={{ fontSize:14, fontWeight:600 }}>{l.isGroup ? l.groupName : l.studentName}</div>
+                          </div>
+                          <div style={{ fontSize:12, color:"#475569" }}>{l.subject} · {l.duration} мин · {l.tutorShort}{l.isGroup ? ` · ${l.studentName}` : ""}</div>
+                        </div>
+                        {t && <Av name={t.name} color={t.color} size={28} />}
+                        <div style={{ textAlign:"right", flexShrink:0 }}>
+                          <div style={{ fontSize:15, fontWeight:700 }}>{l.price}₽</div>
+                          <Tag c={lsnCfg[l.status]?.color} bg={`${lsnCfg[l.status]?.color}22`}>{lsnCfg[l.status]?.label}</Tag>
+                        </div>
+                        <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                          {l.status==="scheduled" && <button className="bg" style={{ fontSize:11, padding:"5px 10px" }} onClick={()=>completeLesson(l.id)}>✓</button>}
+                          <button className="bg" style={{ fontSize:11, padding:"5px 10px", background:isEditing?"rgba(99,102,241,0.25)":"" }} onClick={()=>setEditLesson(isEditing?null:{...l})}>✏️</button>
+                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>{ setLessons(lessons.filter(x=>x.id!==l.id)); notify("Занятие удалено"); }}>🗑</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ── TUTOR COLUMN VIEW (like Excel table) ── */}
+              {schedView==="tutors" && (()=>{
+                const DAYS_FULL = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"];
+                const DAYS_SHORT = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+                const HOURS = Array.from({length:14},(_,i)=>i+8);
+                const activeTutors = schedTutorFilter==="all" ? tutors : tutors.filter(t=>t.id===Number(schedTutorFilter));
+
+                const printTutorSchedule = () => {
+                  const w = window.open("","_blank");
+                  const dateRange = `${fmtLabel(weekDates[0])} — ${fmtLabel(weekDates[6])} 2026`;
+                  let tableRows = "";
+                  HOURS.forEach(hour => {
+                    let row = `<tr><td class="time">${hour}:00</td>`;
+                    activeTutors.forEach(t => {
+                      weekDates.forEach((d,di) => {
+                        const dateStr = fmt(d);
+                        const cell = lessons.filter(l=>l.tutorId===t.id && l.date===dateStr && l.time && parseInt(l.time.split(":")[0])===hour);
+                        row += `<td class="${cell.length?'has-lesson':''}">` + cell.map(l=>`<div class="lesson-cell"><b>${l.studentName}</b><br/>${l.subject}<br/>${l.time} · ${l.duration}мин</div>`).join("") + `</td>`;
+                      });
+                    });
+                    row += "</tr>";
+                    tableRows += row;
+                  });
+                  let headerCells = '<th class="time-h">Время</th>';
+                  activeTutors.forEach(t => {
+                    weekDates.forEach((d,di) => {
+                      headerCells += `<th>${t.short}<br/><span style="font-weight:400;font-size:11px">${DAYS_SHORT[di]} ${d.getDate()}</span></th>`;
+                    });
+                  });
+                  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Расписание ${dateRange}</title>
+                  <style>
+                    body{font-family:Arial,sans-serif;padding:12px;font-size:11px}
+                    h2{font-size:14px;margin-bottom:4px}p{color:#666;margin:0 0 10px;font-size:11px}
+                    table{border-collapse:collapse;width:100%}
+                    th{background:#f0f0f0;padding:5px 4px;text-align:center;border:1px solid #ddd;font-size:10px;white-space:nowrap}
+                    td{padding:3px 4px;border:1px solid #eee;vertical-align:top;min-width:70px;font-size:10px}
+                    td.time{background:#f9f9f9;font-weight:600;text-align:center;color:#666;white-space:nowrap}
+                    th.time-h{background:#e8e8e8}
+                    td.has-lesson{background:#f0f4ff}
+                    .lesson-cell{background:#6366f1;color:white;border-radius:3px;padding:3px 4px;margin-bottom:2px;font-size:9px}
+                    @media print{button{display:none}}
+                  </style></head><body>
+                  <h2>📅 Расписание — ${dateRange}</h2>
+                  <p>Образовательный центр ГЕНИЙ</p>
+                  <button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#6366f1;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ Распечатать</button>
+                  <table><thead><tr>${headerCells}</tr></thead><tbody>${tableRows}</tbody></table>
+                  </body></html>`);
+                  w.document.close();
+                };
+
+                return (
+                  <div>
+                    <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
+                      <button className="bg" onClick={printTutorSchedule}>🖨️ Распечатать расписание</button>
+                    </div>
+                    <div style={{ overflowX:"auto" }}>
+                      <table style={{ borderCollapse:"collapse", minWidth:"100%", fontSize:11 }}>
+                        <thead>
+                          {/* Tutor row */}
+                          <tr style={{ background:"#13151f" }}>
+                            <th style={{ width:52, padding:"8px 4px", border:"1px solid #2d3252", background:"#13151f", position:"sticky", left:0, zIndex:2 }}></th>
+                            {activeTutors.map(t=>(
+                              <th key={t.id} colSpan={7} style={{ padding:"10px 8px", textAlign:"center", border:"1px solid #2d3252", background:"#13151f", minWidth:560 }}>
+                                <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+                                  <div style={{ width:10,height:10,borderRadius:"50%",background:t.color }} />
+                                  <span style={{ color:t.color, fontWeight:700, fontSize:12 }}>{t.short}</span>
+                                  <span style={{ color:"#334155", fontWeight:400, fontSize:10 }}>{t.subjects.join(", ")}</span>
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                          {/* Day row */}
+                          <tr style={{ background:"#161925" }}>
+                            <th style={{ padding:"6px 4px", border:"1px solid #2d3252", background:"#161925", position:"sticky", left:0, zIndex:2, fontSize:10, color:"#334155" }}>Время</th>
+                            {activeTutors.map(t=>
+                              weekDates.map((d,di)=>{
+                                const isToday = fmt(d)===fmt(today);
+                                const dayCount = lessons.filter(l=>l.tutorId===t.id&&l.date===fmt(d)).length;
+                                return (
+                                  <th key={`${t.id}-${di}`} style={{ padding:"6px 5px", border:"1px solid #2d3252", textAlign:"center", background:isToday?"rgba(99,102,241,0.12)":"#161925", minWidth:80 }}>
+                                    <div style={{ fontSize:10, color:isToday?"#818cf8":"#475569" }}>{DAYS_SHORT[di]}</div>
+                                    <div style={{ fontSize:13, fontWeight:700, color:isToday?"#818cf8":"#cbd5e1" }}>{d.getDate()}</div>
+                                    {dayCount>0&&<div style={{ fontSize:9, color:t.color }}>{dayCount}з</div>}
+                                  </th>
+                                );
+                              })
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {HOURS.map(hour=>(
+                            <tr key={hour} style={{ borderBottom:"1px solid #1a1e2e" }}>
+                              <td style={{ padding:"4px 6px", fontSize:11, color:"#334155", textAlign:"right", background:"#13151f", border:"1px solid #1e2433", fontWeight:600, whiteSpace:"nowrap", position:"sticky", left:0, zIndex:1 }}>{hour}:00</td>
+                              {activeTutors.map(t=>
+                                weekDates.map((d,di)=>{
+                                  const dateStr = fmt(d);
+                                  const isToday = dateStr===fmt(today);
+                                  const cellLessons = lessons.filter(l=>l.tutorId===t.id&&l.date===dateStr&&l.time&&parseInt(l.time.split(":")[0])===hour);
+                                  return (
+                                    <td key={`${t.id}-${di}`}
+                                      style={{ padding:"2px 3px", border:"1px solid #1a1e2e", verticalAlign:"top", minHeight:40, background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer", minWidth:80 }}
+                                      onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:`${String(hour).padStart(2,"0")}:00`,tutorId:String(t.id)})); setModal("addLesson"); }}>
+                                      {cellLessons.map(l=>{
+                                        const isActive = editLesson?.id===l.id;
+                                        return (
+                                          <div key={l.id}
+                                            onClick={e=>{ e.stopPropagation(); setEditLesson(isActive?null:{...l}); }}
+                                            style={{ background:isActive?`${t.color}44`:`${t.color}20`, border:`1px solid ${isActive?t.color:t.color+"44"}`, borderLeft:`3px solid ${t.color}`, borderRadius:4, padding:"3px 5px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
+                                            <div style={{ fontSize:10, fontWeight:700, color:"#e2e8f0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:74 }}>{l.studentName}</div>
+                                            <div style={{ fontSize:9, color:"#94a3b8" }}>{l.subject}</div>
+                                            <div style={{ fontSize:9, color:"#64748b" }}>{l.time}{l.status==="completed"?" ✓":l.status==="cancelled"?" ✗":""}</div>
+                                          </div>
+                                        );
+                                      })}
+                                    </td>
+                                  );
+                                })
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ padding:"8px 0", fontSize:11, color:"#334155", marginTop:8 }}>
+                      💡 Нажмите на ячейку — создать занятие · Нажмите на занятие — редактировать
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          );
+        })()}
+
+
+        {/* ── PRICING & RULES ── */}
+        {view==="pricing" && (()=>{
+          const pricingCategories = [...new Set(pricing.map(p=>p.category))];
+          const rulesSections = [...new Set(rules.map(r=>r.section))];
+
+          const printPricing = () => {
+            const w = window.open("","_blank");
+            const cats = [...new Set(pricing.map(p=>p.category))];
+            let pRows = cats.map(cat=>{
+              const items = pricing.filter(p=>p.category===cat);
+              return `<tr><td colspan="5" style="background:#f3f4f6;font-weight:700;padding:8px 10px">${cat}</td></tr>` +
+                items.map(p=>`<tr><td>${p.course}</td><td style="text-align:center">${p.price45?""+p.price45+" ₽":"—"}</td><td style="text-align:center">${p.price60?""+p.price60+" ₽":"—"}</td><td style="text-align:center">${p.price90?""+p.price90+" ₽":"—"}</td><td style="text-align:center">${p.price120?""+p.price120+" ₽":"—"}</td><td style="text-align:center">${p.groupPrice?""+p.groupPrice+" ₽":"—"}</td></tr>`).join("");
+            }).join("");
+            const ruleSecs = [...new Set(rules.map(r=>r.section))];
+            let rHtml = ruleSecs.map(sec=>`<h3 style="margin:16px 0 8px;font-size:13px">${sec}</h3><ul style="margin:0;padding-left:20px">${rules.filter(r=>r.section===sec).map(r=>`<li style="margin-bottom:5px;font-size:12px">${r.text}</li>`).join("")}</ul>`).join("");
+            w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Прайс-лист и правила</title>
+            <style>body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#111}
+            h1{font-size:20px}h2{font-size:16px;margin:24px 0 10px;border-bottom:2px solid #e5e7eb;padding-bottom:6px}
+            table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px}
+            th{background:#6366f1;color:white;padding:8px 10px;text-align:left}
+            td{padding:7px 10px;border-bottom:1px solid #e5e7eb}
+            @media print{button{display:none}}</style></head><body>
+            <h1>Образовательный центр ГЕНИЙ</h1>
+            <button onclick="window.print()" style="margin-bottom:16px;padding:8px 20px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer">🖨️ Распечатать</button>
+            <h2>💰 Прайс-лист</h2>
+            <table><thead><tr><th>Курс</th><th>45 мин</th><th>60 мин</th><th>90 мин</th><th>120 мин</th><th>Групп.</th></tr></thead>
+            <tbody>${pRows}</tbody></table>
+            <h2>📋 Правила центра</h2>${rHtml}
+            </body></html>`);
+            w.document.close();
+          };
+
+          return (
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+                <div>
+                  <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Цены и правила</h1>
+                  <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>Прайс-лист и правила центра · редактируемые</div>
+                </div>
+                <button className="bg" onClick={printPricing}>🖨️ Распечатать памятку</button>
+              </div>
+
+              {/* tabs */}
+              <div style={{ display:"flex", gap:4, marginBottom:20, background:"#161925", border:"1px solid #1e2433", borderRadius:12, padding:6, width:"fit-content" }}>
+                {[["prices","💰 Прайс-лист"],["rules","📋 Правила"]].map(([k,l])=>(
+                  <button key={k} className="stab" onClick={()=>setPricingTab(k)}
+                    style={{ background:pricingTab===k?"rgba(99,102,241,0.25)":"transparent", color:pricingTab===k?"#818cf8":"#64748b" }}>{l}</button>
+                ))}
+              </div>
+
+              {/* PRICES TAB */}
+              {pricingTab==="prices" && (
+                <div>
+                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                      <thead>
+                        <tr style={{ background:"#13151f" }}>
+                          {["Курс / направление","45 мин","60 мин","90 мин","120 мин","Групп.","Примечание",""].map(h=>(
+                            <th key={h} style={{ padding:"12px 14px", textAlign:h==="Курс / направление"||h===""?"left":"center", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pricingCategories.map(cat=>(
+                          <>
+                            <tr key={cat} style={{ background:"rgba(99,102,241,0.08)" }}>
+                              <td colSpan={7} style={{ padding:"9px 14px", fontSize:12, fontWeight:700, color:"#818cf8" }}>{cat}</td>
+                            </tr>
+                            {pricing.filter(p=>p.category===cat).map(p=>(
+                              <tr key={p.id} style={{ borderBottom:"1px solid #1a1e2e" }}>
+                                {editPricing?.id===p.id ? (
+                                  <>
+                                    <td style={{ padding:"8px 10px" }}><input value={editPricing.course} onChange={e=>setEditPricing({...editPricing,course:e.target.value})} style={{ fontSize:12 }} /></td>
+                                    {["price45","price60","price90","price120","groupPrice"].map(f=>(
+                                      <td key={f} style={{ padding:"8px 6px", textAlign:"center" }}>
+                                        <input type="number" value={editPricing[f]||""} onChange={e=>setEditPricing({...editPricing,[f]:e.target.value?Number(e.target.value):null})} style={{ fontSize:12, width:70, textAlign:"center" }} placeholder="—" />
+                                      </td>
+                                    ))}
+                                    <td style={{ padding:"8px 6px" }}><input value={editPricing.note||""} onChange={e=>setEditPricing({...editPricing,note:e.target.value})} style={{ fontSize:11 }} placeholder="Примечание" /></td>
+                                    <td style={{ padding:"8px 6px" }}>
+                                      <div style={{ display:"flex", gap:4 }}>
+                                        <button className="bp" style={{ fontSize:10, padding:"4px 8px" }} onClick={()=>{ setPricing(pricing.map(x=>x.id===p.id?{...editPricing}:x)); setEditPricing(null); notify("Цена обновлена"); }}>✓</button>
+                                        <button className="bg" style={{ fontSize:10, padding:"4px 8px" }} onClick={()=>setEditPricing(null)}>✗</button>
+                                      </div>
+                                    </td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td style={{ padding:"10px 14px", fontSize:13, fontWeight:500 }}>{p.course}</td>
+                                    {[p.price45,p.price60,p.price90,p.price120,p.groupPrice].map((v,i)=>(
+                                      <td key={i} style={{ padding:"10px 8px", textAlign:"center", fontSize:13, color:v?"#22c55e":"#334155", fontWeight:v?600:400 }}>{v?`${v} ₽`:"—"}</td>
+                                    ))}
+                                    <td style={{ padding:"10px 10px", fontSize:11, color:"#f59e0b" }}>{p.note||""}</td>
+                                    <td style={{ padding:"10px 8px" }}>
+                                      <button className="bg" style={{ fontSize:10, padding:"3px 8px" }} onClick={()=>setEditPricing({...p})}>✏️</button>
+                                    </td>
+                                  </>
+                                )}
+                              </tr>
+                            ))}
+                          </>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ display:"flex", gap:10, marginTop:14 }}>
+                    <button className="bp" onClick={()=>{ const newRow={id:Date.now(),category:pricingCategories[0],course:"Новый курс",price45:null,price60:600,price90:null,price120:null,groupPrice:null,note:""}; setPricing([...pricing,newRow]); setEditPricing(newRow); }}>+ Добавить курс</button>
+                  </div>
+                </div>
+              )}
+
+              {/* RULES TAB */}
+              {pricingTab==="rules" && (
+                <div>
+                  {rulesSections.map(sec=>(
+                    <div key={sec} style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20, marginBottom:14 }}>
+                      <div style={{ fontSize:15, fontWeight:700, color:"#818cf8", marginBottom:14 }}>{sec}</div>
+                      {rules.filter(r=>r.section===sec).map(r=>(
+                        <div key={r.id} style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"9px 0", borderBottom:"1px solid #1a1e2e" }}>
+                          {editRule?.id===r.id ? (
+                            <>
+                              <textarea value={editRule.text} onChange={e=>setEditRule({...editRule,text:e.target.value})} rows={2} style={{ flex:1, fontSize:13 }} />
+                              <div style={{ display:"flex", gap:4, flexShrink:0 }}>
+                                <button className="bp" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>{ setRules(rules.map(x=>x.id===r.id?{...editRule}:x)); setEditRule(null); notify("Правило обновлено"); }}>✓ Сохранить</button>
+                                <button className="bg" style={{ fontSize:11, padding:"4px 8px" }} onClick={()=>setEditRule(null)}>✗</button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ width:6, height:6, borderRadius:"50%", background:"#6366f1", marginTop:6, flexShrink:0 }} />
+                              <div style={{ flex:1, fontSize:13, color:"#cbd5e1", lineHeight:1.6 }}>{r.text}</div>
+                              <div style={{ display:"flex", gap:4, flexShrink:0 }}>
+                                <button className="bg" style={{ fontSize:10, padding:"3px 8px" }} onClick={()=>setEditRule({...r})}>✏️</button>
+                                <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontSize:10, fontFamily:"inherit" }} onClick={()=>setRules(rules.filter(x=>x.id!==r.id))}>🗑</button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      <button className="bg" style={{ marginTop:10, fontSize:11 }} onClick={()=>{ const nr={id:Date.now(),section:sec,text:"Новое правило"}; setRules([...rules,nr]); setEditRule(nr); }}>+ Добавить правило</button>
+                    </div>
+                  ))}
+                  <button className="bp" onClick={()=>{ const sec="📌 Новый раздел"; const nr={id:Date.now(),section:sec,text:"Первое правило"}; setRules([...rules,nr]); }}>+ Добавить раздел</button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── PAYMENTS ── */}
+        {view==="payments" && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
+              <div><h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Финансы</h1></div>
+              <button className="bp" onClick={()=>setModal("addPayment")}>+ Записать оплату</button>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16, marginBottom:24 }}>
+              {[
+                { l:"Получено от учеников", v:`${totalRevenue.toLocaleString("ru")} ₽`,              c:"#22c55e" },
+                { l:"Выплачено преподавателям", v:`${totalSalPaid.toLocaleString("ru")} ₽`,         c:"#f59e0b" },
+                { l:"Прибыль центра",        v:`${(totalRevenue-totalSalPaid).toLocaleString("ru")} ₽`, c:"#6366f1" },
+              ].map((s,i)=>(
+                <div key={i} style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:"18px 20px" }}>
+                  <div style={{ fontSize:12, color:"#475569", marginBottom:6 }}>{s.l}</div>
+                  <div style={{ fontSize:24, fontWeight:700, color:s.c }}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom:"1px solid #1e2433" }}>
+                    {["Ученик","Сумма","Дата","Способ","Комментарий"].map(h=>(
+                      <th key={h} style={{ padding:"13px 16px", textAlign:"left", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map(p=>(
+                    <tr key={p.id} style={{ borderBottom:"1px solid #1a1e2e" }}>
+                      <td style={{ padding:"12px 16px", fontSize:13, fontWeight:600 }}>{p.studentName}</td>
+                      <td style={{ padding:"12px 16px", fontSize:15, fontWeight:700, color:"#22c55e" }}>+{p.amount.toLocaleString("ru")}₽</td>
+                      <td style={{ padding:"12px 16px", fontSize:12, color:"#64748b" }}>{p.date}</td>
+                      <td style={{ padding:"12px 16px" }}><Tag c="#818cf8" bg="rgba(99,102,241,0.12)">{p.method==="card"?"💳 Карта":p.method==="cash"?"💵 Наличные":"📱 Перевод"}</Tag></td>
+                      <td style={{ padding:"12px 16px", fontSize:12, color:"#475569" }}>{p.comment}</td>
+                      <td style={{ padding:"12px 16px" }}>
+                        <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>printReceipt(students.find(s=>s.id===p.studentId), p)}>🖨️ Квитанция</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── REPORTS ── */}
+        {view==="reports" && (()=>{
+          const MONTHS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+          const allMonths = [...new Set([...payments.map(p=>p.date.slice(0,7)), ...lessons.filter(l=>l.status==="completed").map(l=>l.date.slice(0,7))])].sort();
+          const [reportMonth, setReportMonth] = useState(allMonths[allMonths.length-1] || "2026-03");
+          const [reportTab, setReportTab] = useState("finance");
+
+          // Finance stats for selected month
+          const mPayments  = payments.filter(p=>p.date.startsWith(reportMonth));
+          const mRevenue   = mPayments.reduce((s,p)=>s+p.amount,0);
+          const mLessons   = lessons.filter(l=>l.date.startsWith(reportMonth));
+          const mCompleted = mLessons.filter(l=>l.status==="completed");
+          const mSalaries  = salaries.filter(s=>s.month===reportMonth || s.date?.startsWith(reportMonth));
+          const mSalTotal  = mSalaries.reduce((s,p)=>s+p.amount,0);
+          const mProfit    = mRevenue - mSalTotal;
+          const mAvgCheck  = mPayments.length ? Math.round(mRevenue/mPayments.length) : 0;
+
+          // Students stats
+          const mNewStudents = students.filter(s=>{
+            const firstLesson = lessons.filter(l=>l.studentId===s.id).sort((a,b)=>a.date>b.date?1:-1)[0];
+            return firstLesson?.date?.startsWith(reportMonth);
+          });
+          const mActiveStudents = [...new Set(mCompleted.map(l=>l.studentId))];
+
+          // Tutor stats for month
+          const tutorStats = tutors.map(t=>{
+            const tLsns = mCompleted.filter(l=>l.tutorId===t.id);
+            const earned = tLsns.reduce((s,l)=>s+calcEarning(l,t),0);
+            const revenue = tLsns.reduce((s,l)=>s+l.price,0);
+            return { ...t, lessons:tLsns.length, earned, revenue, students:[...new Set(tLsns.map(l=>l.studentId))].length };
+          }).filter(t=>t.lessons>0).sort((a,b)=>b.lessons-a.lessons);
+
+          // Subject stats
+          const subjectStats = {};
+          mCompleted.forEach(l=>{ subjectStats[l.subject]=(subjectStats[l.subject]||0)+1; });
+          const subjectArr = Object.entries(subjectStats).sort((a,b)=>b[1]-a[1]);
+          const maxSubj = subjectArr[0]?.[1]||1;
+
+          // Monthly trend (last 6 months)
+          const trendMonths = allMonths.slice(-6);
+          const trendData = trendMonths.map(m=>({
+            month: MONTHS[parseInt(m.split("-")[1])-1],
+            revenue: payments.filter(p=>p.date.startsWith(m)).reduce((s,p)=>s+p.amount,0),
+            lessons: lessons.filter(l=>l.date.startsWith(m)&&l.status==="completed").length,
+          }));
+          const maxRevenue = Math.max(...trendData.map(d=>d.revenue),1);
+          const maxLessons = Math.max(...trendData.map(d=>d.lessons),1);
+
+          const printReport = () => {
+            const w = window.open("","_blank");
+            const mLabel = `${MONTHS[parseInt(reportMonth.split("-")[1])-1]} ${reportMonth.split("-")[0]}`;
+            w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Отчёт ${mLabel}</title>
+            <style>body{font-family:Arial,sans-serif;padding:24px;color:#111;max-width:900px;margin:0 auto}
+            h1{font-size:20px;margin-bottom:4px}p{color:#777;font-size:13px;margin:0 0 20px}
+            .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+            .card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px;text-align:center}
+            .card .v{font-size:24px;font-weight:700;color:#6366f1;margin-bottom:4px}.card .l{font-size:12px;color:#777}
+            table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px}
+            th{background:#f3f4f6;padding:8px 10px;text-align:left;border-bottom:2px solid #e5e7eb;font-weight:600}
+            td{padding:7px 10px;border-bottom:1px solid #e5e7eb}h2{font-size:15px;margin:20px 0 10px}
+            @media print{button{display:none}}</style></head><body>
+            <h1>📊 Отчёт за ${mLabel}</h1><p>EduCRM · Репетиторский центр</p>
+            <button onclick="window.print()" style="margin-bottom:20px;padding:8px 20px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer">🖨️ Распечатать</button>
+            <div class="grid">
+              <div class="card"><div class="v">${mRevenue.toLocaleString("ru")}₽</div><div class="l">Выручка</div></div>
+              <div class="card"><div class="v">${mProfit.toLocaleString("ru")}₽</div><div class="l">Прибыль</div></div>
+              <div class="card"><div class="v">${mCompleted.length}</div><div class="l">Занятий проведено</div></div>
+              <div class="card"><div class="v">${mActiveStudents.length}</div><div class="l">Активных учеников</div></div>
+            </div>
+            <h2>Преподаватели</h2>
+            <table><thead><tr><th>Преподаватель</th><th>Занятий</th><th>Учеников</th><th>Выручка</th><th>К выплате</th></tr></thead>
+            <tbody>${tutorStats.map(t=>`<tr><td>${t.short}</td><td>${t.lessons}</td><td>${t.students}</td><td>${t.revenue.toLocaleString("ru")}₽</td><td>${t.earned.toLocaleString("ru")}₽</td></tr>`).join("")}</tbody></table>
+            <h2>По предметам</h2>
+            <table><thead><tr><th>Предмет</th><th>Занятий</th></tr></thead>
+            <tbody>${subjectArr.map(([s,c])=>`<tr><td>${s}</td><td>${c}</td></tr>`).join("")}</tbody></table>
+            </body></html>`);
+            w.document.close();
+          };
+
+          return (
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
+                <div>
+                  <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Отчёты</h1>
+                  <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>Аналитика и статистика по месяцам</div>
+                </div>
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <select value={reportMonth} onChange={e=>setReportMonth(e.target.value)} style={{ width:"auto" }}>
+                    {allMonths.map(m=>{
+                      const [y,mo]=m.split("-");
+                      return <option key={m} value={m}>{MONTHS[parseInt(mo)-1]} {y}</option>;
+                    })}
+                    {!allMonths.includes("2026-03") && <option value="2026-03">Март 2026</option>}
+                  </select>
+                  <button className="bg" onClick={printReport}>🖨️ Печать</button>
+                </div>
+              </div>
+
+              {/* tabs */}
+              <div style={{ display:"flex", gap:4, marginBottom:20, background:"#161925", border:"1px solid #1e2433", borderRadius:12, padding:6, width:"fit-content" }}>
+                {[["finance","💰 Финансы"],["tutors_r","🎓 Преподаватели"],["subjects","📚 Предметы"],["trend","📈 Динамика"]].map(([k,l])=>(
+                  <button key={k} className="stab" onClick={()=>setReportTab(k)}
+                    style={{ background:reportTab===k?"rgba(99,102,241,0.25)":"transparent", color:reportTab===k?"#818cf8":"#64748b" }}>{l}</button>
+                ))}
+              </div>
+
+              {/* ── TAB: finance ── */}
+              {reportTab==="finance" && (
+                <div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
+                    {[
+                      { l:"Выручка",          v:`${mRevenue.toLocaleString("ru")}₽`,   c:"#22c55e", icon:"💰" },
+                      { l:"Расходы (зарп.)",  v:`${mSalTotal.toLocaleString("ru")}₽`,  c:"#f59e0b", icon:"💸" },
+                      { l:"Прибыль центра",   v:`${mProfit.toLocaleString("ru")}₽`,    c:mProfit>=0?"#6366f1":"#ef4444", icon:"📈" },
+                      { l:"Средний чек",      v:`${mAvgCheck.toLocaleString("ru")}₽`,  c:"#ec4899", icon:"🧾" },
+                    ].map((s,i)=>(
+                      <div key={i} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                          <div>
+                            <div style={{ fontSize:12, color:"#475569", marginBottom:8 }}>{s.l}</div>
+                            <div style={{ fontSize:26, fontWeight:700, color:s.c, fontFamily:"'Syne',sans-serif" }}>{s.v}</div>
+                          </div>
+                          <div style={{ fontSize:26, opacity:.5 }}>{s.icon}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
+                    {[
+                      { l:"Занятий проведено", v:mCompleted.length,       c:"#6366f1", icon:"📚" },
+                      { l:"Занятий запланировано", v:mLessons.filter(l=>l.status==="scheduled").length, c:"#94a3b8", icon:"📅" },
+                      { l:"Уникальных учеников",v:mActiveStudents.length, c:"#22c55e", icon:"👥" },
+                      { l:"Новых учеников",     v:mNewStudents.length,    c:"#f59e0b", icon:"🆕" },
+                    ].map((s,i)=>(
+                      <div key={i} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                          <div>
+                            <div style={{ fontSize:12, color:"#475569", marginBottom:8 }}>{s.l}</div>
+                            <div style={{ fontSize:26, fontWeight:700, color:s.c, fontFamily:"'Syne',sans-serif" }}>{s.v}</div>
+                          </div>
+                          <div style={{ fontSize:26, opacity:.5 }}>{s.icon}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* payments list */}
+                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
+                    <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e2433", fontSize:14, fontWeight:600 }}>Платежи за месяц</div>
+                    {mPayments.length===0
+                      ? <div style={{ padding:"30px", textAlign:"center", color:"#475569" }}>Нет платежей</div>
+                      : <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                          <thead><tr style={{ borderBottom:"1px solid #1e2433" }}>
+                            {["Ученик","Сумма","Дата","Способ","Комментарий"].map(h=><th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase" }}>{h}</th>)}
+                          </tr></thead>
+                          <tbody>
+                            {mPayments.map(p=>(
+                              <tr key={p.id} style={{ borderBottom:"1px solid #1a1e2e" }}>
+                                <td style={{ padding:"11px 16px", fontWeight:600, fontSize:13 }}>{p.studentName}</td>
+                                <td style={{ padding:"11px 16px", fontWeight:700, color:"#22c55e" }}>+{p.amount.toLocaleString("ru")}₽</td>
+                                <td style={{ padding:"11px 16px", fontSize:12, color:"#64748b" }}>{p.date}</td>
+                                <td style={{ padding:"11px 16px" }}><Tag c="#818cf8" bg="rgba(99,102,241,0.12)">{p.method==="card"?"💳 Карта":p.method==="cash"?"💵 Наличные":"📱 Перевод"}</Tag></td>
+                                <td style={{ padding:"11px 16px", fontSize:12, color:"#475569" }}>{p.comment}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                    }
+                  </div>
+                </div>
+              )}
+
+              {/* ── TAB: tutors_r ── */}
+              {reportTab==="tutors_r" && (
+                <div>
+                  {tutorStats.length===0
+                    ? <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:"60px", textAlign:"center", color:"#475569" }}>Нет данных за этот месяц</div>
+                    : (
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
+                        {tutorStats.map((t,i)=>(
+                          <div key={t.id} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+                              <Av name={t.name} color={t.color} size={42} />
+                              <div>
+                                <div style={{ fontSize:14, fontWeight:700 }}>{t.short}</div>
+                                <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{t.subjects.join(", ")}</div>
+                              </div>
+                              {i===0 && <div style={{ marginLeft:"auto", fontSize:18 }}>🥇</div>}
+                              {i===1 && <div style={{ marginLeft:"auto", fontSize:18 }}>🥈</div>}
+                              {i===2 && <div style={{ marginLeft:"auto", fontSize:18 }}>🥉</div>}
+                            </div>
+                            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                              {[
+                                { l:"Занятий",  v:t.lessons,                         c:"#6366f1" },
+                                { l:"Учеников", v:t.students,                        c:"#22c55e" },
+                                { l:"К выплате",v:`${t.earned.toLocaleString("ru")}₽`,c:"#f59e0b"},
+                              ].map((m,j)=>(
+                                <div key={j} style={{ background:"#1a1e2e", borderRadius:9, padding:"9px", textAlign:"center" }}>
+                                  <div style={{ fontSize:10, color:"#475569", marginBottom:3 }}>{m.l}</div>
+                                  <div style={{ fontSize:14, fontWeight:700, color:m.c }}>{m.v}</div>
+                                </div>
+                              ))}
+                            </div>
+                            {/* mini bar */}
+                            <div style={{ marginTop:12 }}>
+                              <div style={{ fontSize:11, color:"#475569", marginBottom:5 }}>Доля занятий в центре</div>
+                              <div style={{ height:6, background:"#1a1e2e", borderRadius:3, overflow:"hidden" }}>
+                                <div style={{ height:"100%", background:t.color, borderRadius:3, width:`${Math.round(t.lessons/Math.max(...tutorStats.map(x=>x.lessons),1)*100)}%`, transition:"width .5s" }} />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  }
+                  {/* salary summary */}
+                  {mSalaries.length>0 && (
+                    <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20, marginTop:16 }}>
+                      <div style={{ fontSize:14, fontWeight:600, marginBottom:14 }}>💼 Выплаты зарплат в этом месяце</div>
+                      {mSalaries.map(s=>{
+                        const t=tutors.find(x=>x.id===s.tutorId);
+                        return (
+                          <div key={s.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 0", borderBottom:"1px solid #1a1e2e" }}>
+                            {t && <Av name={t.name} color={t.color} size={30} />}
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:13, fontWeight:600 }}>{t?.short||"—"}</div>
+                              <div style={{ fontSize:11, color:"#475569" }}>{s.date} · {s.comment}</div>
+                            </div>
+                            <div style={{ fontSize:15, fontWeight:700, color:"#22c55e" }}>+{s.amount.toLocaleString("ru")}₽</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── TAB: subjects ── */}
+              {reportTab==="subjects" && (
+                <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:24 }}>
+                  <div style={{ fontSize:14, fontWeight:600, marginBottom:20 }}>Занятий по предметам за {MONTHS[parseInt(reportMonth.split("-")[1])-1]}</div>
+                  {subjectArr.length===0
+                    ? <div style={{ textAlign:"center", color:"#475569", padding:"40px 0" }}>Нет данных</div>
+                    : subjectArr.map(([subj, cnt])=>(
+                      <div key={subj} style={{ marginBottom:14 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                          <span style={{ fontSize:13, fontWeight:600 }}>{subj}</span>
+                          <span style={{ fontSize:13, color:"#94a3b8" }}>{cnt} занятий</span>
+                        </div>
+                        <div style={{ height:10, background:"#1a1e2e", borderRadius:5, overflow:"hidden" }}>
+                          <div style={{ height:"100%", background:"linear-gradient(90deg,#6366f1,#8b5cf6)", borderRadius:5, width:`${Math.round(cnt/maxSubj*100)}%`, transition:"width .6s" }} />
+                        </div>
+                      </div>
+                    ))
+                  }
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginTop:24 }}>
+                    {subjectArr.slice(0,6).map(([subj,cnt])=>(
+                      <div key={subj} style={{ background:"#1a1e2e", borderRadius:12, padding:"14px", textAlign:"center" }}>
+                        <div style={{ fontSize:22, fontWeight:700, color:"#818cf8" }}>{cnt}</div>
+                        <div style={{ fontSize:11, color:"#475569", marginTop:3 }}>{subj}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── TAB: trend ── */}
+              {reportTab==="trend" && (
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                  {/* revenue chart */}
+                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:24 }}>
+                    <div style={{ fontSize:14, fontWeight:600, marginBottom:20 }}>📈 Выручка по месяцам</div>
+                    <div style={{ display:"flex", alignItems:"flex-end", gap:10, height:140 }}>
+                      {trendData.map((d,i)=>(
+                        <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                          <div style={{ fontSize:10, color:"#475569", marginBottom:2 }}>{d.revenue>0?`${Math.round(d.revenue/1000)}к`:""}</div>
+                          <div style={{ width:"100%", background:`${d.month===MONTHS[parseInt(reportMonth.split("-")[1])-1]?"#6366f1":"rgba(99,102,241,0.3)"}`, borderRadius:"4px 4px 0 0", height:`${Math.max(Math.round(d.revenue/maxRevenue*120),4)}px`, transition:"height .5s" }} />
+                          <div style={{ fontSize:11, color:"#475569" }}>{d.month}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* lessons chart */}
+                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:24 }}>
+                    <div style={{ fontSize:14, fontWeight:600, marginBottom:20 }}>📚 Занятий по месяцам</div>
+                    <div style={{ display:"flex", alignItems:"flex-end", gap:10, height:140 }}>
+                      {trendData.map((d,i)=>(
+                        <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                          <div style={{ fontSize:10, color:"#475569", marginBottom:2 }}>{d.lessons||""}</div>
+                          <div style={{ width:"100%", background:`${d.month===MONTHS[parseInt(reportMonth.split("-")[1])-1]?"#22c55e":"rgba(34,197,94,0.3)"}`, borderRadius:"4px 4px 0 0", height:`${Math.max(Math.round(d.lessons/maxLessons*120),4)}px`, transition:"height .5s" }} />
+                          <div style={{ fontSize:11, color:"#475569" }}>{d.month}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* summary table */}
+                  <div style={{ gridColumn:"1/-1", background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
+                    <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e2433", fontSize:14, fontWeight:600 }}>Сводная таблица по месяцам</div>
+                    <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                      <thead>
+                        <tr style={{ borderBottom:"1px solid #1e2433" }}>
+                          {["Месяц","Выручка","Занятий","Новых учеников","Ср. чек"].map(h=>(
+                            <th key={h} style={{ padding:"11px 16px", textAlign:"left", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allMonths.slice(-6).reverse().map(m=>{
+                          const mP = payments.filter(p=>p.date.startsWith(m));
+                          const mRev = mP.reduce((s,p)=>s+p.amount,0);
+                          const mL = lessons.filter(l=>l.date.startsWith(m)&&l.status==="completed").length;
+                          const mNew = students.filter(s=>{ const f=lessons.filter(l=>l.studentId===s.id).sort((a,b)=>a.date>b.date?1:-1)[0]; return f?.date?.startsWith(m); }).length;
+                          const mAvg = mP.length ? Math.round(mRev/mP.length) : 0;
+                          const isSelected = m===reportMonth;
+                          return (
+                            <tr key={m} style={{ borderBottom:"1px solid #1a1e2e", background:isSelected?"rgba(99,102,241,0.06)":"transparent", cursor:"pointer" }} onClick={()=>setReportMonth(m)}>
+                              <td style={{ padding:"11px 16px", fontWeight:isSelected?700:400, color:isSelected?"#818cf8":"#e2e8f0" }}>
+                                {MONTHS[parseInt(m.split("-")[1])-1]} {m.split("-")[0]} {isSelected&&"◀"}
+                              </td>
+                              <td style={{ padding:"11px 16px", fontWeight:600, color:"#22c55e" }}>{mRev.toLocaleString("ru")}₽</td>
+                              <td style={{ padding:"11px 16px", color:"#94a3b8" }}>{mL}</td>
+                              <td style={{ padding:"11px 16px", color:"#f59e0b" }}>{mNew}</td>
+                              <td style={{ padding:"11px 16px", color:"#64748b" }}>{mAvg.toLocaleString("ru")}₽</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+
+        {/* ── COURSES CATALOG ── */}
+        {view==="courses" && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+              <div>
+                <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Каталог курсов</h1>
+                <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>Все направления центра · {allSubjects.length} курсов</div>
+              </div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+              {courseCategories.map(cat=>(
+                <div key={cat.id} style={{ background:"#161925", border:`1px solid ${cat.color}33`, borderRadius:16, padding:20 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                    <div style={{ width:10, height:10, borderRadius:"50%", background:cat.color, flexShrink:0 }} />
+                    <div style={{ fontSize:14, fontWeight:700, color:cat.color }}>{cat.label}</div>
+                    <div style={{ marginLeft:"auto", background:`${cat.color}20`, color:cat.color, fontSize:11, fontWeight:600, padding:"2px 9px", borderRadius:20 }}>{cat.courses.length}</div>
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                    {cat.courses.map(course=>{
+                      const cnt = lessons.filter(l=>l.subject===course&&l.status==="completed").length;
+                      const tutorCount = [...new Set(lessons.filter(l=>l.subject===course).map(l=>l.tutorId))].length;
+                      return (
+                        <div key={course} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 10px", background:"#1a1e2e", borderRadius:9, borderLeft:`3px solid ${cat.color}` }}>
+                          <span style={{ fontSize:12, fontWeight:500, color:"#cbd5e1" }}>{course}</span>
+                          <div style={{ display:"flex", gap:6 }}>
+                            {cnt>0 && <span style={{ fontSize:10, color:"#475569" }}>{cnt} занят.</span>}
+                            {tutorCount>0 && <span style={{ fontSize:10, color:cat.color, fontWeight:600 }}>{tutorCount} пед.</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* stats row */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginTop:20 }}>
+              {[
+                { l:"Всего курсов",       v:allSubjects.length,                                     c:"#6366f1", icon:"📋" },
+                { l:"Категорий",          v:courseCategories.length,                                 c:"#f59e0b", icon:"🗂️" },
+                { l:"Популярный курс",    v:(()=>{ const m={}; lessons.forEach(l=>{ if(l.status==="completed") m[l.subject]=(m[l.subject]||0)+1; }); return Object.entries(m).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—"; })(), c:"#22c55e", icon:"🏆" },
+                { l:"Курсов с занятиями", v:[...new Set(lessons.filter(l=>l.status==="completed").map(l=>l.subject))].length, c:"#ec4899", icon:"✅" },
+              ].map((s,i)=>(
+                <div key={i} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:18 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between" }}>
+                    <div>
+                      <div style={{ fontSize:11, color:"#475569", marginBottom:6 }}>{s.l}</div>
+                      <div style={{ fontSize:s.l==="Популярный курс"?14:24, fontWeight:700, color:s.c }}>{s.v}</div>
+                    </div>
+                    <div style={{ fontSize:22, opacity:.5 }}>{s.icon}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── REQUESTS ── */}
+        {view==="requests" && (()=>{
+          const reqCfg = {
+            new:       { label:"Новый",        color:"#6366f1", bg:"rgba(99,102,241,0.12)"  },
+            contacted: { label:"Связались",    color:"#f59e0b", bg:"rgba(245,158,11,0.12)"  },
+            trial:     { label:"Пробное",      color:"#22c55e", bg:"rgba(34,197,94,0.12)"   },
+            enrolled:  { label:"Записан",      color:"#06b6d4", bg:"rgba(6,182,212,0.12)"   },
+            rejected:  { label:"Отказался",    color:"#ef4444", bg:"rgba(239,68,68,0.12)"   },
+          };
+          const filtered = requests.filter(r=>{
+            const q = reqSearch.toLowerCase();
+            const matchQ = !q || r.parentName.toLowerCase().includes(q) || r.studentName.toLowerCase().includes(q) || r.course.toLowerCase().includes(q) || r.phone.includes(q);
+            const matchF = reqFilter==="all" || r.status===reqFilter;
+            return matchQ && matchF;
+          });
+          const addRequest = () => {
+            if (!nRequest.parentName || !nRequest.phone) return;
+            setRequests([{ ...nRequest, id:Date.now(), date:new Date().toISOString().split("T")[0], assignedTutorId:null }, ...requests]);
+            setNRequest({ parentName:"", phone:"", studentName:"", age:"", course:"", comment:"", status:"new" });
+            setModal(null); notify("Запрос добавлен");
+          };
+          return (
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+                <div>
+                  <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Запросы от родителей</h1>
+                  <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>Входящие обращения · {requests.filter(r=>r.status==="new").length} новых</div>
+                </div>
+                <button className="bp" onClick={()=>setModal("addRequest")}>+ Новый запрос</button>
+              </div>
+
+              {/* status summary */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:20 }}>
+                {Object.entries(reqCfg).map(([k,v])=>{
+                  const cnt = requests.filter(r=>r.status===k).length;
+                  return (
+                    <div key={k} onClick={()=>setReqFilter(reqFilter===k?"all":k)} style={{ background:"#161925", border:`1px solid ${reqFilter===k?v.color:"#1e2433"}`, borderRadius:12, padding:"12px 16px", cursor:"pointer", textAlign:"center", transition:"all .2s" }}>
+                      <div style={{ fontSize:22, fontWeight:700, color:v.color }}>{cnt}</div>
+                      <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{v.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* search */}
+              <div style={{ marginBottom:16 }}>
+                <input placeholder="🔍 Поиск по имени, телефону, курсу..." value={reqSearch} onChange={e=>setReqSearch(e.target.value)} />
+              </div>
+
+              {/* cards */}
+              <div style={{ display:"grid", gap:12 }}>
+                {filtered.length===0 && <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:"50px", textAlign:"center", color:"#475569" }}>Запросов не найдено</div>}
+                {filtered.sort((a,b)=>a.date<b.date?1:-1).map(req=>{
+                  const cat = subjectCategory(req.course);
+                  const assignedTutor = tutors.find(t=>t.id===req.assignedTutorId);
+                  return (
+                    <div key={req.id} style={{ background:"#161925", border:`1px solid ${req.status==="new"?"rgba(99,102,241,0.4)":"#1e2433"}`, borderRadius:16, padding:"18px 22px" }}>
+                      <div style={{ display:"flex", alignItems:"flex-start", gap:16 }}>
+                        {/* left */}
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8, flexWrap:"wrap" }}>
+                            <div style={{ fontSize:15, fontWeight:700 }}>👤 {req.parentName}</div>
+                            <div style={{ fontSize:13, color:"#475569" }}>→ {req.studentName}{req.age ? `, ${req.age} лет` : ""}</div>
+                            <Tag c={reqCfg[req.status]?.color} bg={reqCfg[req.status]?.bg}>{reqCfg[req.status]?.label}</Tag>
+                            <div style={{ fontSize:11, color:"#334155", marginLeft:"auto" }}>{req.date}</div>
+                          </div>
+                          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:req.comment?8:0, flexWrap:"wrap" }}>
+                            <a href={`tel:${req.phone}`} style={{ fontSize:13, color:"#818cf8", textDecoration:"none", fontWeight:500 }}>📞 {req.phone}</a>
+                            {req.course && <Tag c={cat.color||"#6366f1"} bg={`${cat.color||"#6366f1"}18`}>{req.course}</Tag>}
+                            {assignedTutor && <Tag c={assignedTutor.color} bg={`${assignedTutor.color}18`}>🎓 {assignedTutor.short}</Tag>}
+                          </div>
+                          {req.comment && <div style={{ fontSize:13, color:"#94a3b8", background:"#1a1e2e", borderRadius:8, padding:"9px 12px", lineHeight:1.5 }}>💬 {req.comment}</div>}
+                        </div>
+                        {/* actions */}
+                        <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0, minWidth:130 }}>
+                          <select value={req.status} onChange={e=>setRequests(requests.map(r=>r.id===req.id?{...r,status:e.target.value}:r))}
+                            style={{ fontSize:12, padding:"5px 8px" }}>
+                            {Object.entries(reqCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                          </select>
+                          <select value={req.assignedTutorId||""} onChange={e=>setRequests(requests.map(r=>r.id===req.id?{...r,assignedTutorId:e.target.value?Number(e.target.value):null}:r))}
+                            style={{ fontSize:12, padding:"5px 8px" }}>
+                            <option value="">Назначить педагога</option>
+                            {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                          </select>
+                          {req.status==="contacted" && (
+                            <button className="bp" style={{ fontSize:11, padding:"5px 8px" }}
+                              onClick={()=>{ setNLesson({studentId:"", subject:req.course, tutorId:req.assignedTutorId||"", date:"", time:"", duration:60, price:1200}); setModal("addLesson"); setRequests(requests.map(r=>r.id===req.id?{...r,status:"trial"}:r)); }}>
+                              📅 Назначить пробное
+                            </button>
+                          )}
+                          {req.status==="trial" && (
+                            <button className="bp" style={{ fontSize:11, padding:"5px 8px", background:"linear-gradient(135deg,#22c55e,#16a34a)" }}
+                              onClick={()=>{ setRequests(requests.map(r=>r.id===req.id?{...r,status:"enrolled"}:r)); notify("Ученик переведён в базу!"); }}>
+                              ✅ Записать
+                            </button>
+                          )}
+                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", padding:"4px 8px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }}
+                            onClick={()=>{ if(window.confirm("Удалить запрос?")) { setRequests(requests.filter(r=>r.id!==req.id)); notify("Запрос удалён"); } }}>
+                            🗑 Удалить
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── MAILINGS ── */}
+        {view==="mailings" && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
+              <div><h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Рассылки</h1></div>
+              <button className="bp" onClick={()=>{ setMStep(1); setMDraft({title:"",channel:"whatsapp",audience:"all",text:""}); setModal("mailing"); }}>+ Новая рассылка</button>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:28 }}>
+              {[
+                { icon:"💸", title:"Напоминание об оплате",  audience:"debtors", channel:"whatsapp", text:"Здравствуйте, {{parentName}}! У {{studentName}} задолженность {{balance}}₽. Просим оплатить до конца недели." },
+                { icon:"📅", title:"Напоминание о занятии",  audience:"active",  channel:"whatsapp", text:"Здравствуйте, {{parentName}}! Напоминаем о занятии у {{studentName}} завтра. Ждём вас!" },
+                { icon:"🎉", title:"Поздравление",           audience:"all",     channel:"sms",      text:"Дорогой {{studentName}} и {{parentName}}! Поздравляем с праздником! 🎉" },
+                { icon:"🔄", title:"Возврат после паузы",    audience:"paused",  channel:"whatsapp", text:"Здравствуйте, {{parentName}}! Первое занятие для {{studentName}} после паузы — бесплатно! 😊" },
+                { icon:"⭐", title:"Пробный → Постоянный",   audience:"trial",   channel:"whatsapp", text:"Здравствуйте, {{parentName}}! Оформите абонемент для {{studentName}} со скидкой 10%!" },
+                { icon:"📊", title:"Итоги месяца",           audience:"active",  channel:"telegram", text:"Здравствуйте, {{parentName}}! Подводим итоги марта для {{studentName}}. Отличная работа! 💪" },
+              ].map((tpl,i)=>(
+                <div key={i} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:16, cursor:"pointer" }}
+                  onClick={()=>{ setMDraft({title:tpl.title,channel:tpl.channel,audience:tpl.audience,text:tpl.text}); setMStep(1); setModal("mailing"); }}>
+                  <div style={{ display:"flex", gap:10, marginBottom:8 }}>
+                    <span style={{ fontSize:22 }}>{tpl.icon}</span>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{tpl.title}</div>
+                      <div style={{ display:"flex", gap:6, marginTop:4, flexWrap:"wrap" }}>
+                        <Tag c={channelCfg[tpl.channel].color} bg={`${channelCfg[tpl.channel].color}22`}>{channelCfg[tpl.channel].icon} {channelCfg[tpl.channel].label}</Tag>
+                        <Tag c="#94a3b8" bg="rgba(148,163,184,0.1)">{audLabels[tpl.audience]}</Tag>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:11, color:"#475569", lineHeight:1.5, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{tpl.text}</div>
+                  <div style={{ marginTop:8, fontSize:11, color:"#6366f1", fontWeight:600 }}>Использовать →</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize:13, color:"#64748b", fontWeight:600, marginBottom:12, textTransform:"uppercase", letterSpacing:"0.05em" }}>История</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {mailings.map(m=>(
+                <div key={m.id} style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:"16px 20px", display:"flex", gap:14, alignItems:"flex-start" }}>
+                  <div style={{ width:42, height:42, borderRadius:12, background:`${channelCfg[m.channel]?.color}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{channelCfg[m.channel]?.icon}</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                      <div style={{ fontSize:14, fontWeight:600 }}>{m.title}</div>
+                      <Tag c={m.status==="sent"?"#22c55e":"#94a3b8"} bg={m.status==="sent"?"rgba(34,197,94,0.12)":"rgba(148,163,184,0.12)"}>{m.status==="sent"?"✓ Отправлено":"Черновик"}</Tag>
+                    </div>
+                    <div style={{ fontSize:12, color:"#475569", marginBottom:6 }}>{m.text}</div>
+                    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                      <Tag c={channelCfg[m.channel]?.color} bg={`${channelCfg[m.channel]?.color}22`}>{channelCfg[m.channel]?.icon} {channelCfg[m.channel]?.label}</Tag>
+                      <Tag c="#818cf8" bg="rgba(99,102,241,0.1)">{audIcons[m.audience]} {audLabels[m.audience]||m.audience}</Tag>
+                      {m.status==="sent" && <span style={{ fontSize:11, color:"#475569", alignSelf:"center" }}>📤 {m.sentCount} получателей · {m.sentAt}</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── AI ASSISTANT ── */}
+        {view==="ai" && (
+          <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 64px)", maxWidth:800 }}>
+            <div style={{ marginBottom:20 }}>
+              <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>✨ ИИ-Помощник</h1>
+              <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>Задайте вопрос об учениках, расписании, финансах — или попросите составить сообщение</div>
+            </div>
+            <div style={{ flex:1, background:"#161925", border:"1px solid #1e2433", borderRadius:16, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+              <div style={{ flex:1, overflowY:"auto", padding:20, display:"flex", flexDirection:"column", gap:12 }}>
+                {aiMessages.map((m,i)=>(
+                  <div key={i} style={{ alignSelf:m.role==="user"?"flex-end":"flex-start", maxWidth:"75%" }}>
+                    <div style={{
+                      background: m.role==="user" ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#1a1e2e",
+                      color: m.role==="user" ? "white" : "#e2e8f0",
+                      padding:"10px 16px", borderRadius:14,
+                      borderBottomRightRadius: m.role==="user"?4:14,
+                      borderBottomLeftRadius: m.role==="user"?14:4,
+                      fontSize:14, lineHeight:1.6, whiteSpace:"pre-wrap"
+                    }}>{m.content}</div>
+                  </div>
+                ))}
+                {aiLoading && (
+                  <div style={{ alignSelf:"flex-start" }}>
+                    <div style={{ background:"#1a1e2e", padding:"10px 16px", borderRadius:14, borderBottomLeftRadius:4, fontSize:14, color:"#64748b" }}>Печатает...</div>
+                  </div>
+                )}
+                <div ref={aiMessagesEndRef} />
+              </div>
+              <div style={{ padding:16, borderTop:"1px solid #1e2433", display:"flex", gap:10 }}>
+                <textarea
+                  placeholder="Напишите сообщение..."
+                  value={aiInput}
+                  onChange={e=>setAiInput(e.target.value)}
+                  onKeyDown={handleAiKeyDown}
+                  rows={1}
+                  style={{ flex:1, resize:"none", maxHeight:100 }}
+                />
+                <button className="bp" onClick={sendAiMessage} disabled={aiLoading || !aiInput.trim()}>Отправить</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ══ MODALS ══ */}
+
+      {modal==="addTutor" && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>Новый преподаватель</h2>
+            <div style={{ display:"grid", gap:14 }}>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>ФИО *</div><input placeholder="Иванова Наталья Владимировна" value={nTutor.name} onChange={e=>setNTutor({...nTutor,name:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nTutor.phone} onChange={e=>setNTutor({...nTutor,phone:e.target.value})} /></div>
+              <div>
+                <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Предметы</div>
+                <div style={{ maxHeight:200, overflowY:"auto", display:"flex", flexDirection:"column", gap:10 }}>
+                  {courseCategories.map(cat=>(
+                    <div key={cat.id}>
+                      <div style={{ fontSize:10, color:cat.color, fontWeight:700, textTransform:"uppercase", marginBottom:5 }}>{cat.label}</div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                        {cat.courses.map(s=>(
+                          <button key={s} onClick={()=>setNTutor(prev=>({...prev,subjects:prev.subjects.includes(s)?prev.subjects.filter(x=>x!==s):[...prev.subjects,s]}))}
+                            style={{ padding:"4px 10px", borderRadius:20, fontSize:11, border:"1px solid", cursor:"pointer",
+                              background:nTutor.subjects.includes(s)?`${cat.color}28`:"transparent",
+                              borderColor:nTutor.subjects.includes(s)?cat.color:"#2d3252",
+                              color:nTutor.subjects.includes(s)?cat.color:"#64748b" }}>{s}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div>
+                  <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Тип ставки</div>
+                  <select value={nTutor.rateType} onChange={e=>setNTutor({...nTutor,rateType:e.target.value})}>
+                    <option value="percent">% от занятия</option>
+                    <option value="fixed">Фиксированная ₽</option>
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>{nTutor.rateType==="percent"?"Процент (%)":"Сумма (₽)"}</div>
+                  <input type="number" value={nTutor.rateValue} onChange={e=>setNTutor({...nTutor,rateValue:e.target.value})} />
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#64748b", marginBottom:8 }}>Цвет</div>
+                <div style={{ display:"flex", gap:8 }}>
+                  {COLORS.map(c=>(
+                    <div key={c} onClick={()=>setNTutor({...nTutor,color:c})}
+                      style={{ width:28, height:28, borderRadius:"50%", background:c, cursor:"pointer", border:nTutor.color===c?"3px solid white":"2px solid transparent" }} />
+                  ))}
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                <button className="bp" style={{ flex:1 }} onClick={addTutor}>Добавить</button>
+                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal==="addStudent" && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>Новый ученик</h2>
+            <div style={{ display:"grid", gap:14 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>ФИО *</div><input placeholder="Иванов Иван" value={nStudent.name} onChange={e=>setNStudent({...nStudent,name:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Возраст</div><input type="number" value={nStudent.age} onChange={e=>setNStudent({...nStudent,age:e.target.value})} /></div>
+              </div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nStudent.phone} onChange={e=>setNStudent({...nStudent,phone:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>ФИО родителя</div><input value={nStudent.parentName} onChange={e=>setNStudent({...nStudent,parentName:e.target.value})} /></div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>🏫 Школа / лицей</div><input placeholder="Школа №15" value={nStudent.school} onChange={e=>setNStudent({...nStudent,school:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Класс</div><input placeholder="9А" value={nStudent.grade||""} onChange={e=>setNStudent({...nStudent,grade:e.target.value})} /></div>
+              </div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>📍 Адрес</div><input placeholder="ул. Ленина, д. 12, кв. 34" value={nStudent.address} onChange={e=>setNStudent({...nStudent,address:e.target.value})} /></div>
+              <div>
+                <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Предметы</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {allSubjects.map(s=>(
+                    <button key={s} onClick={()=>setNStudent(prev=>({...prev,subjects:prev.subjects.includes(s)?prev.subjects.filter(x=>x!==s):[...prev.subjects,s]}))}
+                      style={{ padding:"5px 12px", borderRadius:20, fontSize:12, border:"1px solid", cursor:"pointer",
+                        background:nStudent.subjects.includes(s)?"rgba(99,102,241,0.2)":"transparent",
+                        borderColor:nStudent.subjects.includes(s)?"#6366f1":"#2d3252",
+                        color:nStudent.subjects.includes(s)?"#818cf8":"#64748b" }}>{s}</button>
+                  ))}
+                </div>
+              </div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Статус</div>
+                <select value={nStudent.status} onChange={e=>setNStudent({...nStudent,status:e.target.value})}>
+                  {Object.entries(statusCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+              <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                <button className="bp" style={{ flex:1 }} onClick={addStudent}>Добавить</button>
+                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal==="addLesson" && (
+        <div className="ov" onClick={()=>{ setModal(null); setRecurModal(false); setLessonType("individual"); setGroupStudents([]); setGroupName(""); }}>
+          <div className="mo" style={{ width:580, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+
+            {/* ── TYPE SWITCHER ── */}
+            <div style={{ display:"flex", gap:0, marginBottom:20, background:"#1a1e2e", borderRadius:12, padding:4 }}>
+              {[["individual","👤 Индивидуальное"],["group","👥 Групповое"]].map(([k,l])=>(
+                <button key={k} onClick={()=>{ setLessonType(k); setGroupStudents([]); }}
+                  style={{ flex:1, padding:"10px", borderRadius:9, fontSize:13, fontWeight:700, border:"none", cursor:"pointer", fontFamily:"inherit", transition:"all .2s",
+                    background:lessonType===k?"linear-gradient(135deg,#6366f1,#8b5cf6)":"transparent",
+                    color:lessonType===k?"white":"#64748b" }}>{l}</button>
+              ))}
+            </div>
+
+            <h2 style={{ margin:"0 0 18px", fontSize:18, fontWeight:700 }}>
+              {lessonType==="group" ? "👥 Новое групповое занятие" : "👤 Новое индивидуальное занятие"}
+            </h2>
+
+            <div style={{ display:"grid", gap:13 }}>
+
+              {/* TUTOR */}
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Преподаватель *</div>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  {tutors.map(t=>(
+                    <button key={t.id} onClick={()=>setNLesson({...nLesson,tutorId:String(t.id)})}
+                      style={{ display:"flex", alignItems:"center", gap:7, padding:"7px 12px", borderRadius:10, fontSize:12, border:"1px solid", cursor:"pointer", fontFamily:"inherit", transition:"all .15s",
+                        background:nLesson.tutorId===String(t.id)?`${t.color}22`:"transparent",
+                        borderColor:nLesson.tutorId===String(t.id)?t.color:"#2d3252",
+                        color:nLesson.tutorId===String(t.id)?t.color:"#64748b" }}>
+                      <div style={{ width:8,height:8,borderRadius:"50%",background:t.color }} />{t.short}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SUBJECT + PRICE */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Предмет / курс *</div>
+                  <select value={nLesson.subject} onChange={e=>setNLesson({...nLesson,subject:e.target.value})}>
+                    <option value="">Выберите курс</option>
+                    {courseCategories.map(cat=>(
+                      <optgroup key={cat.id} label={cat.label}>
+                        {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                {lessonType==="individual" && (
+                  <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Стоимость (₽)</div>
+                    <input type="number" value={nLesson.price} onChange={e=>setNLesson({...nLesson,price:e.target.value})} />
+                    {nLesson.tutorId && nLesson.price && (
+                      <div style={{ fontSize:11, color:"#22c55e", marginTop:4 }}>
+                        → педагог: {calcEarning({price:Number(nLesson.price)}, tutors.find(t=>t.id===Number(nLesson.tutorId)))}₽
+                      </div>
+                    )}
+                  </div>
+                )}
+                {lessonType==="group" && (
+                  <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Название группы</div>
+                    <input placeholder="напр. Группа ОГЭ Пн" value={groupName} onChange={e=>setGroupName(e.target.value)} />
+                  </div>
+                )}
+              </div>
+
+              {/* DATE / TIME / DURATION */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Дата *</div>
+                  <input type="date" value={nLesson.date} onChange={e=>setNLesson({...nLesson,date:e.target.value})} />
+                </div>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Время</div>
+                  <input type="time" value={nLesson.time} onChange={e=>setNLesson({...nLesson,time:e.target.value})} />
+                </div>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Длительность</div>
+                  <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                    {[45,60,90,120].map(d=>(
+                      <button key={d} onClick={()=>setNLesson({...nLesson,duration:d})}
+                        style={{ padding:"5px 8px", borderRadius:7, fontSize:11, border:"1px solid", cursor:"pointer", fontFamily:"inherit",
+                          background:Number(nLesson.duration)===d?"rgba(99,102,241,0.25)":"transparent",
+                          borderColor:Number(nLesson.duration)===d?"#6366f1":"#2d3252",
+                          color:Number(nLesson.duration)===d?"#818cf8":"#64748b" }}>{d}м</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── INDIVIDUAL: one student ── */}
+              {lessonType==="individual" && (
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Ученик *</div>
+                  <select value={nLesson.studentId} onChange={e=>setNLesson({...nLesson,studentId:e.target.value})}>
+                    <option value="">Выберите ученика</option>
+                    {students.map(s=><option key={s.id} value={s.id}>{s.name} {s.school?`· ${s.school}`:""}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* ── GROUP: multiple students with individual prices ── */}
+              {lessonType==="group" && (
+                <div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                    <div style={{ fontSize:12, color:"#64748b" }}>Ученики группы ({groupStudents.length})</div>
+                    <div style={{ fontSize:11, color:"#475569" }}>Суммарно: {groupStudents.reduce((s,g)=>s+Number(g.price||0),0).toLocaleString("ru")}₽</div>
+                  </div>
+                  {/* added students */}
+                  {groupStudents.map((gs,i)=>{
+                    const st = students.find(s=>s.id===Number(gs.studentId));
+                    return (
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:"#1a1e2e", borderRadius:9, marginBottom:6, border:"1px solid #2d3252" }}>
+                        <Av name={st?.name||"?"} color="#6366f1" size={26} />
+                        <div style={{ flex:1, fontSize:13, fontWeight:600 }}>{st?.name||"—"}</div>
+                        <div style={{ width:90 }}>
+                          <input type="number" value={gs.price} placeholder="Цена" onChange={e=>{ const ng=[...groupStudents]; ng[i]={...ng[i],price:e.target.value}; setGroupStudents(ng); }}
+                            style={{ fontSize:12, padding:"4px 8px" }} />
+                        </div>
+                        <span style={{ fontSize:11, color:"#475569" }}>₽</span>
+                        <button onClick={()=>setGroupStudents(groupStudents.filter((_,j)=>j!==i))}
+                          style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>✗</button>
+                      </div>
+                    );
+                  })}
+                  {/* add student selector */}
+                  <div style={{ display:"flex", gap:8 }}>
+                    <select onChange={e=>{ if(!e.target.value) return; const sid=e.target.value; if(groupStudents.find(g=>g.studentId===sid)) return; const p=pricing.find(pr=>pr.course===nLesson.subject); setGroupStudents([...groupStudents,{studentId:sid,price:p?.groupPrice||400}]); e.target.value=""; }}
+                      style={{ flex:1, fontSize:13 }}>
+                      <option value="">+ Добавить ученика в группу...</option>
+                      {students.filter(s=>!groupStudents.find(g=>g.studentId===String(s.id))).map(s=>(
+                        <option key={s.id} value={s.id}>{s.name} {s.school?`· ${s.school}`:""}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ fontSize:11, color:"#475569", marginTop:6 }}>
+                    💡 Цена берётся автоматически из прайса. Можно изменить для каждого ученика отдельно.
+                  </div>
+                </div>
+              )}
+
+              {/* ── RECURRING ── */}
+              <div style={{ background:"#1a1e2e", borderRadius:12, padding:"12px 14px" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:600 }}>🔁 Повторяющееся занятие</div>
+                    <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>Создать серию занятий</div>
+                  </div>
+                  <div onClick={()=>setRecurModal(r=>!r)} style={{ width:40, height:22, borderRadius:11, background:recurModal?"#6366f1":"#2d3252", cursor:"pointer", transition:"all .2s", position:"relative", flexShrink:0 }}>
+                    <div style={{ position:"absolute", top:3, left:recurModal?20:3, width:16, height:16, borderRadius:"50%", background:"white", transition:"all .2s" }} />
+                  </div>
+                </div>
+                {recurModal && (
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:12 }}>
+                    <div>
+                      <div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Кол-во занятий</div>
+                      <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                        {[4,8,12,16].map(n=>(
+                          <button key={n} onClick={()=>setRecurCount(n)}
+                            style={{ padding:"4px 10px", borderRadius:7, fontSize:12, border:"1px solid", cursor:"pointer", fontFamily:"inherit",
+                              background:recurCount===n?"rgba(99,102,241,0.25)":"transparent",
+                              borderColor:recurCount===n?"#6366f1":"#2d3252",
+                              color:recurCount===n?"#818cf8":"#64748b" }}>{n}</button>
+                        ))}
+                        <input type="number" value={recurCount} onChange={e=>setRecurCount(Number(e.target.value))} style={{ width:55, padding:"4px 6px", fontSize:12 }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Повторять каждые</div>
+                      <div style={{ display:"flex", gap:5 }}>
+                        {[[7,"Нед."],[14,"2 нед."],[30,"Мес."]].map(([d,l])=>(
+                          <button key={d} onClick={()=>setRecurInterval(d)}
+                            style={{ padding:"4px 10px", borderRadius:7, fontSize:12, border:"1px solid", cursor:"pointer", fontFamily:"inherit",
+                              background:recurInterval===d?"rgba(99,102,241,0.25)":"transparent",
+                              borderColor:recurInterval===d?"#6366f1":"#2d3252",
+                              color:recurInterval===d?"#818cf8":"#64748b" }}>{l}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {nLesson.date && (
+                      <div style={{ gridColumn:"1/-1", background:"rgba(99,102,241,0.08)", borderRadius:8, padding:"8px 12px", fontSize:11, color:"#818cf8" }}>
+                        📅 Будет создано {recurCount} занятий каждые {recurInterval} дн. начиная с {nLesson.date}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ACTION BUTTONS */}
+              <div style={{ display:"flex", gap:10, marginTop:4 }}>
+                <button className="bp" style={{ flex:1 }} onClick={()=>{
+                  if (!nLesson.subject || !nLesson.date || !nLesson.tutorId) return;
+                  const tu = tutors.find(t=>t.id===Number(nLesson.tutorId));
+                  const baseLesson = { subject:nLesson.subject, tutorId:Number(nLesson.tutorId), tutorShort:tu?.short||"", date:nLesson.date, time:nLesson.time, duration:Number(nLesson.duration), status:"scheduled" };
+
+                  if (lessonType==="group") {
+                    if (groupStudents.length===0) return;
+                    const groupId = Date.now();
+                    const name = groupName || `Группа ${nLesson.subject} ${nLesson.time}`;
+                    const newLessons = groupStudents.map((gs,i) => {
+                      const st = students.find(s=>s.id===Number(gs.studentId));
+                      return { ...baseLesson, id:groupId+i, studentId:Number(gs.studentId), studentName:st?.name||"", price:Number(gs.price||0), isGroup:true, groupId, groupName:name };
+                    });
+                    if (recurModal) {
+                      const all = [];
+                      Array.from({length:recurCount}).forEach((_,ri)=>{
+                        const d = new Date(nLesson.date); d.setDate(d.getDate()+ri*recurInterval);
+                        const dateStr = d.toISOString().split("T")[0];
+                        const gid = groupId + ri*1000;
+                        newLessons.forEach((l,li)=>{ all.push({...l, id:gid+li, date:dateStr}); });
+                      });
+                      setLessons(prev=>[...prev,...all]);
+                      notify(`Создано ${recurCount} занятий × ${groupStudents.length} учеников`);
+                    } else {
+                      setLessons(prev=>[...prev,...newLessons]);
+                      notify(`Группа "${name}" добавлена (${groupStudents.length} чел.)`);
+                    }
+                  } else {
+                    if (!nLesson.studentId) return;
+                    const st = students.find(s=>s.id===Number(nLesson.studentId));
+                    const lesson = { ...baseLesson, id:Date.now(), studentId:Number(nLesson.studentId), studentName:st?.name||"", price:Number(nLesson.price), isGroup:false };
+                    if (recurModal) {
+                      const all = Array.from({length:recurCount},(_,i)=>{ const d=new Date(nLesson.date); d.setDate(d.getDate()+i*recurInterval); return {...lesson, id:Date.now()+i, date:d.toISOString().split("T")[0]}; });
+                      setLessons(prev=>[...prev,...all]);
+                      notify(`Создано ${recurCount} занятий`);
+                    } else {
+                      setLessons(prev=>[...prev,lesson]);
+                      notify("Занятие добавлено");
+                    }
+                  }
+                  setNLesson({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
+                  setGroupStudents([]); setGroupName(""); setRecurModal(false); setLessonType("individual");
+                  setModal(null);
+                }}>
+                  {lessonType==="group"
+                    ? (recurModal ? `🔁 Создать серию для группы (${groupStudents.length} уч.)` : `👥 Создать групповое (${groupStudents.length} уч.)`)
+                    : (recurModal ? `🔁 Создать ${recurCount} занятий` : "👤 Добавить занятие")}
+                </button>
+                <button className="bg" onClick={()=>{ setModal(null); setRecurModal(false); setLessonType("individual"); setGroupStudents([]); setGroupName(""); }}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+            {modal==="addPayment" && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>Записать оплату</h2>
+            <div style={{ display:"grid", gap:14 }}>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Ученик *</div>
+                <select value={nPayment.studentId} onChange={e=>setNPayment({...nPayment,studentId:e.target.value})}>
+                  <option value="">Выберите</option>
+                  {students.map(s=><option key={s.id} value={s.id}>{s.name} (баланс: {s.balance}₽)</option>)}
+                </select>
+              </div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Сумма (₽) *</div><input type="number" value={nPayment.amount} onChange={e=>setNPayment({...nPayment,amount:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Способ</div>
+                <select value={nPayment.method} onChange={e=>setNPayment({...nPayment,method:e.target.value})}>
+                  <option value="card">💳 Карта</option>
+                  <option value="cash">💵 Наличные</option>
+                  <option value="transfer">📱 Перевод</option>
+                </select>
+              </div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Комментарий</div><input value={nPayment.comment} onChange={e=>setNPayment({...nPayment,comment:e.target.value})} /></div>
+              <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                <button className="bp" style={{ flex:1 }} onClick={addPayment}>Записать</button>
+                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal==="addSalary" && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 8px", fontSize:20, fontWeight:700 }}>Выплата зарплаты</h2>
+            {nSalary.tutorId && (()=>{ const t=tutors.find(x=>x.id===Number(nSalary.tutorId)); const d=t?tDebt(t.id):0; return t?(
+              <div style={{ background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.2)", borderRadius:10, padding:"12px 14px", marginBottom:18, fontSize:13 }}>
+                <div style={{ fontWeight:600, marginBottom:2 }}>{t.short}</div>
+                <div style={{ color:"#f59e0b" }}>К выплате: <strong>{d.toLocaleString("ru")}₽</strong></div>
+              </div>
+            ):null; })()}
+            <div style={{ display:"grid", gap:14 }}>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Преподаватель *</div>
+                <select value={nSalary.tutorId} onChange={e=>setNSalary({...nSalary,tutorId:e.target.value})}>
+                  <option value="">Выберите</option>
+                  {tutors.map(t=><option key={t.id} value={t.id}>{t.short} (к выплате: {tDebt(t.id)}₽)</option>)}
+                </select>
+              </div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Сумма (₽) *</div><input type="number" value={nSalary.amount} onChange={e=>setNSalary({...nSalary,amount:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Месяц</div><input type="month" value={nSalary.month} onChange={e=>setNSalary({...nSalary,month:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Комментарий</div><input value={nSalary.comment} onChange={e=>setNSalary({...nSalary,comment:e.target.value})} /></div>
+              <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                <button className="bp" style={{ flex:1 }} onClick={addSalary}>Выплатить</button>
+                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal==="mailing" && (
+        <div className="ov" onClick={()=>{ setModal(null); setMStep(1); }}>
+          <div className="mo" style={{ width:560 }} onClick={e=>e.stopPropagation()}>
+            <div style={{ display:"flex", gap:8, marginBottom:24 }}>
+              {["Составить","Предпросмотр","Отправить"].map((s,i)=>(
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ width:24, height:24, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700,
+                    background:mStep>i+1?"#22c55e":mStep===i+1?"#6366f1":"#1e2433", color:mStep>=i+1?"white":"#475569" }}>{mStep>i+1?"✓":i+1}</div>
+                  <span style={{ fontSize:12, color:mStep===i+1?"#e2e8f0":"#475569", fontWeight:mStep===i+1?600:400 }}>{s}</span>
+                  {i<2 && <span style={{ color:"#2d3252", fontSize:16, marginLeft:4 }}>›</span>}
+                </div>
+              ))}
+            </div>
+            {mStep===1 && (
+              <div>
+                <h2 style={{ margin:"0 0 20px", fontSize:18, fontWeight:700 }}>Новая рассылка</h2>
+                <div style={{ display:"grid", gap:14 }}>
+                  <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Название</div><input value={mDraft.title} onChange={e=>setMDraft({...mDraft,title:e.target.value})} /></div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                    <div>
+                      <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Канал</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                        {Object.entries(channelCfg).map(([k,v])=>(
+                          <button key={k} onClick={()=>setMDraft({...mDraft,channel:k})}
+                            style={{ padding:"7px", borderRadius:9, fontSize:11, border:"1px solid", cursor:"pointer",
+                              background:mDraft.channel===k?`${v.color}22`:"transparent",
+                              borderColor:mDraft.channel===k?v.color:"#2d3252",
+                              color:mDraft.channel===k?v.color:"#64748b" }}>{v.icon} {v.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Аудитория</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:5, maxHeight:210, overflowY:"auto" }}>
+                        {Object.entries(audLabels).map(([k,v])=>(
+                          <button key={k} onClick={()=>setMDraft({...mDraft,audience:k})}
+                            style={{ padding:"6px 10px", borderRadius:8, fontSize:11, border:"1px solid", cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:6,
+                              background:mDraft.audience===k?"rgba(99,102,241,0.2)":"#1a1e2e",
+                              borderColor:mDraft.audience===k?"#6366f1":"#2d3252",
+                              color:mDraft.audience===k?"#818cf8":"#64748b" }}>
+                            {audIcons[k]} <span style={{ flex:1 }}>{v}</span>
+                            <span style={{ background:"#2d3252", color:"#475569", borderRadius:10, padding:"1px 5px", fontSize:10, fontWeight:700 }}>{audMap[k]?.length||0}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Текст</div>
+                    <textarea rows={4} value={mDraft.text} onChange={e=>setMDraft({...mDraft,text:e.target.value})} style={{ resize:"vertical", lineHeight:1.6 }} />
+                    <div style={{ fontSize:11, color:"#475569", marginTop:5 }}>
+                      Переменные: <span style={{ color:"#818cf8" }}>{"{{studentName}}"}</span> · <span style={{ color:"#818cf8" }}>{"{{parentName}}"}</span> · <span style={{ color:"#818cf8" }}>{"{{balance}}"}</span>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:10 }}>
+                    <button className="bp" style={{ flex:1 }} disabled={!mDraft.text||!mDraft.title} onClick={()=>setMStep(2)}>Предпросмотр →</button>
+                    <button className="bg" onClick={()=>{ setModal(null); setMStep(1); }}>Отмена</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {mStep===2 && (
+              <div>
+                <h2 style={{ margin:"0 0 6px", fontSize:18, fontWeight:700 }}>Предпросмотр</h2>
+                <div style={{ color:"#475569", fontSize:13, marginBottom:14 }}>{channelCfg[mDraft.channel]?.icon} {channelCfg[mDraft.channel]?.label} · {audMap[mDraft.audience]?.length||0} получателей</div>
+                <div style={{ maxHeight:320, overflowY:"auto", display:"flex", flexDirection:"column", gap:8 }}>
+                  {(audMap[mDraft.audience]||[]).length===0
+                    ? <div style={{ textAlign:"center", color:"#475569", padding:"30px 0" }}>Нет получателей</div>
+                    : (audMap[mDraft.audience]||[]).map(s=>(
+                      <div key={s.id} style={{ background:"#1a1e2e", borderRadius:12, padding:12 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                          <Av name={s.name} color="#6366f1" size={26} />
+                          <div style={{ fontSize:12, fontWeight:600 }}>{s.name} <span style={{ color:"#475569", fontWeight:400 }}>· {s.phone}</span></div>
+                        </div>
+                        <div style={{ fontSize:12, color:"#94a3b8", background:"#161925", borderRadius:8, padding:"9px 12px", lineHeight:1.6 }}>{renderText(mDraft.text,s)}</div>
+                      </div>
+                    ))
+                  }
+                </div>
+                <div style={{ display:"flex", gap:10, marginTop:14 }}>
+                  <button className="bp" style={{ flex:1 }} onClick={()=>setMStep(3)}>Всё верно →</button>
+                  <button className="bg" onClick={()=>setMStep(1)}>← Назад</button>
+                </div>
+              </div>
+            )}
+            {mStep===3 && (
+              <div style={{ textAlign:"center", padding:"20px 0" }}>
+                <div style={{ fontSize:52, marginBottom:14 }}>🚀</div>
+                <h2 style={{ margin:"0 0 10px", fontSize:20, fontWeight:700 }}>Подтвердите отправку</h2>
+                <div style={{ color:"#64748b", fontSize:14, marginBottom:24 }}>
+                  Будет отправлено <span style={{ color:"#6366f1", fontWeight:700 }}>{audMap[mDraft.audience]?.length||0} сообщений</span> через {channelCfg[mDraft.channel]?.label}.
+                </div>
+                <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+                  <button className="bp" style={{ minWidth:160 }} onClick={sendMailing}>📤 Отправить</button>
+                  <button className="bg" onClick={()=>setMStep(2)}>← Назад</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+
+      {/* ── ADD REQUEST MODAL ── */}
+      {modal==="addRequest" && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" style={{ width:520 }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 20px", fontSize:20, fontWeight:700 }}>📩 Новый запрос от родителя</h2>
+            <div style={{ display:"grid", gap:14 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>ФИО родителя *</div><input placeholder="Иванова Мария" value={nRequest.parentName} onChange={e=>setNRequest({...nRequest,parentName:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nRequest.phone} onChange={e=>setNRequest({...nRequest,phone:e.target.value})} /></div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Имя ребёнка</div><input placeholder="Иванов Артём" value={nRequest.studentName} onChange={e=>setNRequest({...nRequest,studentName:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Возраст</div><input type="number" placeholder="10" value={nRequest.age} onChange={e=>setNRequest({...nRequest,age:e.target.value})} /></div>
+              </div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Интересующий курс</div>
+                <select value={nRequest.course} onChange={e=>setNRequest({...nRequest,course:e.target.value})}>
+                  <option value="">Выберите курс</option>
+                  {courseCategories.map(cat=>(
+                    <optgroup key={cat.id} label={cat.label}>
+                      {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Комментарий / пожелания</div>
+                <textarea rows={3} placeholder="Опишите запрос родителя..." value={nRequest.comment} onChange={e=>setNRequest({...nRequest,comment:e.target.value})} />
+              </div>
+              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Статус</div>
+                <select value={nRequest.status} onChange={e=>setNRequest({...nRequest,status:e.target.value})}>
+                  <option value="new">Новый</option>
+                  <option value="contacted">Связались</option>
+                  <option value="trial">Пробное</option>
+                  <option value="enrolled">Записан</option>
+                  <option value="rejected">Отказался</option>
+                </select>
+              </div>
+              <div style={{ display:"flex", gap:10, marginTop:4 }}>
+                <button className="bp" style={{ flex:1 }} onClick={()=>{ if(!nRequest.parentName||!nRequest.phone)return; setRequests([{...nRequest,id:Date.now(),date:new Date().toISOString().split("T")[0],assignedTutorId:null},...requests]); setNRequest({parentName:"",phone:"",studentName:"",age:"",course:"",comment:"",status:"new"}); setModal(null); notify("Запрос добавлен"); }}>Добавить запрос</button>
+                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EXCEL IMPORT MODAL ── */}
+      {importModal && (
+        <div className="ov" onClick={()=>setImportModal(false)}>
+          <div className="mo" style={{ width:640 }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 6px", fontSize:20, fontWeight:700 }}>📥 Импорт из Excel</h2>
+            <div style={{ fontSize:13, color:"#475569", marginBottom:18 }}>Найдено <strong style={{ color:"#818cf8" }}>{importPreview.length}</strong> учеников в файле</div>
+
+            {/* mode toggle */}
+            <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+              {[["merge","➕ Добавить к существующим"],["replace","🔄 Заменить все данные"]].map(([k,l])=>(
+                <button key={k} onClick={()=>setImportMode(k)}
+                  style={{ padding:"7px 16px", borderRadius:9, fontSize:12, fontWeight:600, border:"1px solid", cursor:"pointer",
+                    background:importMode===k?"rgba(99,102,241,0.2)":"transparent",
+                    borderColor:importMode===k?"#6366f1":"#2d3252",
+                    color:importMode===k?"#818cf8":"#64748b" }}>{l}</button>
+              ))}
+            </div>
+            {importMode==="replace" && (
+              <div style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#ef4444", marginBottom:14 }}>
+                ⚠️ Все текущие данные учеников будут удалены и заменены импортированными!
+              </div>
+            )}
+
+            {/* preview table */}
+            <div style={{ maxHeight:320, overflowY:"auto", background:"#1a1e2e", borderRadius:12, marginBottom:16 }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                <thead>
+                  <tr style={{ borderBottom:"1px solid #2d3252" }}>
+                    {["ФИО","Телефон","Родитель","Школа","Предметы","Статус","Баланс"].map(h=>(
+                      <th key={h} style={{ padding:"10px 12px", textAlign:"left", color:"#475569", fontWeight:600, fontSize:11, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {importPreview.map((s,i)=>(
+                    <tr key={i} style={{ borderBottom:"1px solid #2a2e42" }}>
+                      <td style={{ padding:"9px 12px", fontWeight:600, color:"#e2e8f0" }}>{s.name}</td>
+                      <td style={{ padding:"9px 12px", color:"#94a3b8" }}>{s.phone||"—"}</td>
+                      <td style={{ padding:"9px 12px", color:"#94a3b8" }}>{s.parentName||"—"}</td>
+                      <td style={{ padding:"9px 12px", color:"#94a3b8" }}>{s.school||"—"}</td>
+                      <td style={{ padding:"9px 12px" }}>{s.subjects.slice(0,2).map(sub=><Tag key={sub} c="#818cf8" bg="rgba(99,102,241,0.12)">{sub}</Tag>)}</td>
+                      <td style={{ padding:"9px 12px" }}><Tag c={statusCfg[s.status]?.color||"#94a3b8"} bg={statusCfg[s.status]?.bg||"rgba(148,163,184,0.1)"}>{statusCfg[s.status]?.label||s.status}</Tag></td>
+                      <td style={{ padding:"9px 12px", color:s.balance>=0?"#22c55e":"#ef4444", fontWeight:600 }}>{s.balance}₽</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ fontSize:12, color:"#475569", marginBottom:16 }}>
+              💡 Система автоматически распознаёт колонки. Убедитесь что данные выглядят правильно перед импортом.
+            </div>
+            <div style={{ display:"flex", gap:10 }}>
+              <button className="bp" style={{ flex:1 }} onClick={confirmImport}>✅ Импортировать {importPreview.length} учеников</button>
+              <button className="bg" onClick={()=>{ setImportModal(false); setImportPreview([]); }}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {notif && (
+        <div className="notif" style={{ background:notif.type==="success"?"rgba(34,197,94,0.15)":"rgba(239,68,68,0.15)", border:`1px solid ${notif.type==="success"?"#22c55e":"#ef4444"}`, color:notif.type==="success"?"#22c55e":"#ef4444" }}>
+          {notif.type==="success"?"✓":"✗"} {notif.msg}
         </div>
       )}
     </div>
   );
 }
-
-export default App;
