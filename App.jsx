@@ -30,7 +30,7 @@ function printSchedule(lessons, tutors, students, weekLabel) {
   </style></head><body>
     <h1>📅 Расписание занятий</h1>
     <p>${weekLabel} · Всего занятий: ${lessons.length}</p>
-    <button onclick="window.print()" style="margin-bottom:16px;padding:8px 20px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">🖨️ Распечатать</button>
+    <button onclick="window.print()" style="margin-bottom:16px;padding:8px 20px;background:#1da0d4;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">🖨️ Распечатать</button>
     <table><thead><tr><th>Дата</th><th>Время</th><th>Ученик</th><th>Предмет</th><th>Преподаватель</th><th>Длит.</th><th>Цена</th><th>Статус</th></tr></thead>
     <tbody>${rows}</tbody></table>
   </body></html>`);
@@ -41,17 +41,17 @@ function printReceipt(student, payment) {
   const w = window.open("","_blank");
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Квитанция</title><style>
     body{font-family:Arial,sans-serif;padding:40px;max-width:500px;margin:0 auto;color:#111}
-    .logo{font-size:22px;font-weight:bold;color:#6366f1;margin-bottom:4px}
+    .logo{font-size:22px;font-weight:bold;color:#1da0d4;margin-bottom:4px}
     .subtitle{color:#888;font-size:13px;margin-bottom:30px}
     h2{font-size:18px;border-bottom:2px solid #e5e7eb;padding-bottom:10px;margin-bottom:20px}
     .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:14px}
     .label{color:#666}.value{font-weight:600}
-    .total{display:flex;justify-content:space-between;padding:14px 0;font-size:18px;font-weight:bold;color:#6366f1;border-top:2px solid #6366f1;margin-top:8px}
+    .total{display:flex;justify-content:space-between;padding:14px 0;font-size:18px;font-weight:bold;color:#1da0d4;border-top:2px solid #1da0d4;margin-top:8px}
     .footer{margin-top:30px;font-size:11px;color:#aaa;text-align:center}
     @media print{button{display:none}}
   </style></head><body>
-    <div class="logo">EduCRM</div>
-    <div class="subtitle">Репетиторский центр</div>
+    <div class="logo">GENIUS CRM</div>
+    <div class="subtitle">Образовательный центр «ГЕНИЙ»</div>
     <h2>Квитанция об оплате</h2>
     <div class="row"><span class="label">Дата</span><span class="value">${payment.date}</span></div>
     <div class="row"><span class="label">Ученик</span><span class="value">${student?.name||payment.studentName}</span></div>
@@ -60,7 +60,7 @@ function printReceipt(student, payment) {
     <div class="row"><span class="label">Способ оплаты</span><span class="value">${payment.method==="card"?"Банковская карта":payment.method==="cash"?"Наличные":"Перевод"}</span></div>
     ${payment.comment?`<div class="row"><span class="label">Комментарий</span><span class="value">${payment.comment}</span></div>`:""}
     <div class="total"><span>Итого</span><span>${payment.amount.toLocaleString("ru")} ₽</span></div>
-    <button onclick="window.print()" style="margin-top:20px;width:100%;padding:10px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">🖨️ Распечатать</button>
+    <button onclick="window.print()" style="margin-top:20px;width:100%;padding:10px;background:#1da0d4;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">🖨️ Распечатать</button>
     <div class="footer">Квитанция сформирована автоматически · EduCRM</div>
   </body></html>`);
   w.document.close();
@@ -104,11 +104,11 @@ function parseExcelStudents(rows) {
 }
 
 const initialTutors = [
-  { id: 1, name: "Иванова Наталья Владимировна",  short: "Иванова Н.В.",   phone: "+7 905 111-11-11", subjects: ["Математика", "Физика"],          rateType: "percent", rateValue: 50, status: "active", color: "#6366f1" },
-  { id: 2, name: "Сидорова Елена Андреевна",      short: "Сидорова Е.А.", phone: "+7 916 222-22-22", subjects: ["Русский язык", "Литература"],     rateType: "fixed",   rateValue: 500,status: "active", color: "#ec4899" },
-  { id: 3, name: "Петров Константин Михайлович",  short: "Петров К.М.",   phone: "+7 926 333-33-33", subjects: ["Английский язык"],                rateType: "percent", rateValue: 55, status: "active", color: "#22c55e" },
-  { id: 4, name: "Орлов Дмитрий Сергеевич",       short: "Орлов Д.С.",    phone: "+7 903 444-44-44", subjects: ["Физика", "Химия"],                rateType: "fixed",   rateValue: 600,status: "active", color: "#f59e0b" },
-  { id: 5, name: "Кузнецова Людмила Борисовна",   short: "Кузнецова Л.Б.",phone: "+7 915 555-55-55", subjects: ["Биология", "Химия"],              rateType: "percent", rateValue: 45, status: "active", color: "#06b6d4" },
+  { id: 1, name: "Иванова Наталья Владимировна",  short: "Иванова Н.В.",   phone: "+7 905 111-11-11", subjects: ["Математика", "Физика"],          rateType: "percent", rateValue: 50, status: "active", color: "#1da0d4" },
+  { id: 2, name: "Сидорова Елена Андреевна",      short: "Сидорова Е.А.", phone: "+7 916 222-22-22", subjects: ["Русский язык", "Литература"],     rateType: "fixed",   rateValue: 500,status: "active", color: "#d6539a" },
+  { id: 3, name: "Петров Константин Михайлович",  short: "Петров К.М.",   phone: "+7 926 333-33-33", subjects: ["Английский язык"],                rateType: "percent", rateValue: 55, status: "active", color: "#5cb85c" },
+  { id: 4, name: "Орлов Дмитрий Сергеевич",       short: "Орлов Д.С.",    phone: "+7 903 444-44-44", subjects: ["Физика", "Химия"],                rateType: "fixed",   rateValue: 600,status: "active", color: "#f5a623" },
+  { id: 5, name: "Кузнецова Людмила Борисовна",   short: "Кузнецова Л.Б.",phone: "+7 915 555-55-55", subjects: ["Биология", "Химия"],              rateType: "percent", rateValue: 45, status: "active", color: "#17a6c9" },
 ];
 
 const initialStudents = [
@@ -143,20 +143,20 @@ const initialSalaryPayouts = [
 ];
 
 const courseCategories = [
-  { id:"prep",     label:"🎓 Подготовка к экзаменам", color:"#ef4444", courses:["Подготовка к ОГЭ","Подготовка к ЕГЭ (базовый)","Подготовка к ЕГЭ (профильный)","Подготовка к ВПР"] },
-  { id:"math",     label:"📐 Математика и IT",       color:"#6366f1", courses:["Математика","Базовая математика","Профильная математика","Геометрия","Информатика","Программирование"] },
-  { id:"sciences", label:"🔬 Естественные науки",     color:"#22c55e", courses:["Физика","Химия","Биология","География"] },
-  { id:"lang",     label:"🗣️ Языки и литература",     color:"#f59e0b", courses:["Русский язык","Английский язык","Арабский язык","Литература","Литературный клуб"] },
-  { id:"social",   label:"📚 Гуманитарные",           color:"#ec4899", courses:["История","Обществознание"] },
-  { id:"school",   label:"🏫 По классам",             color:"#8b5cf6", courses:["1 класс","2 класс","3 класс","4 класс","5 класс","6 класс","7 класс","8 класс","9 класс","10 класс","11 класс"] },
-  { id:"early",    label:"🌱 Дошкольное",             color:"#06b6d4", courses:["Дошкольная подготовка","Каллиграфия","Скорочтение"] },
-  { id:"special",  label:"🧠 Специалисты",            color:"#a855f7", courses:["Логопед","Психолог"] },
-  { id:"creative", label:"🎨 Творчество и клубы",     color:"#f97316", courses:["Живопись","Шахматы","Путешественники во времени","Онлайн занятия"] },
+  { id:"prep",     label:"🎓 Подготовка к экзаменам", color:"#e2574c", courses:["Подготовка к ОГЭ","Подготовка к ЕГЭ (базовый)","Подготовка к ЕГЭ (профильный)","Подготовка к ВПР"] },
+  { id:"math",     label:"📐 Математика и IT",       color:"#1da0d4", courses:["Математика","Базовая математика","Профильная математика","Геометрия","Информатика","Программирование"] },
+  { id:"sciences", label:"🔬 Естественные науки",     color:"#5cb85c", courses:["Физика","Химия","Биология","География"] },
+  { id:"lang",     label:"🗣️ Языки и литература",     color:"#f5a623", courses:["Русский язык","Английский язык","Арабский язык","Литература","Литературный клуб"] },
+  { id:"social",   label:"📚 Гуманитарные",           color:"#d6539a", courses:["История","Обществознание"] },
+  { id:"school",   label:"🏫 По классам",             color:"#5cb85c", courses:["1 класс","2 класс","3 класс","4 класс","5 класс","6 класс","7 класс","8 класс","9 класс","10 класс","11 класс"] },
+  { id:"early",    label:"🌱 Дошкольное",             color:"#17a6c9", courses:["Дошкольная подготовка","Каллиграфия","Скорочтение"] },
+  { id:"special",  label:"🧠 Специалисты",            color:"#8a5cc9", courses:["Логопед","Психолог"] },
+  { id:"creative", label:"🎨 Творчество и клубы",     color:"#f5a623", courses:["Живопись","Шахматы","Путешественники во времени","Онлайн занятия"] },
 ];
 const allSubjects = courseCategories.flatMap(c => c.courses);
-const subjectColor = s => courseCategories.find(c=>c.courses.includes(s))?.color || "#6366f1";
+const subjectColor = s => courseCategories.find(c=>c.courses.includes(s))?.color || "#1da0d4";
 const subjectCategory = s => courseCategories.find(c=>c.courses.includes(s)) || {};
-const COLORS = ["#6366f1","#ec4899","#22c55e","#f59e0b","#06b6d4","#a855f7","#ef4444","#84cc16"];
+const COLORS = ["#1da0d4","#d6539a","#5cb85c","#f5a623","#17a6c9","#8a5cc9","#e2574c","#84cc16"];
 const initialPricing = [
   { id:1, category:"📐 Математика и IT",          course:"Математика (базовая)",            price45:600,  price60:800,  price90:1100, price120:1450, groupPrice:400,  note:"" },
   { id:2, category:"📐 Математика и IT",          course:"Профильная математика",           price45:700,  price60:900,  price90:1200, price120:1550, groupPrice:500,  note:"" },
@@ -213,22 +213,22 @@ const initialRequests = [
 ];
 
 const statusCfg = {
-  active:   { label:"Активен",   color:"#22c55e", bg:"rgba(34,197,94,0.12)"   },
-  trial:    { label:"Пробный",   color:"#f59e0b", bg:"rgba(245,158,11,0.12)"  },
-  paused:   { label:"Пауза",     color:"#94a3b8", bg:"rgba(148,163,184,0.12)" },
-  inactive: { label:"Неактивен", color:"#ef4444", bg:"rgba(239,68,68,0.12)"   },
+  active:   { label:"Активен",   color:"#5cb85c", bg:"rgba(34,197,94,0.12)"   },
+  trial:    { label:"Пробный",   color:"#f5a623", bg:"rgba(245,158,11,0.12)"  },
+  paused:   { label:"Пауза",     color:"#6d7f92", bg:"rgba(148,163,184,0.12)" },
+  inactive: { label:"Неактивен", color:"#e2574c", bg:"rgba(239,68,68,0.12)"   },
 };
 const lsnCfg = {
-  scheduled:{ label:"Запланировано", color:"#6366f1" },
-  completed: { label:"Проведено",    color:"#22c55e" },
-  cancelled: { label:"Отменено",     color:"#ef4444" },
-  noshow:    { label:"Не явился",    color:"#f59e0b" },
+  scheduled:{ label:"Запланировано", color:"#1da0d4" },
+  completed: { label:"Проведено",    color:"#5cb85c" },
+  cancelled: { label:"Отменено",     color:"#e2574c" },
+  noshow:    { label:"Не явился",    color:"#f5a623" },
 };
 const channelCfg = {
   whatsapp:{ label:"WhatsApp", icon:"💬", color:"#25d366" },
-  sms:     { label:"SMS",      icon:"📱", color:"#6366f1" },
+  sms:     { label:"SMS",      icon:"📱", color:"#1da0d4" },
   telegram:{ label:"Telegram", icon:"✈️", color:"#229ed9" },
-  email:   { label:"Email",    icon:"📧", color:"#f59e0b" },
+  email:   { label:"Email",    icon:"📧", color:"#f5a623" },
 };
 const audLabels = { all:"Все ученики", active:"Активные", debtors:"Должники", zeroblance:"Нулевой баланс", trial:"На пробном", paused:"На паузе", inactive:"Неактивные", math:"Математика", english:"Английский язык" };
 const audIcons  = { all:"👥", active:"✅", debtors:"💸", zeroblance:"⚠️", trial:"🔍", paused:"⏸️", inactive:"❌", math:"📐", english:"🇬🇧" };
@@ -240,7 +240,7 @@ function calcEarning(lesson, tutor) {
 
 function Av({ name, color, size = 36 }) {
   const i = name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-  return <div style={{ width:size, height:size, borderRadius:size*0.28, background:color||"#6366f1", display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*0.35, fontWeight:700, color:"white", flexShrink:0 }}>{i}</div>;
+  return <div style={{ width:size, height:size, borderRadius:size*0.28, background:color||"#1da0d4", display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*0.35, fontWeight:700, color:"white", flexShrink:0 }}>{i}</div>;
 }
 function Tag({ c, bg, children }) {
   return <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, margin:2, color:c, background:bg }}>{children}</span>;
@@ -396,7 +396,7 @@ export default function App() {
   }, [tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules]);
 
   const [nStudent,  setNStudent]  = useState({ name:"", age:"", phone:"", parentName:"", subjects:[], status:"trial", balance:0, address:"", school:"" });
-  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#6366f1" });
+  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
   const [nLesson,   setNLesson]   = useState({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
   const [lessonType,  setLessonType]  = useState("individual"); // individual | group
   const [groupStudents, setGroupStudents] = useState([]); // [{studentId, price}]
@@ -530,7 +530,7 @@ export default function App() {
     const parts = nTutor.name.trim().split(" ");
     const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
     setTutors([...tutors, { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue) }]);
-    setNTutor({ name:"", phone:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#6366f1" });
+    setNTutor({ name:"", phone:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
     setModal(null); notify("Преподаватель добавлен");
   };
   const addLesson = () => {
@@ -590,10 +590,10 @@ export default function App() {
 
   if (cloudLoading) {
     return (
-      <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:"#0f1117", minHeight:"100vh", color:"#e2e8f0", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif", background:"#eef3f8", minHeight:"100vh", color:"#22344a", display:"flex", alignItems:"center", justifyContent:"center" }}>
         <div style={{ textAlign:"center" }}>
           <div style={{ fontSize:32, marginBottom:12 }}>☁️</div>
-          <div style={{ fontSize:15, color:"#94a3b8" }}>Загрузка данных из облака...</div>
+          <div style={{ fontSize:15, color:"#6d7f92" }}>Загрузка данных из облака...</div>
         </div>
       </div>
     );
@@ -601,23 +601,23 @@ export default function App() {
 
   // ── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:"#0f1117", minHeight:"100vh", color:"#e2e8f0", display:"flex" }}>
+    <div style={{ fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif", background:"#eef3f8", minHeight:"100vh", color:"#22344a", display:"flex" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap');
         *{box-sizing:border-box}
-        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#1a1d27}::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
-        .nb{transition:all .2s}.nb:hover{background:rgba(99,102,241,.1)!important;color:#818cf8!important}
-        .nb.on{background:rgba(99,102,241,.18)!important;color:#818cf8!important;border-left:3px solid #6366f1!important}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#e9eef3}::-webkit-scrollbar-thumb{background:#a9b8c6;border-radius:2px}
+        .nb{transition:all .2s}.nb:hover{background:rgba(255,255,255,.15)!important;color:#ffffff!important}
+        .nb.on{background:rgba(255,255,255,.22)!important;color:#ffffff!important;border-left:3px solid #ffffff!important}
         .card{transition:transform .2s,box-shadow .2s}.card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.4)!important}
-        .bp{background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;padding:9px 20px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;transition:all .2s}
+        .bp{background:linear-gradient(135deg,#1da0d4,#5cb85c);border:none;color:#fff;padding:9px 20px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;transition:all .2s}
         .bp:hover{opacity:.9;transform:translateY(-1px)}.bp:disabled{opacity:.4;cursor:not-allowed}
-        .bg{background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#818cf8;padding:7px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;transition:all .2s}
+        .bg{background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#1da0d4;padding:7px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;transition:all .2s}
         .bg:hover{background:rgba(99,102,241,.2)}
-        input,select,textarea{background:#1e2130;border:1px solid #2d3252;color:#e2e8f0;padding:9px 12px;border-radius:9px;font-family:inherit;font-size:14px;outline:none;transition:border .2s;width:100%}
-        input:focus,select:focus,textarea:focus{border-color:#6366f1}
-        select option{background:#1e2130}
+        input,select,textarea{background:#ffffff;border:1px solid #d7e2ee;color:#22344a;padding:9px 12px;border-radius:9px;font-family:inherit;font-size:14px;outline:none;transition:border .2s;width:100%}
+        input:focus,select:focus,textarea:focus{border-color:#1da0d4}
+        select option{background:#ffffff}
         .ov{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center}
-        .mo{background:#161925;border:1px solid #2d3252;border-radius:18px;padding:28px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto}
+        .mo{background:#ffffff;border:1px solid #d7e2ee;border-radius:18px;padding:28px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto}
         .rh{transition:background .15s;cursor:pointer}.rh:hover{background:rgba(99,102,241,.05)!important}
         .notif{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:500;z-index:999;animation:si .3s ease}
         @keyframes si{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -625,35 +625,35 @@ export default function App() {
       `}</style>
 
       {/* SIDEBAR */}
-      <div style={{ width:220, background:"#13151f", borderRight:"1px solid #1e2433", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
+      <div style={{ width:220, background:"linear-gradient(180deg, #1da0d4 0%, #17a6c9 45%, #5cb85c 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
         <div style={{ padding:"0 20px 28px" }}>
-          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:800, color:"#818cf8" }}>EduCRM</div>
-          <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>Репетиторский центр</div>
+          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:20, fontWeight:800, color:"#ffffff" }}>GENIUS CRM</div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.75)", marginTop:2 }}>Образовательный центр «ГЕНИЙ»</div>
         </div>
         {nav.map(n=>(
           <button key={n.id} className={`nb ${view===n.id?"on":""}`} onClick={()=>goView(n.id)}
-            style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 20px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"#64748b", fontSize:14, fontWeight:500, cursor:"pointer", width:"100%", textAlign:"left" }}>
+            style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 20px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"rgba(255,255,255,0.85)", fontSize:14, fontWeight:500, cursor:"pointer", width:"100%", textAlign:"left" }}>
             <span style={{ fontSize:16 }}>{n.icon}</span>{n.label}
             {n.id==="requests" && requests.filter(r=>r.status==="new").length>0 && (
-              <span style={{ marginLeft:"auto", background:"#ef4444", color:"white", fontSize:10, fontWeight:700, borderRadius:10, padding:"1px 6px" }}>{requests.filter(r=>r.status==="new").length}</span>
+              <span style={{ marginLeft:"auto", background:"#e2574c", color:"white", fontSize:10, fontWeight:700, borderRadius:10, padding:"1px 6px" }}>{requests.filter(r=>r.status==="new").length}</span>
             )}
           </button>
         ))}
         <div style={{ marginTop:"auto", padding:16 }}>
           {/* Save / cloud sync indicator */}
           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10, padding:"6px 10px", background: (saveIndicator||cloudSyncing)?"rgba(34,197,94,0.1)":"rgba(99,102,241,0.06)", border:`1px solid ${(saveIndicator||cloudSyncing)?"rgba(34,197,94,0.3)":"rgba(99,102,241,0.12)"}`, borderRadius:8, transition:"all .5s" }}>
-            <div style={{ width:7, height:7, borderRadius:"50%", background:(saveIndicator||cloudSyncing)?"#22c55e":"#334155", transition:"all .5s" }} />
-            <span style={{ fontSize:11, color:(saveIndicator||cloudSyncing)?"#22c55e":"#475569", fontWeight:500 }}>{cloudSyncing?"Синхронизация...":saveIndicator?"Сохранено ✓":"Облако · синхронизировано"}</span>
+            <div style={{ width:7, height:7, borderRadius:"50%", background:(saveIndicator||cloudSyncing)?"#5cb85c":"#a9b8c6", transition:"all .5s" }} />
+            <span style={{ fontSize:11, color:(saveIndicator||cloudSyncing)?"#5cb85c":"#7a8a9c", fontWeight:500 }}>{cloudSyncing?"Синхронизация...":saveIndicator?"Сохранено ✓":"Облако · синхронизировано"}</span>
           </div>
           {/* Import Excel */}
-          <button onClick={()=>fileInputRef.current?.click()} style={{ width:"100%", padding:"8px", background:"rgba(99,102,241,0.1)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:9, color:"#818cf8", fontSize:12, fontWeight:600, cursor:"pointer", marginBottom:8, fontFamily:"inherit" }}>
+          <button onClick={()=>fileInputRef.current?.click()} style={{ width:"100%", padding:"8px", background:"rgba(99,102,241,0.1)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:9, color:"#1da0d4", fontSize:12, fontWeight:600, cursor:"pointer", marginBottom:8, fontFamily:"inherit" }}>
             📥 Импорт из Excel
           </button>
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display:"none" }} onChange={handleExcelFile} />
           <div style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.18)", borderRadius:12, padding:12, textAlign:"center" }}>
-            <div style={{ fontSize:10, color:"#64748b" }}>Должники</div>
-            <div style={{ fontSize:20, fontWeight:700, color:"#ef4444" }}>{students.filter(s=>s.balance<0).length}</div>
-            <div style={{ fontSize:10, color:"#475569" }}>учеников</div>
+            <div style={{ fontSize:10, color:"#55677a" }}>Должники</div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#e2574c" }}>{students.filter(s=>s.balance<0).length}</div>
+            <div style={{ fontSize:10, color:"#7a8a9c" }}>учеников</div>
           </div>
         </div>
       </div>
@@ -665,21 +665,21 @@ export default function App() {
         {view==="dashboard" && (
           <div>
             <div style={{ marginBottom:28 }}>
-              <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:800, color:"#f1f5f9", margin:0 }}>Дашборд</h1>
-              <div style={{ color:"#475569", fontSize:14, marginTop:4 }}>Понедельник, 9 марта 2026</div>
+              <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:28, fontWeight:800, color:"#12283d", margin:0 }}>Дашборд</h1>
+              <div style={{ color:"#7a8a9c", fontSize:14, marginTop:4 }}>Понедельник, 9 марта 2026</div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:28 }}>
               {[
-                { label:"Активных учеников", value:students.filter(s=>s.status==="active").length, icon:"👥", color:"#6366f1" },
-                { label:"Преподавателей",    value:tutors.filter(t=>t.status==="active").length,   icon:"🎓", color:"#22c55e" },
-                { label:"Занятий впереди",   value:lessons.filter(l=>l.status==="scheduled").length,icon:"📅",color:"#f59e0b" },
-                { label:"Выручка в марте",   value:`${(totalRevenue/1000).toFixed(1)}к`,           icon:"💰", color:"#ec4899" },
+                { label:"Активных учеников", value:students.filter(s=>s.status==="active").length, icon:"👥", color:"#1da0d4" },
+                { label:"Преподавателей",    value:tutors.filter(t=>t.status==="active").length,   icon:"🎓", color:"#5cb85c" },
+                { label:"Занятий впереди",   value:lessons.filter(l=>l.status==="scheduled").length,icon:"📅",color:"#f5a623" },
+                { label:"Выручка в марте",   value:`${(totalRevenue/1000).toFixed(1)}к`,           icon:"💰", color:"#d6539a" },
               ].map((s,i)=>(
-                <div key={i} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20 }}>
+                <div key={i} className="card" style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:20 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                     <div>
-                      <div style={{ fontSize:12, color:"#475569", marginBottom:8 }}>{s.label}</div>
-                      <div style={{ fontSize:30, fontWeight:700, color:s.color, fontFamily:"'Syne',sans-serif" }}>{s.value}</div>
+                      <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:8 }}>{s.label}</div>
+                      <div style={{ fontSize:30, fontWeight:700, color:s.color, fontFamily:"'DM Serif Display',serif" }}>{s.value}</div>
                     </div>
                     <div style={{ fontSize:28, opacity:.6 }}>{s.icon}</div>
                   </div>
@@ -687,41 +687,41 @@ export default function App() {
               ))}
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-              <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:22 }}>
+              <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:22 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
                   <h3 style={{ margin:0, fontSize:15, fontWeight:600 }}>Ближайшие занятия</h3>
                   <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>goView("schedule")}>Все</button>
                 </div>
                 {lessons.filter(l=>l.status==="scheduled").slice(0,5).map(l=>(
-                  <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid #1a1e2e" }}>
+                  <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid #f2f6fa" }}>
                     <div style={{ width:38, height:38, borderRadius:10, background:"rgba(99,102,241,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>📖</div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:13, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.studentName}</div>
-                      <div style={{ fontSize:11, color:"#475569" }}>{l.subject} · {l.tutorShort}</div>
+                      <div style={{ fontSize:11, color:"#7a8a9c" }}>{l.subject} · {l.tutorShort}</div>
                     </div>
                     <div style={{ textAlign:"right", flexShrink:0 }}>
-                      <div style={{ fontSize:12, color:"#6366f1", fontWeight:600 }}>{l.date}</div>
-                      <div style={{ fontSize:11, color:"#475569" }}>{l.time}</div>
+                      <div style={{ fontSize:12, color:"#1da0d4", fontWeight:600 }}>{l.date}</div>
+                      <div style={{ fontSize:11, color:"#7a8a9c" }}>{l.time}</div>
                     </div>
                   </div>
                 ))}
               </div>
-              <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:22 }}>
+              <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:22 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
                   <h3 style={{ margin:0, fontSize:15, fontWeight:600 }}>💼 Зарплаты к выплате</h3>
                   <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>goView("tutors")}>Все</button>
                 </div>
                 {tutors.map(t=>{ const d=tDebt(t.id); if(d<=0) return null; return (
-                  <div key={t.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid #1a1e2e", cursor:"pointer" }} onClick={()=>{ setSelTutor(t); setView("tutors"); }}>
+                  <div key={t.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid #f2f6fa", cursor:"pointer" }} onClick={()=>{ setSelTutor(t); setView("tutors"); }}>
                     <Av name={t.name} color={t.color} size={34} />
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:13, fontWeight:600 }}>{t.short}</div>
-                      <div style={{ fontSize:11, color:"#475569" }}>{tCompleted(t.id).length} занятий</div>
+                      <div style={{ fontSize:11, color:"#7a8a9c" }}>{tCompleted(t.id).length} занятий</div>
                     </div>
-                    <div style={{ fontSize:15, fontWeight:700, color:"#f59e0b" }}>{d.toLocaleString("ru")}₽</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:"#f5a623" }}>{d.toLocaleString("ru")}₽</div>
                   </div>
                 ); })}
-                {tutors.every(t=>tDebt(t.id)<=0) && <div style={{ color:"#475569", fontSize:13, textAlign:"center", padding:"20px 0" }}>🎉 Все выплаты сделаны!</div>}
+                {tutors.every(t=>tDebt(t.id)<=0) && <div style={{ color:"#7a8a9c", fontSize:13, textAlign:"center", padding:"20px 0" }}>🎉 Все выплаты сделаны!</div>}
               </div>
             </div>
           </div>
@@ -732,8 +732,8 @@ export default function App() {
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
               <div>
-                <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Преподаватели</h1>
-                <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>{tutors.length} в базе</div>
+                <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Преподаватели</h1>
+                <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>{tutors.length} в базе</div>
               </div>
               <button className="bp" onClick={()=>setModal("addTutor")}>+ Добавить преподавателя</button>
             </div>
@@ -741,28 +741,28 @@ export default function App() {
               {tutors.map(t=>{
                 const earned=tEarned(t.id), paid=tPaid(t.id), debt=earned-paid;
                 return (
-                  <div key={t.id} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:22, cursor:"pointer" }} onClick={()=>{ setSelTutor(t); setTTab("overview"); }}>
+                  <div key={t.id} className="card" style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:22, cursor:"pointer" }} onClick={()=>{ setSelTutor(t); setTTab("overview"); }}>
                     <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
                       <Av name={t.name} color={t.color} size={46} />
                       <div>
                         <div style={{ fontSize:14, fontWeight:700 }}>{t.short}</div>
-                        <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{t.subjects.join(", ")}</div>
+                        <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>{t.subjects.join(", ")}</div>
                       </div>
                     </div>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
                       {[
-                        { l:"Учеников",  v:tStudents(t.id).length,          c:"#6366f1" },
-                        { l:"Занятий",   v:tCompleted(t.id).length,         c:"#22c55e" },
-                        { l:"К выдаче",  v:`${debt.toLocaleString("ru")}₽`, c:debt>0?"#f59e0b":"#94a3b8" },
+                        { l:"Учеников",  v:tStudents(t.id).length,          c:"#1da0d4" },
+                        { l:"Занятий",   v:tCompleted(t.id).length,         c:"#5cb85c" },
+                        { l:"К выдаче",  v:`${debt.toLocaleString("ru")}₽`, c:debt>0?"#f5a623":"#6d7f92" },
                       ].map((m,i)=>(
-                        <div key={i} style={{ background:"#1a1e2e", borderRadius:10, padding:8, textAlign:"center" }}>
-                          <div style={{ fontSize:10, color:"#475569", marginBottom:3 }}>{m.l}</div>
+                        <div key={i} style={{ background:"#f2f6fa", borderRadius:10, padding:8, textAlign:"center" }}>
+                          <div style={{ fontSize:10, color:"#7a8a9c", marginBottom:3 }}>{m.l}</div>
                           <div style={{ fontSize:13, fontWeight:700, color:m.c }}>{m.v}</div>
                         </div>
                       ))}
                     </div>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                      <div style={{ fontSize:11, color:"#475569" }}>{t.rateType==="percent"?`${t.rateValue}% от занятия`:`${t.rateValue}₽/занятие`}</div>
+                      <div style={{ fontSize:11, color:"#7a8a9c" }}>{t.rateType==="percent"?`${t.rateValue}% от занятия`:`${t.rateValue}₽/занятие`}</div>
                       <Tag c={statusCfg[t.status]?.color} bg={statusCfg[t.status]?.bg}>{statusCfg[t.status]?.label}</Tag>
                     </div>
                   </div>
@@ -781,14 +781,14 @@ export default function App() {
             <div>
               <button className="bg" style={{ marginBottom:20 }} onClick={()=>setSelTutor(null)}>← Назад</button>
               {/* header card */}
-              <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:18, padding:28, marginBottom:20 }}>
+              <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:18, padding:28, marginBottom:20 }}>
                 <div style={{ display:"flex", gap:20, alignItems:"flex-start", marginBottom:22 }}>
                   <Av name={t.name} color={t.color} size={64} />
                   <div style={{ flex:1 }}>
-                    <div style={{ fontSize:22, fontWeight:700, color:"#f1f5f9" }}>{t.name}</div>
-                    <div style={{ fontSize:13, color:"#475569", marginTop:4 }}>{t.phone}</div>
+                    <div style={{ fontSize:22, fontWeight:700, color:"#12283d" }}>{t.name}</div>
+                    <div style={{ fontSize:13, color:"#7a8a9c", marginTop:4 }}>{t.phone}</div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8 }}>
-                      {t.subjects.map(s=><Tag key={s} c="#818cf8" bg="rgba(99,102,241,0.15)">{s}</Tag>)}
+                      {t.subjects.map(s=><Tag key={s} c="#1da0d4" bg="rgba(99,102,241,0.15)">{s}</Tag>)}
                       <Tag c={statusCfg[t.status]?.color} bg={statusCfg[t.status]?.bg}>{statusCfg[t.status]?.label}</Tag>
                     </div>
                   </div>
@@ -796,59 +796,59 @@ export default function App() {
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
                   {[
-                    { l:"Учеников",      v:mySt.length,                     c:"#6366f1" },
-                    { l:"Всего занятий", v:myL.length,                      c:"#94a3b8" },
-                    { l:"Проведено",     v:myC.length,                      c:"#22c55e" },
-                    { l:"Заработано",    v:`${earned.toLocaleString("ru")}₽`,c:"#f59e0b"},
-                    { l:"К выплате",     v:`${debt.toLocaleString("ru")}₽`, c:debt>0?"#ef4444":"#22c55e" },
+                    { l:"Учеников",      v:mySt.length,                     c:"#1da0d4" },
+                    { l:"Всего занятий", v:myL.length,                      c:"#6d7f92" },
+                    { l:"Проведено",     v:myC.length,                      c:"#5cb85c" },
+                    { l:"Заработано",    v:`${earned.toLocaleString("ru")}₽`,c:"#f5a623"},
+                    { l:"К выплате",     v:`${debt.toLocaleString("ru")}₽`, c:debt>0?"#e2574c":"#5cb85c" },
                   ].map((m,i)=>(
-                    <div key={i} style={{ background:"#1a1e2e", borderRadius:12, padding:14, textAlign:"center" }}>
-                      <div style={{ fontSize:11, color:"#475569", marginBottom:4 }}>{m.l}</div>
+                    <div key={i} style={{ background:"#f2f6fa", borderRadius:12, padding:14, textAlign:"center" }}>
+                      <div style={{ fontSize:11, color:"#7a8a9c", marginBottom:4 }}>{m.l}</div>
                       <div style={{ fontSize:18, fontWeight:700, color:m.c }}>{m.v}</div>
                     </div>
                   ))}
                 </div>
               </div>
               {/* tabs */}
-              <div style={{ display:"flex", gap:4, marginBottom:20, background:"#161925", border:"1px solid #1e2433", borderRadius:12, padding:6, width:"fit-content" }}>
+              <div style={{ display:"flex", gap:4, marginBottom:20, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:12, padding:6, width:"fit-content" }}>
                 {[["overview","📊 Обзор"],["students","👥 Ученики"],["lessons","📚 Занятия"],["salary","💼 Зарплата"]].map(([k,l])=>(
                   <button key={k} className="stab" onClick={()=>setTTab(k)}
-                    style={{ background:tTab===k?"rgba(99,102,241,0.25)":"transparent", color:tTab===k?"#818cf8":"#64748b" }}>{l}</button>
+                    style={{ background:tTab===k?"rgba(99,102,241,0.25)":"transparent", color:tTab===k?"#1da0d4":"#55677a" }}>{l}</button>
                 ))}
               </div>
 
               {/* TAB overview */}
               {tTab==="overview" && (
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:20 }}>
-                    <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#94a3b8", fontWeight:600 }}>Последние занятия</h4>
-                    {myC.length===0 && <div style={{ color:"#475569", fontSize:13 }}>Нет проведённых занятий</div>}
+                  <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, padding:20 }}>
+                    <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#6d7f92", fontWeight:600 }}>Последние занятия</h4>
+                    {myC.length===0 && <div style={{ color:"#7a8a9c", fontSize:13 }}>Нет проведённых занятий</div>}
                     {myC.slice(-5).reverse().map(l=>(
-                      <div key={l.id} style={{ display:"flex", gap:10, padding:"9px 0", borderBottom:"1px solid #1a1e2e", alignItems:"center" }}>
+                      <div key={l.id} style={{ display:"flex", gap:10, padding:"9px 0", borderBottom:"1px solid #f2f6fa", alignItems:"center" }}>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:13, fontWeight:600 }}>{l.studentName}</div>
-                          <div style={{ fontSize:11, color:"#475569" }}>{l.subject} · {l.date}</div>
+                          <div style={{ fontSize:11, color:"#7a8a9c" }}>{l.subject} · {l.date}</div>
                         </div>
                         <div style={{ textAlign:"right" }}>
                           <div style={{ fontSize:13, fontWeight:700 }}>{l.price}₽</div>
-                          <div style={{ fontSize:11, color:"#22c55e" }}>+{calcEarning(l,t)}₽</div>
+                          <div style={{ fontSize:11, color:"#5cb85c" }}>+{calcEarning(l,t)}₽</div>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:20 }}>
-                    <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#94a3b8", fontWeight:600 }}>Ставка оплаты</h4>
-                    <div style={{ background:"#1a1e2e", borderRadius:10, padding:14, marginBottom:12 }}>
-                      <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Тип</div>
-                      <div style={{ fontSize:16, fontWeight:700, color:"#818cf8" }}>
+                  <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, padding:20 }}>
+                    <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#6d7f92", fontWeight:600 }}>Ставка оплаты</h4>
+                    <div style={{ background:"#f2f6fa", borderRadius:10, padding:14, marginBottom:12 }}>
+                      <div style={{ fontSize:12, color:"#55677a", marginBottom:4 }}>Тип</div>
+                      <div style={{ fontSize:16, fontWeight:700, color:"#1da0d4" }}>
                         {t.rateType==="percent"?`${t.rateValue}% от стоимости занятия`:`Фиксированно ${t.rateValue}₽ за занятие`}
                       </div>
                     </div>
-                    <div style={{ fontSize:12, color:"#64748b", marginBottom:8 }}>Примеры расчёта:</div>
+                    <div style={{ fontSize:12, color:"#55677a", marginBottom:8 }}>Примеры расчёта:</div>
                     {[800,1000,1200,1500,2000].map(price=>(
-                      <div key={price} style={{ display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom:"1px solid #1a1e2e", fontSize:13 }}>
-                        <span style={{ color:"#94a3b8" }}>Занятие {price}₽</span>
-                        <span style={{ color:"#22c55e", fontWeight:700 }}>→ {calcEarning({price},t)}₽</span>
+                      <div key={price} style={{ display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom:"1px solid #f2f6fa", fontSize:13 }}>
+                        <span style={{ color:"#6d7f92" }}>Занятие {price}₽</span>
+                        <span style={{ color:"#5cb85c", fontWeight:700 }}>→ {calcEarning({price},t)}₽</span>
                       </div>
                     ))}
                   </div>
@@ -857,13 +857,13 @@ export default function App() {
 
               {/* TAB students */}
               {tTab==="students" && (
-                <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, overflow:"hidden" }}>
-                  {mySt.length===0 ? <div style={{ padding:40, textAlign:"center", color:"#475569" }}>Нет учеников</div> : (
+                <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, overflow:"hidden" }}>
+                  {mySt.length===0 ? <div style={{ padding:40, textAlign:"center", color:"#7a8a9c" }}>Нет учеников</div> : (
                     <table style={{ width:"100%", borderCollapse:"collapse" }}>
                       <thead>
-                        <tr style={{ borderBottom:"1px solid #1e2433" }}>
+                        <tr style={{ borderBottom:"1px solid #dbe6f0" }}>
                           {["Ученик","Предметы","Статус","Баланс","Занятий с преп."].map(h=>(
-                            <th key={h} style={{ padding:"13px 16px", textAlign:"left", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                            <th key={h} style={{ padding:"13px 16px", textAlign:"left", fontSize:11, color:"#7a8a9c", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -871,20 +871,20 @@ export default function App() {
                         {mySt.map(s=>{
                           const cnt = myC.filter(l=>l.studentId===s.id).length;
                           return (
-                            <tr key={s.id} style={{ borderBottom:"1px solid #1a1e2e" }}>
+                            <tr key={s.id} style={{ borderBottom:"1px solid #f2f6fa" }}>
                               <td style={{ padding:"12px 16px" }}>
                                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                                  <Av name={s.name} color="#6366f1" size={32} />
+                                  <Av name={s.name} color="#1da0d4" size={32} />
                                   <div>
                                     <div style={{ fontSize:13, fontWeight:600 }}>{s.name}</div>
-                                    <div style={{ fontSize:11, color:"#475569" }}>{s.age} лет</div>
+                                    <div style={{ fontSize:11, color:"#7a8a9c" }}>{s.age} лет</div>
                                   </div>
                                 </div>
                               </td>
-                              <td style={{ padding:"12px 16px" }}>{s.subjects.map(sub=><Tag key={sub} c="#818cf8" bg="rgba(99,102,241,0.12)">{sub}</Tag>)}</td>
+                              <td style={{ padding:"12px 16px" }}>{s.subjects.map(sub=><Tag key={sub} c="#1da0d4" bg="rgba(99,102,241,0.12)">{sub}</Tag>)}</td>
                               <td style={{ padding:"12px 16px" }}><Tag c={statusCfg[s.status]?.color} bg={statusCfg[s.status]?.bg}>{statusCfg[s.status]?.label}</Tag></td>
-                              <td style={{ padding:"12px 16px", fontWeight:700, color:s.balance>=0?"#22c55e":"#ef4444" }}>{s.balance}₽</td>
-                              <td style={{ padding:"12px 16px", color:"#94a3b8", fontWeight:600 }}>{cnt}</td>
+                              <td style={{ padding:"12px 16px", fontWeight:700, color:s.balance>=0?"#5cb85c":"#e2574c" }}>{s.balance}₽</td>
+                              <td style={{ padding:"12px 16px", color:"#6d7f92", fontWeight:600 }}>{cnt}</td>
                             </tr>
                           );
                         })}
@@ -897,21 +897,21 @@ export default function App() {
               {/* TAB lessons */}
               {tTab==="lessons" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {myL.length===0 && <div style={{ color:"#475569", padding:"40px", textAlign:"center" }}>Нет занятий</div>}
+                  {myL.length===0 && <div style={{ color:"#7a8a9c", padding:"40px", textAlign:"center" }}>Нет занятий</div>}
                   {myL.sort((a,b)=>a.date>b.date?-1:1).map(l=>(
-                    <div key={l.id} style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:12, padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
+                    <div key={l.id} style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:12, padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
                       <div style={{ width:4, height:36, borderRadius:2, background:lsnCfg[l.status]?.color, flexShrink:0 }} />
                       <div style={{ width:70, flexShrink:0 }}>
                         <div style={{ fontSize:13, fontWeight:700 }}>{l.time||"—"}</div>
-                        <div style={{ fontSize:11, color:"#475569" }}>{l.date}</div>
+                        <div style={{ fontSize:11, color:"#7a8a9c" }}>{l.date}</div>
                       </div>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:13, fontWeight:600 }}>{l.studentName}</div>
-                        <div style={{ fontSize:11, color:"#475569" }}>{l.subject} · {l.duration} мин</div>
+                        <div style={{ fontSize:11, color:"#7a8a9c" }}>{l.subject} · {l.duration} мин</div>
                       </div>
                       <div style={{ textAlign:"right" }}>
                         <div style={{ fontSize:14, fontWeight:700 }}>{l.price}₽</div>
-                        <div style={{ fontSize:12, color:"#22c55e", fontWeight:600 }}>+{calcEarning(l,t)}₽ вам</div>
+                        <div style={{ fontSize:12, color:"#5cb85c", fontWeight:600 }}>+{calcEarning(l,t)}₽ вам</div>
                       </div>
                       <Tag c={lsnCfg[l.status]?.color} bg={`${lsnCfg[l.status]?.color}22`}>{lsnCfg[l.status]?.label}</Tag>
                       {l.status==="scheduled" && <button className="bg" style={{ fontSize:11, padding:"5px 10px" }} onClick={()=>completeLesson(l.id)}>✓</button>}
@@ -924,15 +924,15 @@ export default function App() {
               {tTab==="salary" && (
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                   <div>
-                    <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:20, marginBottom:16 }}>
-                      <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#94a3b8", fontWeight:600 }}>Итого</h4>
+                    <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, padding:20, marginBottom:16 }}>
+                      <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#6d7f92", fontWeight:600 }}>Итого</h4>
                       {[
-                        { l:"Заработано всего",  v:`${earned.toLocaleString("ru")}₽`, c:"#f59e0b" },
-                        { l:"Выплачено всего",   v:`${paid.toLocaleString("ru")}₽`,   c:"#22c55e" },
-                        { l:"Остаток к выплате", v:`${debt.toLocaleString("ru")}₽`,   c:debt>0?"#ef4444":"#22c55e" },
+                        { l:"Заработано всего",  v:`${earned.toLocaleString("ru")}₽`, c:"#f5a623" },
+                        { l:"Выплачено всего",   v:`${paid.toLocaleString("ru")}₽`,   c:"#5cb85c" },
+                        { l:"Остаток к выплате", v:`${debt.toLocaleString("ru")}₽`,   c:debt>0?"#e2574c":"#5cb85c" },
                       ].map((m,i)=>(
-                        <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"11px 14px", background:"#1a1e2e", borderRadius:10, marginBottom:8 }}>
-                          <span style={{ fontSize:13, color:"#94a3b8" }}>{m.l}</span>
+                        <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"11px 14px", background:"#f2f6fa", borderRadius:10, marginBottom:8 }}>
+                          <span style={{ fontSize:13, color:"#6d7f92" }}>{m.l}</span>
                           <span style={{ fontSize:15, fontWeight:700, color:m.c }}>{m.v}</span>
                         </div>
                       ))}
@@ -940,36 +940,36 @@ export default function App() {
                         💰 Выплатить зарплату
                       </button>
                     </div>
-                    <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:20 }}>
-                      <h4 style={{ margin:"0 0 12px", fontSize:14, color:"#94a3b8", fontWeight:600 }}>Детализация по занятиям</h4>
+                    <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, padding:20 }}>
+                      <h4 style={{ margin:"0 0 12px", fontSize:14, color:"#6d7f92", fontWeight:600 }}>Детализация по занятиям</h4>
                       {myC.map(l=>(
-                        <div key={l.id} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid #1a1e2e", fontSize:12 }}>
+                        <div key={l.id} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid #f2f6fa", fontSize:12 }}>
                           <div>
-                            <div style={{ fontWeight:600, color:"#e2e8f0" }}>{l.studentName} · {l.subject}</div>
-                            <div style={{ color:"#475569" }}>{l.date}</div>
+                            <div style={{ fontWeight:600, color:"#22344a" }}>{l.studentName} · {l.subject}</div>
+                            <div style={{ color:"#7a8a9c" }}>{l.date}</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
-                            <div style={{ color:"#94a3b8" }}>{l.price}₽</div>
-                            <div style={{ color:"#22c55e", fontWeight:700 }}>+{calcEarning(l,t)}₽</div>
+                            <div style={{ color:"#6d7f92" }}>{l.price}₽</div>
+                            <div style={{ color:"#5cb85c", fontWeight:700 }}>+{calcEarning(l,t)}₽</div>
                           </div>
                         </div>
                       ))}
-                      {myC.length===0 && <div style={{ color:"#475569", fontSize:13 }}>Нет проведённых занятий</div>}
+                      {myC.length===0 && <div style={{ color:"#7a8a9c", fontSize:13 }}>Нет проведённых занятий</div>}
                     </div>
                   </div>
-                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:20 }}>
-                    <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#94a3b8", fontWeight:600 }}>История выплат</h4>
-                    {myPay.length===0 && <div style={{ color:"#475569", fontSize:13 }}>Выплат пока нет</div>}
+                  <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, padding:20 }}>
+                    <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#6d7f92", fontWeight:600 }}>История выплат</h4>
+                    {myPay.length===0 && <div style={{ color:"#7a8a9c", fontSize:13 }}>Выплат пока нет</div>}
                     {myPay.map(p=>(
-                      <div key={p.id} style={{ background:"#1a1e2e", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
+                      <div key={p.id} style={{ background:"#f2f6fa", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                           <div>
-                            <div style={{ fontSize:15, fontWeight:700, color:"#22c55e" }}>+{p.amount.toLocaleString("ru")}₽</div>
-                            <div style={{ fontSize:11, color:"#475569", marginTop:3 }}>{p.date} · {p.month}</div>
+                            <div style={{ fontSize:15, fontWeight:700, color:"#5cb85c" }}>+{p.amount.toLocaleString("ru")}₽</div>
+                            <div style={{ fontSize:11, color:"#7a8a9c", marginTop:3 }}>{p.date} · {p.month}</div>
                           </div>
-                          <Tag c="#22c55e" bg="rgba(34,197,94,0.12)">Выплачено</Tag>
+                          <Tag c="#5cb85c" bg="rgba(34,197,94,0.12)">Выплачено</Tag>
                         </div>
-                        {p.comment && <div style={{ fontSize:12, color:"#64748b", marginTop:6 }}>{p.comment}</div>}
+                        {p.comment && <div style={{ fontSize:12, color:"#55677a", marginTop:6 }}>{p.comment}</div>}
                       </div>
                     ))}
                   </div>
@@ -984,8 +984,8 @@ export default function App() {
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
               <div>
-                <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Ученики</h1>
-                <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>{students.length} в базе</div>
+                <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Ученики</h1>
+                <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>{students.length} в базе</div>
               </div>
               <button className="bp" onClick={()=>setModal("addStudent")}>+ Добавить ученика</button>
             </div>
@@ -999,37 +999,37 @@ export default function App() {
             {selStudent ? (
               <div>
                 <button className="bg" style={{ marginBottom:20 }} onClick={()=>setSelStudent(null)}>← Назад</button>
-                <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:18, padding:28 }}>
+                <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:18, padding:28 }}>
                   <div style={{ display:"flex", gap:20, alignItems:"flex-start", marginBottom:20 }}>
-                    <Av name={selStudent.name} color="#6366f1" size={60} />
+                    <Av name={selStudent.name} color="#1da0d4" size={60} />
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:20, fontWeight:700 }}>{selStudent.name}</div>
-                      <div style={{ fontSize:13, color:"#475569", marginTop:4 }}>{selStudent.age} лет · {selStudent.phone}</div>
-                      <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>👤 Родитель: {selStudent.parentName}</div>
-                      {selStudent.school && <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>🏫 {selStudent.school}{selStudent.grade ? ` · ${selStudent.grade} класс` : ""}</div>}
-                      {selStudent.address && <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>📍 {selStudent.address}</div>}
+                      <div style={{ fontSize:13, color:"#7a8a9c", marginTop:4 }}>{selStudent.age} лет · {selStudent.phone}</div>
+                      <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>👤 Родитель: {selStudent.parentName}</div>
+                      {selStudent.school && <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>🏫 {selStudent.school}{selStudent.grade ? ` · ${selStudent.grade} класс` : ""}</div>}
+                      {selStudent.address && <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>📍 {selStudent.address}</div>}
                     </div>
                     <Tag c={statusCfg[selStudent.status]?.color} bg={statusCfg[selStudent.status]?.bg}>{statusCfg[selStudent.status]?.label}</Tag>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
                     {[
-                      { l:"Баланс",  v:`${selStudent.balance}₽`, c:selStudent.balance>=0?"#22c55e":"#ef4444" },
-                      { l:"Занятий", v:selStudent.totalLessons,   c:"#6366f1" },
-                      { l:"Предметов",v:selStudent.subjects.length,c:"#f59e0b"},
+                      { l:"Баланс",  v:`${selStudent.balance}₽`, c:selStudent.balance>=0?"#5cb85c":"#e2574c" },
+                      { l:"Занятий", v:selStudent.totalLessons,   c:"#1da0d4" },
+                      { l:"Предметов",v:selStudent.subjects.length,c:"#f5a623"},
                     ].map((m,i)=>(
-                      <div key={i} style={{ background:"#1a1e2e", borderRadius:12, padding:14, textAlign:"center" }}>
-                        <div style={{ fontSize:11, color:"#475569", marginBottom:4 }}>{m.l}</div>
+                      <div key={i} style={{ background:"#f2f6fa", borderRadius:12, padding:14, textAlign:"center" }}>
+                        <div style={{ fontSize:11, color:"#7a8a9c", marginBottom:4 }}>{m.l}</div>
                         <div style={{ fontSize:22, fontWeight:700, color:m.c }}>{m.v}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{ marginBottom:16 }}>{selStudent.subjects.map(s=><Tag key={s} c="#818cf8" bg="rgba(99,102,241,0.15)">{s}</Tag>)}</div>
-                  <h4 style={{ color:"#94a3b8", fontSize:13, marginBottom:12, fontWeight:600 }}>История занятий</h4>
+                  <div style={{ marginBottom:16 }}>{selStudent.subjects.map(s=><Tag key={s} c="#1da0d4" bg="rgba(99,102,241,0.15)">{s}</Tag>)}</div>
+                  <h4 style={{ color:"#6d7f92", fontSize:13, marginBottom:12, fontWeight:600 }}>История занятий</h4>
                   {lessons.filter(l=>l.studentId===selStudent.id).map(l=>(
-                    <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"#1a1e2e", borderRadius:10, marginBottom:8 }}>
+                    <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"#f2f6fa", borderRadius:10, marginBottom:8 }}>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:13, fontWeight:600 }}>{l.subject}</div>
-                        <div style={{ fontSize:11, color:"#475569" }}>{l.tutorShort} · {l.date} {l.time}</div>
+                        <div style={{ fontSize:11, color:"#7a8a9c" }}>{l.tutorShort} · {l.date} {l.time}</div>
                       </div>
                       <div style={{ fontSize:13, fontWeight:600 }}>{l.price}₽</div>
                       <Tag c={lsnCfg[l.status]?.color} bg={`${lsnCfg[l.status]?.color}22`}>{lsnCfg[l.status]?.label}</Tag>
@@ -1038,12 +1038,12 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
+              <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, overflow:"hidden" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse" }}>
                   <thead>
-                    <tr style={{ borderBottom:"1px solid #1e2433" }}>
+                    <tr style={{ borderBottom:"1px solid #dbe6f0" }}>
                       {["Ученик","Предметы","Преподаватель","Статус","Баланс",""].map(h=>(
-                        <th key={h} style={{ padding:"13px 16px", textAlign:"left", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                        <th key={h} style={{ padding:"13px 16px", textAlign:"left", fontSize:11, color:"#7a8a9c", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1051,20 +1051,20 @@ export default function App() {
                     {filteredStudents.map(s=>{
                       const myTutors=[...new Set(lessons.filter(l=>l.studentId===s.id).map(l=>l.tutorShort))];
                       return (
-                        <tr key={s.id} className="rh" style={{ borderBottom:"1px solid #1a1e2e" }} onClick={()=>setSelStudent(s)}>
+                        <tr key={s.id} className="rh" style={{ borderBottom:"1px solid #f2f6fa" }} onClick={()=>setSelStudent(s)}>
                           <td style={{ padding:"13px 16px" }}>
                             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                              <Av name={s.name} color="#6366f1" size={34} />
+                              <Av name={s.name} color="#1da0d4" size={34} />
                               <div>
                                 <div style={{ fontSize:13, fontWeight:600 }}>{s.name}</div>
-                                <div style={{ fontSize:11, color:"#475569" }}>{s.age} лет</div>
+                                <div style={{ fontSize:11, color:"#7a8a9c" }}>{s.age} лет</div>
                               </div>
                             </div>
                           </td>
-                          <td style={{ padding:"13px 16px" }}>{s.subjects.slice(0,2).map(sub=><Tag key={sub} c="#818cf8" bg="rgba(99,102,241,0.12)">{sub}</Tag>)}</td>
-                          <td style={{ padding:"13px 16px", fontSize:12, color:"#94a3b8" }}>{myTutors.slice(0,2).join(", ")||"—"}</td>
+                          <td style={{ padding:"13px 16px" }}>{s.subjects.slice(0,2).map(sub=><Tag key={sub} c="#1da0d4" bg="rgba(99,102,241,0.12)">{sub}</Tag>)}</td>
+                          <td style={{ padding:"13px 16px", fontSize:12, color:"#6d7f92" }}>{myTutors.slice(0,2).join(", ")||"—"}</td>
                           <td style={{ padding:"13px 16px" }}><Tag c={statusCfg[s.status]?.color} bg={statusCfg[s.status]?.bg}>{statusCfg[s.status]?.label}</Tag></td>
-                          <td style={{ padding:"13px 16px", fontWeight:700, fontSize:14, color:s.balance>=0?"#22c55e":"#ef4444" }}>{s.balance}₽</td>
+                          <td style={{ padding:"13px 16px", fontWeight:700, fontSize:14, color:s.balance>=0?"#5cb85c":"#e2574c" }}>{s.balance}₽</td>
                           <td style={{ padding:"13px 16px" }} onClick={e=>e.stopPropagation()}>
                             <button className="bp" style={{ padding:"5px 12px", fontSize:12, borderRadius:7 }} onClick={()=>{ setNPayment({...nPayment,studentId:String(s.id)}); setModal("addPayment"); }}>Оплата</button>
                           </td>
@@ -1126,19 +1126,19 @@ export default function App() {
               {/* Header */}
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
                 <div>
-                  <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Расписание</h1>
-                  <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>{fmtLabel(weekDates[0])} — {fmtLabel(weekDates[6])} 2026</div>
+                  <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Расписание</h1>
+                  <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>{fmtLabel(weekDates[0])} — {fmtLabel(weekDates[6])} 2026</div>
                 </div>
                 <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                  <div style={{ display:"flex", gap:4, background:"#161925", border:"1px solid #1e2433", borderRadius:10, padding:4 }}>
+                  <div style={{ display:"flex", gap:4, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:10, padding:4 }}>
                     <button className="bg" style={{ padding:"5px 12px" }} onClick={()=>setWeekOffset(w=>w-1)}>‹</button>
                     <button className="bg" style={{ padding:"5px 12px", fontSize:12 }} onClick={()=>setWeekOffset(0)}>Сегодня</button>
                     <button className="bg" style={{ padding:"5px 12px" }} onClick={()=>setWeekOffset(w=>w+1)}>›</button>
                   </div>
-                  <div style={{ display:"flex", gap:4, background:"#161925", border:"1px solid #1e2433", borderRadius:10, padding:4 }}>
+                  <div style={{ display:"flex", gap:4, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:10, padding:4 }}>
                     {[["week","📅 Неделя"],["tutors","👥 По педагогам"],["list","☰ Список"]].map(([k,l])=>(
                       <button key={k} className="stab" onClick={()=>setSchedView(k)}
-                        style={{ background:schedView===k?"rgba(99,102,241,0.25)":"transparent", color:schedView===k?"#818cf8":"#64748b" }}>{l}</button>
+                        style={{ background:schedView===k?"rgba(99,102,241,0.25)":"transparent", color:schedView===k?"#1da0d4":"#55677a" }}>{l}</button>
                     ))}
                   </div>
                   <button className="bp" onClick={()=>setModal("addLesson")}>+ Добавить занятие</button>
@@ -1151,14 +1151,14 @@ export default function App() {
                 <button onClick={()=>setSchedTutorFilter("all")}
                   style={{ padding:"5px 14px", borderRadius:20, fontSize:12, fontWeight:600, border:"1px solid", cursor:"pointer", transition:"all .15s",
                     background:schedTutorFilter==="all"?"rgba(99,102,241,0.2)":"transparent",
-                    borderColor:schedTutorFilter==="all"?"#6366f1":"#2d3252",
-                    color:schedTutorFilter==="all"?"#818cf8":"#64748b" }}>Все преподаватели</button>
+                    borderColor:schedTutorFilter==="all"?"#1da0d4":"#d7e2ee",
+                    color:schedTutorFilter==="all"?"#1da0d4":"#55677a" }}>Все преподаватели</button>
                 {tutors.map(t=>(
                   <button key={t.id} onClick={()=>setSchedTutorFilter(String(t.id))}
                     style={{ padding:"5px 14px", borderRadius:20, fontSize:12, fontWeight:600, border:"1px solid", cursor:"pointer", display:"flex", alignItems:"center", gap:6, transition:"all .15s",
                       background:schedTutorFilter===String(t.id)?`${t.color}22`:"transparent",
-                      borderColor:schedTutorFilter===String(t.id)?t.color:"#2d3252",
-                      color:schedTutorFilter===String(t.id)?t.color:"#64748b" }}>
+                      borderColor:schedTutorFilter===String(t.id)?t.color:"#d7e2ee",
+                      color:schedTutorFilter===String(t.id)?t.color:"#55677a" }}>
                     <div style={{ width:8, height:8, borderRadius:"50%", background:t.color }} />{t.short}
                   </button>
                 ))}
@@ -1166,27 +1166,27 @@ export default function App() {
 
               {/* Edit panel */}
               {editLesson && (
-                <div style={{ background:"#161925", border:"1px solid #6366f1", borderRadius:14, padding:20, marginBottom:20 }}>
+                <div style={{ background:"#ffffff", border:"1px solid #1da0d4", borderRadius:14, padding:20, marginBottom:20 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                     <div style={{ fontSize:15, fontWeight:700 }}>✏️ Редактирование занятия</div>
                     <div style={{ display:"flex", gap:8 }}>
                       <button className="bp" style={{ padding:"6px 16px", fontSize:13 }} onClick={saveEdit}>Сохранить</button>
-                      <button style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", color:"#ef4444", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit" }} onClick={()=>deleteLesson(editLesson.id)}>🗑 Удалить</button>
+                      <button style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", color:"#e2574c", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit" }} onClick={()=>deleteLesson(editLesson.id)}>🗑 Удалить</button>
                       <button className="bg" style={{ padding:"6px 14px", fontSize:13 }} onClick={()=>setEditLesson(null)}>Отмена</button>
                     </div>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
-                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Ученик</div>
+                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Ученик</div>
                       <select value={editLesson.studentId} onChange={e=>{ const s=students.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,studentId:Number(e.target.value),studentName:s?.name||""}); }}>
                         {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                     </div>
-                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Преподаватель</div>
+                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Преподаватель</div>
                       <select value={editLesson.tutorId} onChange={e=>{ const t=tutors.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,tutorId:Number(e.target.value),tutorShort:t?.short||""}); }}>
                         {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
                       </select>
                     </div>
-                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Предмет</div>
+                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Предмет</div>
                       <select value={editLesson.subject} onChange={e=>setEditLesson({...editLesson,subject:e.target.value})}>
                         {courseCategories.map(cat=>(
                     <optgroup key={cat.id} label={cat.label}>
@@ -1195,21 +1195,21 @@ export default function App() {
                   ))}
                       </select>
                     </div>
-                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Статус</div>
+                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Статус</div>
                       <select value={editLesson.status} onChange={e=>setEditLesson({...editLesson,status:e.target.value})}>
                         {Object.entries(lsnCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                       </select>
                     </div>
-                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Дата</div>
+                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Дата</div>
                       <input type="date" value={editLesson.date} onChange={e=>setEditLesson({...editLesson,date:e.target.value})} />
                     </div>
-                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Время</div>
+                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Время</div>
                       <input type="time" value={editLesson.time} onChange={e=>setEditLesson({...editLesson,time:e.target.value})} />
                     </div>
-                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Длительность (мин)</div>
+                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Длительность (мин)</div>
                       <input type="number" value={editLesson.duration} onChange={e=>setEditLesson({...editLesson,duration:Number(e.target.value)})} />
                     </div>
-                    <div><div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Стоимость (₽)</div>
+                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Стоимость (₽)</div>
                       <input type="number" value={editLesson.price} onChange={e=>setEditLesson({...editLesson,price:Number(e.target.value)})} />
                     </div>
                   </div>
@@ -1218,47 +1218,47 @@ export default function App() {
 
               {/* WEEK GRID */}
               {schedView==="week" && (
-                <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
-                  <div style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom:"1px solid #1e2433" }}>
-                    <div style={{ background:"#13151f" }} />
+                <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, overflow:"hidden" }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom:"1px solid #dbe6f0" }}>
+                    <div style={{ background:"#1b6f8c" }} />
                     {weekDates.map((d,i)=>{
                       const isToday = fmt(d)===fmt(today);
                       const dayCount = weekLessons.filter(l=>l.date===fmt(d)).length;
                       return (
-                        <div key={i} style={{ padding:"12px 6px", textAlign:"center", background:"#13151f", borderLeft:"1px solid #1e2433" }}>
-                          <div style={{ fontSize:11, color:"#475569", marginBottom:3 }}>{DAYS[i]}</div>
-                          <div style={{ fontSize:17, fontWeight:700, color:isToday?"#818cf8":"#e2e8f0", background:isToday?"rgba(99,102,241,0.18)":"transparent", borderRadius:8, padding:"2px 6px", display:"inline-block" }}>{d.getDate()}</div>
-                          {dayCount>0 && <div style={{ fontSize:10, color:"#6366f1", marginTop:2, fontWeight:600 }}>{dayCount} занят.</div>}
+                        <div key={i} style={{ padding:"12px 6px", textAlign:"center", background:"#1b6f8c", borderLeft:"1px solid #dbe6f0" }}>
+                          <div style={{ fontSize:11, color:"#7a8a9c", marginBottom:3 }}>{DAYS[i]}</div>
+                          <div style={{ fontSize:17, fontWeight:700, color:isToday?"#1da0d4":"#22344a", background:isToday?"rgba(99,102,241,0.18)":"transparent", borderRadius:8, padding:"2px 6px", display:"inline-block" }}>{d.getDate()}</div>
+                          {dayCount>0 && <div style={{ fontSize:10, color:"#1da0d4", marginTop:2, fontWeight:600 }}>{dayCount} занят.</div>}
                         </div>
                       );
                     })}
                   </div>
                   <div style={{ overflowY:"auto", maxHeight:"58vh" }}>
                     {HOURS.map(hour=>(
-                      <div key={hour} style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom:"1px solid #1a1e2e", minHeight:52 }}>
-                        <div style={{ padding:"4px 6px", fontSize:11, color:"#334155", textAlign:"right", paddingTop:8, borderRight:"1px solid #1e2433", background:"#13151f" }}>{hour}:00</div>
+                      <div key={hour} style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom:"1px solid #f2f6fa", minHeight:52 }}>
+                        <div style={{ padding:"4px 6px", fontSize:11, color:"#a9b8c6", textAlign:"right", paddingTop:8, borderRight:"1px solid #dbe6f0", background:"#1b6f8c" }}>{hour}:00</div>
                         {weekDates.map((d,di)=>{
                           const dateStr = fmt(d);
                           const dayLessons = weekLessons.filter(l=>l.date===dateStr && l.time && parseInt(l.time.split(":")[0])===hour);
                           const isToday = dateStr===fmt(today);
                           return (
                             <div key={di}
-                              style={{ borderLeft:"1px solid #1a1e2e", padding:"3px 4px", background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer" }}
+                              style={{ borderLeft:"1px solid #f2f6fa", padding:"3px 4px", background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer" }}
                               onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:`${String(hour).padStart(2,"0")}:00`})); setModal("addLesson"); }}>
                               {dayLessons.map(l=>{
                                 const tu=tutors.find(x=>x.id===l.tutorId);
                                 const isActive = editLesson?.id===l.id;
                                 return (
                                   <div key={l.id} onClick={e=>{ e.stopPropagation(); setEditLesson(isActive?null:{...l}); }}
-                                    style={{ background: isActive?`${tu?.color||"#6366f1"}33`:`${tu?.color||"#6366f1"}18`, border:`1px solid ${isActive?tu?.color||"#6366f1":(tu?.color||"#6366f1")+"33"}`, borderLeft:`3px solid ${tu?.color||"#6366f1"}`, borderRadius:6, padding:"4px 6px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
+                                    style={{ background: isActive?`${tu?.color||"#1da0d4"}33`:`${tu?.color||"#1da0d4"}18`, border:`1px solid ${isActive?tu?.color||"#1da0d4":(tu?.color||"#1da0d4")+"33"}`, borderLeft:`3px solid ${tu?.color||"#1da0d4"}`, borderRadius:6, padding:"4px 6px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
                                     <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                                      {l.isGroup && <span style={{ fontSize:8, background:"#f59e0b", color:"black", borderRadius:3, padding:"1px 4px", fontWeight:700 }}>ГР</span>}
-                                      <div style={{ fontSize:11, fontWeight:700, color:"#e2e8f0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{l.isGroup?l.groupName:l.studentName}</div>
+                                      {l.isGroup && <span style={{ fontSize:8, background:"#f5a623", color:"black", borderRadius:3, padding:"1px 4px", fontWeight:700 }}>ГР</span>}
+                                      <div style={{ fontSize:11, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{l.isGroup?l.groupName:l.studentName}</div>
                                     </div>
-                                    <div style={{ fontSize:10, color:"#94a3b8" }}>{l.subject} · {l.time}</div>
-                                    {l.isGroup && <div style={{ fontSize:9, color:"#f59e0b" }}>{l.studentName}</div>}
-                                    {l.status==="completed" && <div style={{ fontSize:9, color:"#22c55e" }}>✓</div>}
-                                    {l.status==="cancelled" && <div style={{ fontSize:9, color:"#ef4444" }}>✗</div>}
+                                    <div style={{ fontSize:10, color:"#6d7f92" }}>{l.subject} · {l.time}</div>
+                                    {l.isGroup && <div style={{ fontSize:9, color:"#f5a623" }}>{l.studentName}</div>}
+                                    {l.status==="completed" && <div style={{ fontSize:9, color:"#5cb85c" }}>✓</div>}
+                                    {l.status==="cancelled" && <div style={{ fontSize:9, color:"#e2574c" }}>✗</div>}
                                   </div>
                                 );
                               })}
@@ -1268,7 +1268,7 @@ export default function App() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ padding:"8px 14px", borderTop:"1px solid #1e2433", fontSize:11, color:"#334155" }}>
+                  <div style={{ padding:"8px 14px", borderTop:"1px solid #dbe6f0", fontSize:11, color:"#a9b8c6" }}>
                     💡 Нажмите на занятие — редактировать · Нажмите на пустую ячейку — добавить в это время
                   </div>
                 </div>
@@ -1277,23 +1277,23 @@ export default function App() {
               {/* LIST VIEW */}
               {schedView==="list" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {lessons.length===0 && <div style={{ color:"#475569", textAlign:"center", padding:40 }}>Нет занятий</div>}
+                  {lessons.length===0 && <div style={{ color:"#7a8a9c", textAlign:"center", padding:40 }}>Нет занятий</div>}
                   {allLessonsFiltered.sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:a.time>b.time?1:-1).map(l=>{
                     const t=tutors.find(x=>x.id===l.tutorId);
                     const isEditing = editLesson?.id===l.id;
                     return (
-                      <div key={l.id} style={{ background:isEditing?"rgba(99,102,241,0.08)":"#161925", border:`1px solid ${isEditing?"#6366f1":"#1e2433"}`, borderRadius:14, padding:"14px 20px", display:"flex", alignItems:"center", gap:14, transition:"all .2s" }}>
+                      <div key={l.id} style={{ background:isEditing?"rgba(99,102,241,0.08)":"#ffffff", border:`1px solid ${isEditing?"#1da0d4":"#dbe6f0"}`, borderRadius:14, padding:"14px 20px", display:"flex", alignItems:"center", gap:14, transition:"all .2s" }}>
                         <div style={{ width:4, height:40, borderRadius:2, background:lsnCfg[l.status]?.color, flexShrink:0 }} />
                         <div style={{ width:70, flexShrink:0 }}>
                           <div style={{ fontSize:14, fontWeight:700 }}>{l.time||"—"}</div>
-                          <div style={{ fontSize:11, color:"#475569" }}>{l.date}</div>
+                          <div style={{ fontSize:11, color:"#7a8a9c" }}>{l.date}</div>
                         </div>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                            {l.isGroup && <span style={{ fontSize:9, background:"#f59e0b22", color:"#f59e0b", border:"1px solid #f59e0b44", borderRadius:4, padding:"1px 6px", fontWeight:700 }}>ГРУППА</span>}
+                            {l.isGroup && <span style={{ fontSize:9, background:"#f5a62322", color:"#f5a623", border:"1px solid #f5a62344", borderRadius:4, padding:"1px 6px", fontWeight:700 }}>ГРУППА</span>}
                             <div style={{ fontSize:14, fontWeight:600 }}>{l.isGroup ? l.groupName : l.studentName}</div>
                           </div>
-                          <div style={{ fontSize:12, color:"#475569" }}>{l.subject} · {l.duration} мин · {l.tutorShort}{l.isGroup ? ` · ${l.studentName}` : ""}</div>
+                          <div style={{ fontSize:12, color:"#7a8a9c" }}>{l.subject} · {l.duration} мин · {l.tutorShort}{l.isGroup ? ` · ${l.studentName}` : ""}</div>
                         </div>
                         {t && <Av name={t.name} color={t.color} size={28} />}
                         <div style={{ textAlign:"right", flexShrink:0 }}>
@@ -1303,7 +1303,7 @@ export default function App() {
                         <div style={{ display:"flex", gap:6, flexShrink:0 }}>
                           {l.status==="scheduled" && <button className="bg" style={{ fontSize:11, padding:"5px 10px" }} onClick={()=>completeLesson(l.id)}>✓</button>}
                           <button className="bg" style={{ fontSize:11, padding:"5px 10px", background:isEditing?"rgba(99,102,241,0.25)":"" }} onClick={()=>setEditLesson(isEditing?null:{...l})}>✏️</button>
-                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>{ setLessons(lessons.filter(x=>x.id!==l.id)); notify("Занятие удалено"); }}>🗑</button>
+                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>{ setLessons(lessons.filter(x=>x.id!==l.id)); notify("Занятие удалено"); }}>🗑</button>
                         </div>
                       </div>
                     );
@@ -1350,12 +1350,12 @@ export default function App() {
                     td.time{background:#f9f9f9;font-weight:600;text-align:center;color:#666;white-space:nowrap}
                     th.time-h{background:#e8e8e8}
                     td.has-lesson{background:#f0f4ff}
-                    .lesson-cell{background:#6366f1;color:white;border-radius:3px;padding:3px 4px;margin-bottom:2px;font-size:9px}
+                    .lesson-cell{background:#1da0d4;color:white;border-radius:3px;padding:3px 4px;margin-bottom:2px;font-size:9px}
                     @media print{button{display:none}}
                   </style></head><body>
                   <h2>📅 Расписание — ${dateRange}</h2>
                   <p>Образовательный центр ГЕНИЙ</p>
-                  <button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#6366f1;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ Распечатать</button>
+                  <button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#1da0d4;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ Распечатать</button>
                   <table><thead><tr>${headerCells}</tr></thead><tbody>${tableRows}</tbody></table>
                   </body></html>`);
                   w.document.close();
@@ -1370,29 +1370,29 @@ export default function App() {
                       <table style={{ borderCollapse:"collapse", minWidth:"100%", fontSize:11 }}>
                         <thead>
                           {/* Tutor row */}
-                          <tr style={{ background:"#13151f" }}>
-                            <th style={{ width:52, padding:"8px 4px", border:"1px solid #2d3252", background:"#13151f", position:"sticky", left:0, zIndex:2 }}></th>
+                          <tr style={{ background:"#1b6f8c" }}>
+                            <th style={{ width:52, padding:"8px 4px", border:"1px solid #d7e2ee", background:"#1b6f8c", position:"sticky", left:0, zIndex:2 }}></th>
                             {activeTutors.map(t=>(
-                              <th key={t.id} colSpan={7} style={{ padding:"10px 8px", textAlign:"center", border:"1px solid #2d3252", background:"#13151f", minWidth:560 }}>
+                              <th key={t.id} colSpan={7} style={{ padding:"10px 8px", textAlign:"center", border:"1px solid #d7e2ee", background:"#1b6f8c", minWidth:560 }}>
                                 <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
                                   <div style={{ width:10,height:10,borderRadius:"50%",background:t.color }} />
                                   <span style={{ color:t.color, fontWeight:700, fontSize:12 }}>{t.short}</span>
-                                  <span style={{ color:"#334155", fontWeight:400, fontSize:10 }}>{t.subjects.join(", ")}</span>
+                                  <span style={{ color:"#a9b8c6", fontWeight:400, fontSize:10 }}>{t.subjects.join(", ")}</span>
                                 </div>
                               </th>
                             ))}
                           </tr>
                           {/* Day row */}
-                          <tr style={{ background:"#161925" }}>
-                            <th style={{ padding:"6px 4px", border:"1px solid #2d3252", background:"#161925", position:"sticky", left:0, zIndex:2, fontSize:10, color:"#334155" }}>Время</th>
+                          <tr style={{ background:"#ffffff" }}>
+                            <th style={{ padding:"6px 4px", border:"1px solid #d7e2ee", background:"#ffffff", position:"sticky", left:0, zIndex:2, fontSize:10, color:"#a9b8c6" }}>Время</th>
                             {activeTutors.map(t=>
                               weekDates.map((d,di)=>{
                                 const isToday = fmt(d)===fmt(today);
                                 const dayCount = lessons.filter(l=>l.tutorId===t.id&&l.date===fmt(d)).length;
                                 return (
-                                  <th key={`${t.id}-${di}`} style={{ padding:"6px 5px", border:"1px solid #2d3252", textAlign:"center", background:isToday?"rgba(99,102,241,0.12)":"#161925", minWidth:80 }}>
-                                    <div style={{ fontSize:10, color:isToday?"#818cf8":"#475569" }}>{DAYS_SHORT[di]}</div>
-                                    <div style={{ fontSize:13, fontWeight:700, color:isToday?"#818cf8":"#cbd5e1" }}>{d.getDate()}</div>
+                                  <th key={`${t.id}-${di}`} style={{ padding:"6px 5px", border:"1px solid #d7e2ee", textAlign:"center", background:isToday?"rgba(99,102,241,0.12)":"#ffffff", minWidth:80 }}>
+                                    <div style={{ fontSize:10, color:isToday?"#1da0d4":"#7a8a9c" }}>{DAYS_SHORT[di]}</div>
+                                    <div style={{ fontSize:13, fontWeight:700, color:isToday?"#1da0d4":"#cbd5e1" }}>{d.getDate()}</div>
                                     {dayCount>0&&<div style={{ fontSize:9, color:t.color }}>{dayCount}з</div>}
                                   </th>
                                 );
@@ -1402,8 +1402,8 @@ export default function App() {
                         </thead>
                         <tbody>
                           {HOURS.map(hour=>(
-                            <tr key={hour} style={{ borderBottom:"1px solid #1a1e2e" }}>
-                              <td style={{ padding:"4px 6px", fontSize:11, color:"#334155", textAlign:"right", background:"#13151f", border:"1px solid #1e2433", fontWeight:600, whiteSpace:"nowrap", position:"sticky", left:0, zIndex:1 }}>{hour}:00</td>
+                            <tr key={hour} style={{ borderBottom:"1px solid #f2f6fa" }}>
+                              <td style={{ padding:"4px 6px", fontSize:11, color:"#a9b8c6", textAlign:"right", background:"#1b6f8c", border:"1px solid #dbe6f0", fontWeight:600, whiteSpace:"nowrap", position:"sticky", left:0, zIndex:1 }}>{hour}:00</td>
                               {activeTutors.map(t=>
                                 weekDates.map((d,di)=>{
                                   const dateStr = fmt(d);
@@ -1411,7 +1411,7 @@ export default function App() {
                                   const cellLessons = lessons.filter(l=>l.tutorId===t.id&&l.date===dateStr&&l.time&&parseInt(l.time.split(":")[0])===hour);
                                   return (
                                     <td key={`${t.id}-${di}`}
-                                      style={{ padding:"2px 3px", border:"1px solid #1a1e2e", verticalAlign:"top", minHeight:40, background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer", minWidth:80 }}
+                                      style={{ padding:"2px 3px", border:"1px solid #f2f6fa", verticalAlign:"top", minHeight:40, background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer", minWidth:80 }}
                                       onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:`${String(hour).padStart(2,"0")}:00`,tutorId:String(t.id)})); setModal("addLesson"); }}>
                                       {cellLessons.map(l=>{
                                         const isActive = editLesson?.id===l.id;
@@ -1419,9 +1419,9 @@ export default function App() {
                                           <div key={l.id}
                                             onClick={e=>{ e.stopPropagation(); setEditLesson(isActive?null:{...l}); }}
                                             style={{ background:isActive?`${t.color}44`:`${t.color}20`, border:`1px solid ${isActive?t.color:t.color+"44"}`, borderLeft:`3px solid ${t.color}`, borderRadius:4, padding:"3px 5px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
-                                            <div style={{ fontSize:10, fontWeight:700, color:"#e2e8f0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:74 }}>{l.studentName}</div>
-                                            <div style={{ fontSize:9, color:"#94a3b8" }}>{l.subject}</div>
-                                            <div style={{ fontSize:9, color:"#64748b" }}>{l.time}{l.status==="completed"?" ✓":l.status==="cancelled"?" ✗":""}</div>
+                                            <div style={{ fontSize:10, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:74 }}>{l.studentName}</div>
+                                            <div style={{ fontSize:9, color:"#6d7f92" }}>{l.subject}</div>
+                                            <div style={{ fontSize:9, color:"#55677a" }}>{l.time}{l.status==="completed"?" ✓":l.status==="cancelled"?" ✗":""}</div>
                                           </div>
                                         );
                                       })}
@@ -1434,7 +1434,7 @@ export default function App() {
                         </tbody>
                       </table>
                     </div>
-                    <div style={{ padding:"8px 0", fontSize:11, color:"#334155", marginTop:8 }}>
+                    <div style={{ padding:"8px 0", fontSize:11, color:"#a9b8c6", marginTop:8 }}>
                       💡 Нажмите на ячейку — создать занятие · Нажмите на занятие — редактировать
                     </div>
                   </div>
@@ -1464,11 +1464,11 @@ export default function App() {
             <style>body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#111}
             h1{font-size:20px}h2{font-size:16px;margin:24px 0 10px;border-bottom:2px solid #e5e7eb;padding-bottom:6px}
             table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px}
-            th{background:#6366f1;color:white;padding:8px 10px;text-align:left}
+            th{background:#1da0d4;color:white;padding:8px 10px;text-align:left}
             td{padding:7px 10px;border-bottom:1px solid #e5e7eb}
             @media print{button{display:none}}</style></head><body>
             <h1>Образовательный центр ГЕНИЙ</h1>
-            <button onclick="window.print()" style="margin-bottom:16px;padding:8px 20px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer">🖨️ Распечатать</button>
+            <button onclick="window.print()" style="margin-bottom:16px;padding:8px 20px;background:#1da0d4;color:white;border:none;border-radius:8px;cursor:pointer">🖨️ Распечатать</button>
             <h2>💰 Прайс-лист</h2>
             <table><thead><tr><th>Курс</th><th>45 мин</th><th>60 мин</th><th>90 мин</th><th>120 мин</th><th>Групп.</th></tr></thead>
             <tbody>${pRows}</tbody></table>
@@ -1481,29 +1481,29 @@ export default function App() {
             <div>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
                 <div>
-                  <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Цены и правила</h1>
-                  <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>Прайс-лист и правила центра · редактируемые</div>
+                  <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Цены и правила</h1>
+                  <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Прайс-лист и правила центра · редактируемые</div>
                 </div>
                 <button className="bg" onClick={printPricing}>🖨️ Распечатать памятку</button>
               </div>
 
               {/* tabs */}
-              <div style={{ display:"flex", gap:4, marginBottom:20, background:"#161925", border:"1px solid #1e2433", borderRadius:12, padding:6, width:"fit-content" }}>
+              <div style={{ display:"flex", gap:4, marginBottom:20, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:12, padding:6, width:"fit-content" }}>
                 {[["prices","💰 Прайс-лист"],["rules","📋 Правила"]].map(([k,l])=>(
                   <button key={k} className="stab" onClick={()=>setPricingTab(k)}
-                    style={{ background:pricingTab===k?"rgba(99,102,241,0.25)":"transparent", color:pricingTab===k?"#818cf8":"#64748b" }}>{l}</button>
+                    style={{ background:pricingTab===k?"rgba(99,102,241,0.25)":"transparent", color:pricingTab===k?"#1da0d4":"#55677a" }}>{l}</button>
                 ))}
               </div>
 
               {/* PRICES TAB */}
               {pricingTab==="prices" && (
                 <div>
-                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
+                  <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, overflow:"hidden" }}>
                     <table style={{ width:"100%", borderCollapse:"collapse" }}>
                       <thead>
-                        <tr style={{ background:"#13151f" }}>
+                        <tr style={{ background:"#1b6f8c" }}>
                           {["Курс / направление","45 мин","60 мин","90 мин","120 мин","Групп.","Примечание",""].map(h=>(
-                            <th key={h} style={{ padding:"12px 14px", textAlign:h==="Курс / направление"||h===""?"left":"center", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
+                            <th key={h} style={{ padding:"12px 14px", textAlign:h==="Курс / направление"||h===""?"left":"center", fontSize:11, color:"#7a8a9c", fontWeight:600, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1511,10 +1511,10 @@ export default function App() {
                         {pricingCategories.map(cat=>(
                           <>
                             <tr key={cat} style={{ background:"rgba(99,102,241,0.08)" }}>
-                              <td colSpan={7} style={{ padding:"9px 14px", fontSize:12, fontWeight:700, color:"#818cf8" }}>{cat}</td>
+                              <td colSpan={7} style={{ padding:"9px 14px", fontSize:12, fontWeight:700, color:"#1da0d4" }}>{cat}</td>
                             </tr>
                             {pricing.filter(p=>p.category===cat).map(p=>(
-                              <tr key={p.id} style={{ borderBottom:"1px solid #1a1e2e" }}>
+                              <tr key={p.id} style={{ borderBottom:"1px solid #f2f6fa" }}>
                                 {editPricing?.id===p.id ? (
                                   <>
                                     <td style={{ padding:"8px 10px" }}><input value={editPricing.course} onChange={e=>setEditPricing({...editPricing,course:e.target.value})} style={{ fontSize:12 }} /></td>
@@ -1535,9 +1535,9 @@ export default function App() {
                                   <>
                                     <td style={{ padding:"10px 14px", fontSize:13, fontWeight:500 }}>{p.course}</td>
                                     {[p.price45,p.price60,p.price90,p.price120,p.groupPrice].map((v,i)=>(
-                                      <td key={i} style={{ padding:"10px 8px", textAlign:"center", fontSize:13, color:v?"#22c55e":"#334155", fontWeight:v?600:400 }}>{v?`${v} ₽`:"—"}</td>
+                                      <td key={i} style={{ padding:"10px 8px", textAlign:"center", fontSize:13, color:v?"#5cb85c":"#a9b8c6", fontWeight:v?600:400 }}>{v?`${v} ₽`:"—"}</td>
                                     ))}
-                                    <td style={{ padding:"10px 10px", fontSize:11, color:"#f59e0b" }}>{p.note||""}</td>
+                                    <td style={{ padding:"10px 10px", fontSize:11, color:"#f5a623" }}>{p.note||""}</td>
                                     <td style={{ padding:"10px 8px" }}>
                                       <button className="bg" style={{ fontSize:10, padding:"3px 8px" }} onClick={()=>setEditPricing({...p})}>✏️</button>
                                     </td>
@@ -1560,10 +1560,10 @@ export default function App() {
               {pricingTab==="rules" && (
                 <div>
                   {rulesSections.map(sec=>(
-                    <div key={sec} style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20, marginBottom:14 }}>
-                      <div style={{ fontSize:15, fontWeight:700, color:"#818cf8", marginBottom:14 }}>{sec}</div>
+                    <div key={sec} style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:20, marginBottom:14 }}>
+                      <div style={{ fontSize:15, fontWeight:700, color:"#1da0d4", marginBottom:14 }}>{sec}</div>
                       {rules.filter(r=>r.section===sec).map(r=>(
-                        <div key={r.id} style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"9px 0", borderBottom:"1px solid #1a1e2e" }}>
+                        <div key={r.id} style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"9px 0", borderBottom:"1px solid #f2f6fa" }}>
                           {editRule?.id===r.id ? (
                             <>
                               <textarea value={editRule.text} onChange={e=>setEditRule({...editRule,text:e.target.value})} rows={2} style={{ flex:1, fontSize:13 }} />
@@ -1574,11 +1574,11 @@ export default function App() {
                             </>
                           ) : (
                             <>
-                              <div style={{ width:6, height:6, borderRadius:"50%", background:"#6366f1", marginTop:6, flexShrink:0 }} />
+                              <div style={{ width:6, height:6, borderRadius:"50%", background:"#1da0d4", marginTop:6, flexShrink:0 }} />
                               <div style={{ flex:1, fontSize:13, color:"#cbd5e1", lineHeight:1.6 }}>{r.text}</div>
                               <div style={{ display:"flex", gap:4, flexShrink:0 }}>
                                 <button className="bg" style={{ fontSize:10, padding:"3px 8px" }} onClick={()=>setEditRule({...r})}>✏️</button>
-                                <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontSize:10, fontFamily:"inherit" }} onClick={()=>setRules(rules.filter(x=>x.id!==r.id))}>🗑</button>
+                                <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontSize:10, fontFamily:"inherit" }} onClick={()=>setRules(rules.filter(x=>x.id!==r.id))}>🗑</button>
                               </div>
                             </>
                           )}
@@ -1598,38 +1598,38 @@ export default function App() {
         {view==="payments" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
-              <div><h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Финансы</h1></div>
+              <div><h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Финансы</h1></div>
               <button className="bp" onClick={()=>setModal("addPayment")}>+ Записать оплату</button>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16, marginBottom:24 }}>
               {[
-                { l:"Получено от учеников", v:`${totalRevenue.toLocaleString("ru")} ₽`,              c:"#22c55e" },
-                { l:"Выплачено преподавателям", v:`${totalSalPaid.toLocaleString("ru")} ₽`,         c:"#f59e0b" },
-                { l:"Прибыль центра",        v:`${(totalRevenue-totalSalPaid).toLocaleString("ru")} ₽`, c:"#6366f1" },
+                { l:"Получено от учеников", v:`${totalRevenue.toLocaleString("ru")} ₽`,              c:"#5cb85c" },
+                { l:"Выплачено преподавателям", v:`${totalSalPaid.toLocaleString("ru")} ₽`,         c:"#f5a623" },
+                { l:"Прибыль центра",        v:`${(totalRevenue-totalSalPaid).toLocaleString("ru")} ₽`, c:"#1da0d4" },
               ].map((s,i)=>(
-                <div key={i} style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:"18px 20px" }}>
-                  <div style={{ fontSize:12, color:"#475569", marginBottom:6 }}>{s.l}</div>
+                <div key={i} style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, padding:"18px 20px" }}>
+                  <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:6 }}>{s.l}</div>
                   <div style={{ fontSize:24, fontWeight:700, color:s.c }}>{s.v}</div>
                 </div>
               ))}
             </div>
-            <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
+            <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, overflow:"hidden" }}>
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead>
-                  <tr style={{ borderBottom:"1px solid #1e2433" }}>
+                  <tr style={{ borderBottom:"1px solid #dbe6f0" }}>
                     {["Ученик","Сумма","Дата","Способ","Комментарий"].map(h=>(
-                      <th key={h} style={{ padding:"13px 16px", textAlign:"left", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                      <th key={h} style={{ padding:"13px 16px", textAlign:"left", fontSize:11, color:"#7a8a9c", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {payments.map(p=>(
-                    <tr key={p.id} style={{ borderBottom:"1px solid #1a1e2e" }}>
+                    <tr key={p.id} style={{ borderBottom:"1px solid #f2f6fa" }}>
                       <td style={{ padding:"12px 16px", fontSize:13, fontWeight:600 }}>{p.studentName}</td>
-                      <td style={{ padding:"12px 16px", fontSize:15, fontWeight:700, color:"#22c55e" }}>+{p.amount.toLocaleString("ru")}₽</td>
-                      <td style={{ padding:"12px 16px", fontSize:12, color:"#64748b" }}>{p.date}</td>
-                      <td style={{ padding:"12px 16px" }}><Tag c="#818cf8" bg="rgba(99,102,241,0.12)">{p.method==="card"?"💳 Карта":p.method==="cash"?"💵 Наличные":"📱 Перевод"}</Tag></td>
-                      <td style={{ padding:"12px 16px", fontSize:12, color:"#475569" }}>{p.comment}</td>
+                      <td style={{ padding:"12px 16px", fontSize:15, fontWeight:700, color:"#5cb85c" }}>+{p.amount.toLocaleString("ru")}₽</td>
+                      <td style={{ padding:"12px 16px", fontSize:12, color:"#55677a" }}>{p.date}</td>
+                      <td style={{ padding:"12px 16px" }}><Tag c="#1da0d4" bg="rgba(99,102,241,0.12)">{p.method==="card"?"💳 Карта":p.method==="cash"?"💵 Наличные":"📱 Перевод"}</Tag></td>
+                      <td style={{ padding:"12px 16px", fontSize:12, color:"#7a8a9c" }}>{p.comment}</td>
                       <td style={{ padding:"12px 16px" }}>
                         <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>printReceipt(students.find(s=>s.id===p.studentId), p)}>🖨️ Квитанция</button>
                       </td>
@@ -1697,13 +1697,13 @@ export default function App() {
             h1{font-size:20px;margin-bottom:4px}p{color:#777;font-size:13px;margin:0 0 20px}
             .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
             .card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px;text-align:center}
-            .card .v{font-size:24px;font-weight:700;color:#6366f1;margin-bottom:4px}.card .l{font-size:12px;color:#777}
+            .card .v{font-size:24px;font-weight:700;color:#1da0d4;margin-bottom:4px}.card .l{font-size:12px;color:#777}
             table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px}
             th{background:#f3f4f6;padding:8px 10px;text-align:left;border-bottom:2px solid #e5e7eb;font-weight:600}
             td{padding:7px 10px;border-bottom:1px solid #e5e7eb}h2{font-size:15px;margin:20px 0 10px}
             @media print{button{display:none}}</style></head><body>
-            <h1>📊 Отчёт за ${mLabel}</h1><p>EduCRM · Репетиторский центр</p>
-            <button onclick="window.print()" style="margin-bottom:20px;padding:8px 20px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer">🖨️ Распечатать</button>
+            <h1>📊 Отчёт за ${mLabel}</h1><p>CRM образовательного центра «ГЕНИЙ»</p>
+            <button onclick="window.print()" style="margin-bottom:20px;padding:8px 20px;background:#1da0d4;color:white;border:none;border-radius:8px;cursor:pointer">🖨️ Распечатать</button>
             <div class="grid">
               <div class="card"><div class="v">${mRevenue.toLocaleString("ru")}₽</div><div class="l">Выручка</div></div>
               <div class="card"><div class="v">${mProfit.toLocaleString("ru")}₽</div><div class="l">Прибыль</div></div>
@@ -1724,8 +1724,8 @@ export default function App() {
             <div>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
                 <div>
-                  <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Отчёты</h1>
-                  <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>Аналитика и статистика по месяцам</div>
+                  <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Отчёты</h1>
+                  <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Аналитика и статистика по месяцам</div>
                 </div>
                 <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                   <select value={reportMonth} onChange={e=>setReportMonth(e.target.value)} style={{ width:"auto" }}>
@@ -1740,10 +1740,10 @@ export default function App() {
               </div>
 
               {/* tabs */}
-              <div style={{ display:"flex", gap:4, marginBottom:20, background:"#161925", border:"1px solid #1e2433", borderRadius:12, padding:6, width:"fit-content" }}>
+              <div style={{ display:"flex", gap:4, marginBottom:20, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:12, padding:6, width:"fit-content" }}>
                 {[["finance","💰 Финансы"],["tutors_r","🎓 Преподаватели"],["subjects","📚 Предметы"],["trend","📈 Динамика"]].map(([k,l])=>(
                   <button key={k} className="stab" onClick={()=>setReportTab(k)}
-                    style={{ background:reportTab===k?"rgba(99,102,241,0.25)":"transparent", color:reportTab===k?"#818cf8":"#64748b" }}>{l}</button>
+                    style={{ background:reportTab===k?"rgba(99,102,241,0.25)":"transparent", color:reportTab===k?"#1da0d4":"#55677a" }}>{l}</button>
                 ))}
               </div>
 
@@ -1752,16 +1752,16 @@ export default function App() {
                 <div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
                     {[
-                      { l:"Выручка",          v:`${mRevenue.toLocaleString("ru")}₽`,   c:"#22c55e", icon:"💰" },
-                      { l:"Расходы (зарп.)",  v:`${mSalTotal.toLocaleString("ru")}₽`,  c:"#f59e0b", icon:"💸" },
-                      { l:"Прибыль центра",   v:`${mProfit.toLocaleString("ru")}₽`,    c:mProfit>=0?"#6366f1":"#ef4444", icon:"📈" },
-                      { l:"Средний чек",      v:`${mAvgCheck.toLocaleString("ru")}₽`,  c:"#ec4899", icon:"🧾" },
+                      { l:"Выручка",          v:`${mRevenue.toLocaleString("ru")}₽`,   c:"#5cb85c", icon:"💰" },
+                      { l:"Расходы (зарп.)",  v:`${mSalTotal.toLocaleString("ru")}₽`,  c:"#f5a623", icon:"💸" },
+                      { l:"Прибыль центра",   v:`${mProfit.toLocaleString("ru")}₽`,    c:mProfit>=0?"#1da0d4":"#e2574c", icon:"📈" },
+                      { l:"Средний чек",      v:`${mAvgCheck.toLocaleString("ru")}₽`,  c:"#d6539a", icon:"🧾" },
                     ].map((s,i)=>(
-                      <div key={i} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20 }}>
+                      <div key={i} className="card" style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:20 }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                           <div>
-                            <div style={{ fontSize:12, color:"#475569", marginBottom:8 }}>{s.l}</div>
-                            <div style={{ fontSize:26, fontWeight:700, color:s.c, fontFamily:"'Syne',sans-serif" }}>{s.v}</div>
+                            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:8 }}>{s.l}</div>
+                            <div style={{ fontSize:26, fontWeight:700, color:s.c, fontFamily:"'DM Serif Display',serif" }}>{s.v}</div>
                           </div>
                           <div style={{ fontSize:26, opacity:.5 }}>{s.icon}</div>
                         </div>
@@ -1770,16 +1770,16 @@ export default function App() {
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
                     {[
-                      { l:"Занятий проведено", v:mCompleted.length,       c:"#6366f1", icon:"📚" },
-                      { l:"Занятий запланировано", v:mLessons.filter(l=>l.status==="scheduled").length, c:"#94a3b8", icon:"📅" },
-                      { l:"Уникальных учеников",v:mActiveStudents.length, c:"#22c55e", icon:"👥" },
-                      { l:"Новых учеников",     v:mNewStudents.length,    c:"#f59e0b", icon:"🆕" },
+                      { l:"Занятий проведено", v:mCompleted.length,       c:"#1da0d4", icon:"📚" },
+                      { l:"Занятий запланировано", v:mLessons.filter(l=>l.status==="scheduled").length, c:"#6d7f92", icon:"📅" },
+                      { l:"Уникальных учеников",v:mActiveStudents.length, c:"#5cb85c", icon:"👥" },
+                      { l:"Новых учеников",     v:mNewStudents.length,    c:"#f5a623", icon:"🆕" },
                     ].map((s,i)=>(
-                      <div key={i} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20 }}>
+                      <div key={i} className="card" style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:20 }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                           <div>
-                            <div style={{ fontSize:12, color:"#475569", marginBottom:8 }}>{s.l}</div>
-                            <div style={{ fontSize:26, fontWeight:700, color:s.c, fontFamily:"'Syne',sans-serif" }}>{s.v}</div>
+                            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:8 }}>{s.l}</div>
+                            <div style={{ fontSize:26, fontWeight:700, color:s.c, fontFamily:"'DM Serif Display',serif" }}>{s.v}</div>
                           </div>
                           <div style={{ fontSize:26, opacity:.5 }}>{s.icon}</div>
                         </div>
@@ -1787,22 +1787,22 @@ export default function App() {
                     ))}
                   </div>
                   {/* payments list */}
-                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
-                    <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e2433", fontSize:14, fontWeight:600 }}>Платежи за месяц</div>
+                  <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, overflow:"hidden" }}>
+                    <div style={{ padding:"16px 20px", borderBottom:"1px solid #dbe6f0", fontSize:14, fontWeight:600 }}>Платежи за месяц</div>
                     {mPayments.length===0
-                      ? <div style={{ padding:"30px", textAlign:"center", color:"#475569" }}>Нет платежей</div>
+                      ? <div style={{ padding:"30px", textAlign:"center", color:"#7a8a9c" }}>Нет платежей</div>
                       : <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                          <thead><tr style={{ borderBottom:"1px solid #1e2433" }}>
-                            {["Ученик","Сумма","Дата","Способ","Комментарий"].map(h=><th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase" }}>{h}</th>)}
+                          <thead><tr style={{ borderBottom:"1px solid #dbe6f0" }}>
+                            {["Ученик","Сумма","Дата","Способ","Комментарий"].map(h=><th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:"#7a8a9c", fontWeight:600, textTransform:"uppercase" }}>{h}</th>)}
                           </tr></thead>
                           <tbody>
                             {mPayments.map(p=>(
-                              <tr key={p.id} style={{ borderBottom:"1px solid #1a1e2e" }}>
+                              <tr key={p.id} style={{ borderBottom:"1px solid #f2f6fa" }}>
                                 <td style={{ padding:"11px 16px", fontWeight:600, fontSize:13 }}>{p.studentName}</td>
-                                <td style={{ padding:"11px 16px", fontWeight:700, color:"#22c55e" }}>+{p.amount.toLocaleString("ru")}₽</td>
-                                <td style={{ padding:"11px 16px", fontSize:12, color:"#64748b" }}>{p.date}</td>
-                                <td style={{ padding:"11px 16px" }}><Tag c="#818cf8" bg="rgba(99,102,241,0.12)">{p.method==="card"?"💳 Карта":p.method==="cash"?"💵 Наличные":"📱 Перевод"}</Tag></td>
-                                <td style={{ padding:"11px 16px", fontSize:12, color:"#475569" }}>{p.comment}</td>
+                                <td style={{ padding:"11px 16px", fontWeight:700, color:"#5cb85c" }}>+{p.amount.toLocaleString("ru")}₽</td>
+                                <td style={{ padding:"11px 16px", fontSize:12, color:"#55677a" }}>{p.date}</td>
+                                <td style={{ padding:"11px 16px" }}><Tag c="#1da0d4" bg="rgba(99,102,241,0.12)">{p.method==="card"?"💳 Карта":p.method==="cash"?"💵 Наличные":"📱 Перевод"}</Tag></td>
+                                <td style={{ padding:"11px 16px", fontSize:12, color:"#7a8a9c" }}>{p.comment}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1816,16 +1816,16 @@ export default function App() {
               {reportTab==="tutors_r" && (
                 <div>
                   {tutorStats.length===0
-                    ? <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:"60px", textAlign:"center", color:"#475569" }}>Нет данных за этот месяц</div>
+                    ? <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:"60px", textAlign:"center", color:"#7a8a9c" }}>Нет данных за этот месяц</div>
                     : (
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
                         {tutorStats.map((t,i)=>(
-                          <div key={t.id} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20 }}>
+                          <div key={t.id} className="card" style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:20 }}>
                             <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
                               <Av name={t.name} color={t.color} size={42} />
                               <div>
                                 <div style={{ fontSize:14, fontWeight:700 }}>{t.short}</div>
-                                <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{t.subjects.join(", ")}</div>
+                                <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>{t.subjects.join(", ")}</div>
                               </div>
                               {i===0 && <div style={{ marginLeft:"auto", fontSize:18 }}>🥇</div>}
                               {i===1 && <div style={{ marginLeft:"auto", fontSize:18 }}>🥈</div>}
@@ -1833,20 +1833,20 @@ export default function App() {
                             </div>
                             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
                               {[
-                                { l:"Занятий",  v:t.lessons,                         c:"#6366f1" },
-                                { l:"Учеников", v:t.students,                        c:"#22c55e" },
-                                { l:"К выплате",v:`${t.earned.toLocaleString("ru")}₽`,c:"#f59e0b"},
+                                { l:"Занятий",  v:t.lessons,                         c:"#1da0d4" },
+                                { l:"Учеников", v:t.students,                        c:"#5cb85c" },
+                                { l:"К выплате",v:`${t.earned.toLocaleString("ru")}₽`,c:"#f5a623"},
                               ].map((m,j)=>(
-                                <div key={j} style={{ background:"#1a1e2e", borderRadius:9, padding:"9px", textAlign:"center" }}>
-                                  <div style={{ fontSize:10, color:"#475569", marginBottom:3 }}>{m.l}</div>
+                                <div key={j} style={{ background:"#f2f6fa", borderRadius:9, padding:"9px", textAlign:"center" }}>
+                                  <div style={{ fontSize:10, color:"#7a8a9c", marginBottom:3 }}>{m.l}</div>
                                   <div style={{ fontSize:14, fontWeight:700, color:m.c }}>{m.v}</div>
                                 </div>
                               ))}
                             </div>
                             {/* mini bar */}
                             <div style={{ marginTop:12 }}>
-                              <div style={{ fontSize:11, color:"#475569", marginBottom:5 }}>Доля занятий в центре</div>
-                              <div style={{ height:6, background:"#1a1e2e", borderRadius:3, overflow:"hidden" }}>
+                              <div style={{ fontSize:11, color:"#7a8a9c", marginBottom:5 }}>Доля занятий в центре</div>
+                              <div style={{ height:6, background:"#f2f6fa", borderRadius:3, overflow:"hidden" }}>
                                 <div style={{ height:"100%", background:t.color, borderRadius:3, width:`${Math.round(t.lessons/Math.max(...tutorStats.map(x=>x.lessons),1)*100)}%`, transition:"width .5s" }} />
                               </div>
                             </div>
@@ -1857,18 +1857,18 @@ export default function App() {
                   }
                   {/* salary summary */}
                   {mSalaries.length>0 && (
-                    <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:20, marginTop:16 }}>
+                    <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:20, marginTop:16 }}>
                       <div style={{ fontSize:14, fontWeight:600, marginBottom:14 }}>💼 Выплаты зарплат в этом месяце</div>
                       {mSalaries.map(s=>{
                         const t=tutors.find(x=>x.id===s.tutorId);
                         return (
-                          <div key={s.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 0", borderBottom:"1px solid #1a1e2e" }}>
+                          <div key={s.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 0", borderBottom:"1px solid #f2f6fa" }}>
                             {t && <Av name={t.name} color={t.color} size={30} />}
                             <div style={{ flex:1 }}>
                               <div style={{ fontSize:13, fontWeight:600 }}>{t?.short||"—"}</div>
-                              <div style={{ fontSize:11, color:"#475569" }}>{s.date} · {s.comment}</div>
+                              <div style={{ fontSize:11, color:"#7a8a9c" }}>{s.date} · {s.comment}</div>
                             </div>
-                            <div style={{ fontSize:15, fontWeight:700, color:"#22c55e" }}>+{s.amount.toLocaleString("ru")}₽</div>
+                            <div style={{ fontSize:15, fontWeight:700, color:"#5cb85c" }}>+{s.amount.toLocaleString("ru")}₽</div>
                           </div>
                         );
                       })}
@@ -1879,27 +1879,27 @@ export default function App() {
 
               {/* ── TAB: subjects ── */}
               {reportTab==="subjects" && (
-                <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:24 }}>
+                <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:24 }}>
                   <div style={{ fontSize:14, fontWeight:600, marginBottom:20 }}>Занятий по предметам за {MONTHS[parseInt(reportMonth.split("-")[1])-1]}</div>
                   {subjectArr.length===0
-                    ? <div style={{ textAlign:"center", color:"#475569", padding:"40px 0" }}>Нет данных</div>
+                    ? <div style={{ textAlign:"center", color:"#7a8a9c", padding:"40px 0" }}>Нет данных</div>
                     : subjectArr.map(([subj, cnt])=>(
                       <div key={subj} style={{ marginBottom:14 }}>
                         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
                           <span style={{ fontSize:13, fontWeight:600 }}>{subj}</span>
-                          <span style={{ fontSize:13, color:"#94a3b8" }}>{cnt} занятий</span>
+                          <span style={{ fontSize:13, color:"#6d7f92" }}>{cnt} занятий</span>
                         </div>
-                        <div style={{ height:10, background:"#1a1e2e", borderRadius:5, overflow:"hidden" }}>
-                          <div style={{ height:"100%", background:"linear-gradient(90deg,#6366f1,#8b5cf6)", borderRadius:5, width:`${Math.round(cnt/maxSubj*100)}%`, transition:"width .6s" }} />
+                        <div style={{ height:10, background:"#f2f6fa", borderRadius:5, overflow:"hidden" }}>
+                          <div style={{ height:"100%", background:"linear-gradient(90deg,#1da0d4,#5cb85c)", borderRadius:5, width:`${Math.round(cnt/maxSubj*100)}%`, transition:"width .6s" }} />
                         </div>
                       </div>
                     ))
                   }
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginTop:24 }}>
                     {subjectArr.slice(0,6).map(([subj,cnt])=>(
-                      <div key={subj} style={{ background:"#1a1e2e", borderRadius:12, padding:"14px", textAlign:"center" }}>
-                        <div style={{ fontSize:22, fontWeight:700, color:"#818cf8" }}>{cnt}</div>
-                        <div style={{ fontSize:11, color:"#475569", marginTop:3 }}>{subj}</div>
+                      <div key={subj} style={{ background:"#f2f6fa", borderRadius:12, padding:"14px", textAlign:"center" }}>
+                        <div style={{ fontSize:22, fontWeight:700, color:"#1da0d4" }}>{cnt}</div>
+                        <div style={{ fontSize:11, color:"#7a8a9c", marginTop:3 }}>{subj}</div>
                       </div>
                     ))}
                   </div>
@@ -1910,39 +1910,39 @@ export default function App() {
               {reportTab==="trend" && (
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                   {/* revenue chart */}
-                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:24 }}>
+                  <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:24 }}>
                     <div style={{ fontSize:14, fontWeight:600, marginBottom:20 }}>📈 Выручка по месяцам</div>
                     <div style={{ display:"flex", alignItems:"flex-end", gap:10, height:140 }}>
                       {trendData.map((d,i)=>(
                         <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                          <div style={{ fontSize:10, color:"#475569", marginBottom:2 }}>{d.revenue>0?`${Math.round(d.revenue/1000)}к`:""}</div>
-                          <div style={{ width:"100%", background:`${d.month===MONTHS[parseInt(reportMonth.split("-")[1])-1]?"#6366f1":"rgba(99,102,241,0.3)"}`, borderRadius:"4px 4px 0 0", height:`${Math.max(Math.round(d.revenue/maxRevenue*120),4)}px`, transition:"height .5s" }} />
-                          <div style={{ fontSize:11, color:"#475569" }}>{d.month}</div>
+                          <div style={{ fontSize:10, color:"#7a8a9c", marginBottom:2 }}>{d.revenue>0?`${Math.round(d.revenue/1000)}к`:""}</div>
+                          <div style={{ width:"100%", background:`${d.month===MONTHS[parseInt(reportMonth.split("-")[1])-1]?"#1da0d4":"rgba(99,102,241,0.3)"}`, borderRadius:"4px 4px 0 0", height:`${Math.max(Math.round(d.revenue/maxRevenue*120),4)}px`, transition:"height .5s" }} />
+                          <div style={{ fontSize:11, color:"#7a8a9c" }}>{d.month}</div>
                         </div>
                       ))}
                     </div>
                   </div>
                   {/* lessons chart */}
-                  <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:24 }}>
+                  <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:24 }}>
                     <div style={{ fontSize:14, fontWeight:600, marginBottom:20 }}>📚 Занятий по месяцам</div>
                     <div style={{ display:"flex", alignItems:"flex-end", gap:10, height:140 }}>
                       {trendData.map((d,i)=>(
                         <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                          <div style={{ fontSize:10, color:"#475569", marginBottom:2 }}>{d.lessons||""}</div>
-                          <div style={{ width:"100%", background:`${d.month===MONTHS[parseInt(reportMonth.split("-")[1])-1]?"#22c55e":"rgba(34,197,94,0.3)"}`, borderRadius:"4px 4px 0 0", height:`${Math.max(Math.round(d.lessons/maxLessons*120),4)}px`, transition:"height .5s" }} />
-                          <div style={{ fontSize:11, color:"#475569" }}>{d.month}</div>
+                          <div style={{ fontSize:10, color:"#7a8a9c", marginBottom:2 }}>{d.lessons||""}</div>
+                          <div style={{ width:"100%", background:`${d.month===MONTHS[parseInt(reportMonth.split("-")[1])-1]?"#5cb85c":"rgba(34,197,94,0.3)"}`, borderRadius:"4px 4px 0 0", height:`${Math.max(Math.round(d.lessons/maxLessons*120),4)}px`, transition:"height .5s" }} />
+                          <div style={{ fontSize:11, color:"#7a8a9c" }}>{d.month}</div>
                         </div>
                       ))}
                     </div>
                   </div>
                   {/* summary table */}
-                  <div style={{ gridColumn:"1/-1", background:"#161925", border:"1px solid #1e2433", borderRadius:16, overflow:"hidden" }}>
-                    <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e2433", fontSize:14, fontWeight:600 }}>Сводная таблица по месяцам</div>
+                  <div style={{ gridColumn:"1/-1", background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, overflow:"hidden" }}>
+                    <div style={{ padding:"16px 20px", borderBottom:"1px solid #dbe6f0", fontSize:14, fontWeight:600 }}>Сводная таблица по месяцам</div>
                     <table style={{ width:"100%", borderCollapse:"collapse" }}>
                       <thead>
-                        <tr style={{ borderBottom:"1px solid #1e2433" }}>
+                        <tr style={{ borderBottom:"1px solid #dbe6f0" }}>
                           {["Месяц","Выручка","Занятий","Новых учеников","Ср. чек"].map(h=>(
-                            <th key={h} style={{ padding:"11px 16px", textAlign:"left", fontSize:11, color:"#475569", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                            <th key={h} style={{ padding:"11px 16px", textAlign:"left", fontSize:11, color:"#7a8a9c", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1955,14 +1955,14 @@ export default function App() {
                           const mAvg = mP.length ? Math.round(mRev/mP.length) : 0;
                           const isSelected = m===reportMonth;
                           return (
-                            <tr key={m} style={{ borderBottom:"1px solid #1a1e2e", background:isSelected?"rgba(99,102,241,0.06)":"transparent", cursor:"pointer" }} onClick={()=>setReportMonth(m)}>
-                              <td style={{ padding:"11px 16px", fontWeight:isSelected?700:400, color:isSelected?"#818cf8":"#e2e8f0" }}>
+                            <tr key={m} style={{ borderBottom:"1px solid #f2f6fa", background:isSelected?"rgba(99,102,241,0.06)":"transparent", cursor:"pointer" }} onClick={()=>setReportMonth(m)}>
+                              <td style={{ padding:"11px 16px", fontWeight:isSelected?700:400, color:isSelected?"#1da0d4":"#22344a" }}>
                                 {MONTHS[parseInt(m.split("-")[1])-1]} {m.split("-")[0]} {isSelected&&"◀"}
                               </td>
-                              <td style={{ padding:"11px 16px", fontWeight:600, color:"#22c55e" }}>{mRev.toLocaleString("ru")}₽</td>
-                              <td style={{ padding:"11px 16px", color:"#94a3b8" }}>{mL}</td>
-                              <td style={{ padding:"11px 16px", color:"#f59e0b" }}>{mNew}</td>
-                              <td style={{ padding:"11px 16px", color:"#64748b" }}>{mAvg.toLocaleString("ru")}₽</td>
+                              <td style={{ padding:"11px 16px", fontWeight:600, color:"#5cb85c" }}>{mRev.toLocaleString("ru")}₽</td>
+                              <td style={{ padding:"11px 16px", color:"#6d7f92" }}>{mL}</td>
+                              <td style={{ padding:"11px 16px", color:"#f5a623" }}>{mNew}</td>
+                              <td style={{ padding:"11px 16px", color:"#55677a" }}>{mAvg.toLocaleString("ru")}₽</td>
                             </tr>
                           );
                         })}
@@ -1981,13 +1981,13 @@ export default function App() {
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
               <div>
-                <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Каталог курсов</h1>
-                <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>Все направления центра · {allSubjects.length} курсов</div>
+                <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Каталог курсов</h1>
+                <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Все направления центра · {allSubjects.length} курсов</div>
               </div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
               {courseCategories.map(cat=>(
-                <div key={cat.id} style={{ background:"#161925", border:`1px solid ${cat.color}33`, borderRadius:16, padding:20 }}>
+                <div key={cat.id} style={{ background:"#ffffff", border:`1px solid ${cat.color}33`, borderRadius:16, padding:20 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
                     <div style={{ width:10, height:10, borderRadius:"50%", background:cat.color, flexShrink:0 }} />
                     <div style={{ fontSize:14, fontWeight:700, color:cat.color }}>{cat.label}</div>
@@ -1998,10 +1998,10 @@ export default function App() {
                       const cnt = lessons.filter(l=>l.subject===course&&l.status==="completed").length;
                       const tutorCount = [...new Set(lessons.filter(l=>l.subject===course).map(l=>l.tutorId))].length;
                       return (
-                        <div key={course} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 10px", background:"#1a1e2e", borderRadius:9, borderLeft:`3px solid ${cat.color}` }}>
+                        <div key={course} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 10px", background:"#f2f6fa", borderRadius:9, borderLeft:`3px solid ${cat.color}` }}>
                           <span style={{ fontSize:12, fontWeight:500, color:"#cbd5e1" }}>{course}</span>
                           <div style={{ display:"flex", gap:6 }}>
-                            {cnt>0 && <span style={{ fontSize:10, color:"#475569" }}>{cnt} занят.</span>}
+                            {cnt>0 && <span style={{ fontSize:10, color:"#7a8a9c" }}>{cnt} занят.</span>}
                             {tutorCount>0 && <span style={{ fontSize:10, color:cat.color, fontWeight:600 }}>{tutorCount} пед.</span>}
                           </div>
                         </div>
@@ -2014,15 +2014,15 @@ export default function App() {
             {/* stats row */}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginTop:20 }}>
               {[
-                { l:"Всего курсов",       v:allSubjects.length,                                     c:"#6366f1", icon:"📋" },
-                { l:"Категорий",          v:courseCategories.length,                                 c:"#f59e0b", icon:"🗂️" },
-                { l:"Популярный курс",    v:(()=>{ const m={}; lessons.forEach(l=>{ if(l.status==="completed") m[l.subject]=(m[l.subject]||0)+1; }); return Object.entries(m).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—"; })(), c:"#22c55e", icon:"🏆" },
-                { l:"Курсов с занятиями", v:[...new Set(lessons.filter(l=>l.status==="completed").map(l=>l.subject))].length, c:"#ec4899", icon:"✅" },
+                { l:"Всего курсов",       v:allSubjects.length,                                     c:"#1da0d4", icon:"📋" },
+                { l:"Категорий",          v:courseCategories.length,                                 c:"#f5a623", icon:"🗂️" },
+                { l:"Популярный курс",    v:(()=>{ const m={}; lessons.forEach(l=>{ if(l.status==="completed") m[l.subject]=(m[l.subject]||0)+1; }); return Object.entries(m).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—"; })(), c:"#5cb85c", icon:"🏆" },
+                { l:"Курсов с занятиями", v:[...new Set(lessons.filter(l=>l.status==="completed").map(l=>l.subject))].length, c:"#d6539a", icon:"✅" },
               ].map((s,i)=>(
-                <div key={i} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:18 }}>
+                <div key={i} className="card" style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:18 }}>
                   <div style={{ display:"flex", justifyContent:"space-between" }}>
                     <div>
-                      <div style={{ fontSize:11, color:"#475569", marginBottom:6 }}>{s.l}</div>
+                      <div style={{ fontSize:11, color:"#7a8a9c", marginBottom:6 }}>{s.l}</div>
                       <div style={{ fontSize:s.l==="Популярный курс"?14:24, fontWeight:700, color:s.c }}>{s.v}</div>
                     </div>
                     <div style={{ fontSize:22, opacity:.5 }}>{s.icon}</div>
@@ -2036,11 +2036,11 @@ export default function App() {
         {/* ── REQUESTS ── */}
         {view==="requests" && (()=>{
           const reqCfg = {
-            new:       { label:"Новый",        color:"#6366f1", bg:"rgba(99,102,241,0.12)"  },
-            contacted: { label:"Связались",    color:"#f59e0b", bg:"rgba(245,158,11,0.12)"  },
-            trial:     { label:"Пробное",      color:"#22c55e", bg:"rgba(34,197,94,0.12)"   },
-            enrolled:  { label:"Записан",      color:"#06b6d4", bg:"rgba(6,182,212,0.12)"   },
-            rejected:  { label:"Отказался",    color:"#ef4444", bg:"rgba(239,68,68,0.12)"   },
+            new:       { label:"Новый",        color:"#1da0d4", bg:"rgba(99,102,241,0.12)"  },
+            contacted: { label:"Связались",    color:"#f5a623", bg:"rgba(245,158,11,0.12)"  },
+            trial:     { label:"Пробное",      color:"#5cb85c", bg:"rgba(34,197,94,0.12)"   },
+            enrolled:  { label:"Записан",      color:"#17a6c9", bg:"rgba(6,182,212,0.12)"   },
+            rejected:  { label:"Отказался",    color:"#e2574c", bg:"rgba(239,68,68,0.12)"   },
           };
           const filtered = requests.filter(r=>{
             const q = reqSearch.toLowerCase();
@@ -2058,8 +2058,8 @@ export default function App() {
             <div>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
                 <div>
-                  <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Запросы от родителей</h1>
-                  <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>Входящие обращения · {requests.filter(r=>r.status==="new").length} новых</div>
+                  <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Запросы от родителей</h1>
+                  <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Входящие обращения · {requests.filter(r=>r.status==="new").length} новых</div>
                 </div>
                 <button className="bp" onClick={()=>setModal("addRequest")}>+ Новый запрос</button>
               </div>
@@ -2069,9 +2069,9 @@ export default function App() {
                 {Object.entries(reqCfg).map(([k,v])=>{
                   const cnt = requests.filter(r=>r.status===k).length;
                   return (
-                    <div key={k} onClick={()=>setReqFilter(reqFilter===k?"all":k)} style={{ background:"#161925", border:`1px solid ${reqFilter===k?v.color:"#1e2433"}`, borderRadius:12, padding:"12px 16px", cursor:"pointer", textAlign:"center", transition:"all .2s" }}>
+                    <div key={k} onClick={()=>setReqFilter(reqFilter===k?"all":k)} style={{ background:"#ffffff", border:`1px solid ${reqFilter===k?v.color:"#dbe6f0"}`, borderRadius:12, padding:"12px 16px", cursor:"pointer", textAlign:"center", transition:"all .2s" }}>
                       <div style={{ fontSize:22, fontWeight:700, color:v.color }}>{cnt}</div>
-                      <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{v.label}</div>
+                      <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>{v.label}</div>
                     </div>
                   );
                 })}
@@ -2084,27 +2084,27 @@ export default function App() {
 
               {/* cards */}
               <div style={{ display:"grid", gap:12 }}>
-                {filtered.length===0 && <div style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:16, padding:"50px", textAlign:"center", color:"#475569" }}>Запросов не найдено</div>}
+                {filtered.length===0 && <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:"50px", textAlign:"center", color:"#7a8a9c" }}>Запросов не найдено</div>}
                 {filtered.sort((a,b)=>a.date<b.date?1:-1).map(req=>{
                   const cat = subjectCategory(req.course);
                   const assignedTutor = tutors.find(t=>t.id===req.assignedTutorId);
                   return (
-                    <div key={req.id} style={{ background:"#161925", border:`1px solid ${req.status==="new"?"rgba(99,102,241,0.4)":"#1e2433"}`, borderRadius:16, padding:"18px 22px" }}>
+                    <div key={req.id} style={{ background:"#ffffff", border:`1px solid ${req.status==="new"?"rgba(99,102,241,0.4)":"#dbe6f0"}`, borderRadius:16, padding:"18px 22px" }}>
                       <div style={{ display:"flex", alignItems:"flex-start", gap:16 }}>
                         {/* left */}
                         <div style={{ flex:1 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8, flexWrap:"wrap" }}>
                             <div style={{ fontSize:15, fontWeight:700 }}>👤 {req.parentName}</div>
-                            <div style={{ fontSize:13, color:"#475569" }}>→ {req.studentName}{req.age ? `, ${req.age} лет` : ""}</div>
+                            <div style={{ fontSize:13, color:"#7a8a9c" }}>→ {req.studentName}{req.age ? `, ${req.age} лет` : ""}</div>
                             <Tag c={reqCfg[req.status]?.color} bg={reqCfg[req.status]?.bg}>{reqCfg[req.status]?.label}</Tag>
-                            <div style={{ fontSize:11, color:"#334155", marginLeft:"auto" }}>{req.date}</div>
+                            <div style={{ fontSize:11, color:"#a9b8c6", marginLeft:"auto" }}>{req.date}</div>
                           </div>
                           <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:req.comment?8:0, flexWrap:"wrap" }}>
-                            <a href={`tel:${req.phone}`} style={{ fontSize:13, color:"#818cf8", textDecoration:"none", fontWeight:500 }}>📞 {req.phone}</a>
-                            {req.course && <Tag c={cat.color||"#6366f1"} bg={`${cat.color||"#6366f1"}18`}>{req.course}</Tag>}
+                            <a href={`tel:${req.phone}`} style={{ fontSize:13, color:"#1da0d4", textDecoration:"none", fontWeight:500 }}>📞 {req.phone}</a>
+                            {req.course && <Tag c={cat.color||"#1da0d4"} bg={`${cat.color||"#1da0d4"}18`}>{req.course}</Tag>}
                             {assignedTutor && <Tag c={assignedTutor.color} bg={`${assignedTutor.color}18`}>🎓 {assignedTutor.short}</Tag>}
                           </div>
-                          {req.comment && <div style={{ fontSize:13, color:"#94a3b8", background:"#1a1e2e", borderRadius:8, padding:"9px 12px", lineHeight:1.5 }}>💬 {req.comment}</div>}
+                          {req.comment && <div style={{ fontSize:13, color:"#6d7f92", background:"#f2f6fa", borderRadius:8, padding:"9px 12px", lineHeight:1.5 }}>💬 {req.comment}</div>}
                         </div>
                         {/* actions */}
                         <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0, minWidth:130 }}>
@@ -2124,12 +2124,12 @@ export default function App() {
                             </button>
                           )}
                           {req.status==="trial" && (
-                            <button className="bp" style={{ fontSize:11, padding:"5px 8px", background:"linear-gradient(135deg,#22c55e,#16a34a)" }}
+                            <button className="bp" style={{ fontSize:11, padding:"5px 8px", background:"linear-gradient(135deg,#5cb85c,#16a34a)" }}
                               onClick={()=>{ setRequests(requests.map(r=>r.id===req.id?{...r,status:"enrolled"}:r)); notify("Ученик переведён в базу!"); }}>
                               ✅ Записать
                             </button>
                           )}
-                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", padding:"4px 8px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }}
+                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"4px 8px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }}
                             onClick={()=>{ if(window.confirm("Удалить запрос?")) { setRequests(requests.filter(r=>r.id!==req.id)); notify("Запрос удалён"); } }}>
                             🗑 Удалить
                           </button>
@@ -2147,7 +2147,7 @@ export default function App() {
         {view==="mailings" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
-              <div><h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>Рассылки</h1></div>
+              <div><h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Рассылки</h1></div>
               <button className="bp" onClick={()=>{ setMStep(1); setMDraft({title:"",channel:"whatsapp",audience:"all",text:""}); setModal("mailing"); }}>+ Новая рассылка</button>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:28 }}>
@@ -2159,7 +2159,7 @@ export default function App() {
                 { icon:"⭐", title:"Пробный → Постоянный",   audience:"trial",   channel:"whatsapp", text:"Здравствуйте, {{parentName}}! Оформите абонемент для {{studentName}} со скидкой 10%!" },
                 { icon:"📊", title:"Итоги месяца",           audience:"active",  channel:"telegram", text:"Здравствуйте, {{parentName}}! Подводим итоги марта для {{studentName}}. Отличная работа! 💪" },
               ].map((tpl,i)=>(
-                <div key={i} className="card" style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:16, cursor:"pointer" }}
+                <div key={i} className="card" style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, padding:16, cursor:"pointer" }}
                   onClick={()=>{ setMDraft({title:tpl.title,channel:tpl.channel,audience:tpl.audience,text:tpl.text}); setMStep(1); setModal("mailing"); }}>
                   <div style={{ display:"flex", gap:10, marginBottom:8 }}>
                     <span style={{ fontSize:22 }}>{tpl.icon}</span>
@@ -2167,30 +2167,30 @@ export default function App() {
                       <div style={{ fontSize:13, fontWeight:600 }}>{tpl.title}</div>
                       <div style={{ display:"flex", gap:6, marginTop:4, flexWrap:"wrap" }}>
                         <Tag c={channelCfg[tpl.channel].color} bg={`${channelCfg[tpl.channel].color}22`}>{channelCfg[tpl.channel].icon} {channelCfg[tpl.channel].label}</Tag>
-                        <Tag c="#94a3b8" bg="rgba(148,163,184,0.1)">{audLabels[tpl.audience]}</Tag>
+                        <Tag c="#6d7f92" bg="rgba(148,163,184,0.1)">{audLabels[tpl.audience]}</Tag>
                       </div>
                     </div>
                   </div>
-                  <div style={{ fontSize:11, color:"#475569", lineHeight:1.5, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{tpl.text}</div>
-                  <div style={{ marginTop:8, fontSize:11, color:"#6366f1", fontWeight:600 }}>Использовать →</div>
+                  <div style={{ fontSize:11, color:"#7a8a9c", lineHeight:1.5, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{tpl.text}</div>
+                  <div style={{ marginTop:8, fontSize:11, color:"#1da0d4", fontWeight:600 }}>Использовать →</div>
                 </div>
               ))}
             </div>
-            <div style={{ fontSize:13, color:"#64748b", fontWeight:600, marginBottom:12, textTransform:"uppercase", letterSpacing:"0.05em" }}>История</div>
+            <div style={{ fontSize:13, color:"#55677a", fontWeight:600, marginBottom:12, textTransform:"uppercase", letterSpacing:"0.05em" }}>История</div>
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               {mailings.map(m=>(
-                <div key={m.id} style={{ background:"#161925", border:"1px solid #1e2433", borderRadius:14, padding:"16px 20px", display:"flex", gap:14, alignItems:"flex-start" }}>
+                <div key={m.id} style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, padding:"16px 20px", display:"flex", gap:14, alignItems:"flex-start" }}>
                   <div style={{ width:42, height:42, borderRadius:12, background:`${channelCfg[m.channel]?.color}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{channelCfg[m.channel]?.icon}</div>
                   <div style={{ flex:1 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
                       <div style={{ fontSize:14, fontWeight:600 }}>{m.title}</div>
-                      <Tag c={m.status==="sent"?"#22c55e":"#94a3b8"} bg={m.status==="sent"?"rgba(34,197,94,0.12)":"rgba(148,163,184,0.12)"}>{m.status==="sent"?"✓ Отправлено":"Черновик"}</Tag>
+                      <Tag c={m.status==="sent"?"#5cb85c":"#6d7f92"} bg={m.status==="sent"?"rgba(34,197,94,0.12)":"rgba(148,163,184,0.12)"}>{m.status==="sent"?"✓ Отправлено":"Черновик"}</Tag>
                     </div>
-                    <div style={{ fontSize:12, color:"#475569", marginBottom:6 }}>{m.text}</div>
+                    <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:6 }}>{m.text}</div>
                     <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                       <Tag c={channelCfg[m.channel]?.color} bg={`${channelCfg[m.channel]?.color}22`}>{channelCfg[m.channel]?.icon} {channelCfg[m.channel]?.label}</Tag>
-                      <Tag c="#818cf8" bg="rgba(99,102,241,0.1)">{audIcons[m.audience]} {audLabels[m.audience]||m.audience}</Tag>
-                      {m.status==="sent" && <span style={{ fontSize:11, color:"#475569", alignSelf:"center" }}>📤 {m.sentCount} получателей · {m.sentAt}</span>}
+                      <Tag c="#1da0d4" bg="rgba(99,102,241,0.1)">{audIcons[m.audience]} {audLabels[m.audience]||m.audience}</Tag>
+                      {m.status==="sent" && <span style={{ fontSize:11, color:"#7a8a9c", alignSelf:"center" }}>📤 {m.sentCount} получателей · {m.sentAt}</span>}
                     </div>
                   </div>
                 </div>
@@ -2203,16 +2203,16 @@ export default function App() {
         {view==="ai" && (
           <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 64px)", maxWidth:800 }}>
             <div style={{ marginBottom:20 }}>
-              <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#f1f5f9", margin:0 }}>✨ ИИ-Помощник</h1>
-              <div style={{ color:"#475569", fontSize:13, marginTop:4 }}>Задайте вопрос об учениках, расписании, финансах — или попросите составить сообщение</div>
+              <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>✨ ИИ-Помощник</h1>
+              <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Задайте вопрос об учениках, расписании, финансах — или попросите составить сообщение</div>
             </div>
-            <div style={{ flex:1, background:"#161925", border:"1px solid #1e2433", borderRadius:16, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+            <div style={{ flex:1, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, display:"flex", flexDirection:"column", overflow:"hidden" }}>
               <div style={{ flex:1, overflowY:"auto", padding:20, display:"flex", flexDirection:"column", gap:12 }}>
                 {aiMessages.map((m,i)=>(
                   <div key={i} style={{ alignSelf:m.role==="user"?"flex-end":"flex-start", maxWidth:"75%" }}>
                     <div style={{
-                      background: m.role==="user" ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#1a1e2e",
-                      color: m.role==="user" ? "white" : "#e2e8f0",
+                      background: m.role==="user" ? "linear-gradient(135deg,#1da0d4,#5cb85c)" : "#f2f6fa",
+                      color: m.role==="user" ? "white" : "#22344a",
                       padding:"10px 16px", borderRadius:14,
                       borderBottomRightRadius: m.role==="user"?4:14,
                       borderBottomLeftRadius: m.role==="user"?14:4,
@@ -2222,12 +2222,12 @@ export default function App() {
                 ))}
                 {aiLoading && (
                   <div style={{ alignSelf:"flex-start" }}>
-                    <div style={{ background:"#1a1e2e", padding:"10px 16px", borderRadius:14, borderBottomLeftRadius:4, fontSize:14, color:"#64748b" }}>Печатает...</div>
+                    <div style={{ background:"#f2f6fa", padding:"10px 16px", borderRadius:14, borderBottomLeftRadius:4, fontSize:14, color:"#55677a" }}>Печатает...</div>
                   </div>
                 )}
                 <div ref={aiMessagesEndRef} />
               </div>
-              <div style={{ padding:16, borderTop:"1px solid #1e2433", display:"flex", gap:10 }}>
+              <div style={{ padding:16, borderTop:"1px solid #dbe6f0", display:"flex", gap:10 }}>
                 <textarea
                   placeholder="Напишите сообщение..."
                   value={aiInput}
@@ -2250,10 +2250,10 @@ export default function App() {
           <div className="mo" onClick={e=>e.stopPropagation()}>
             <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>Новый преподаватель</h2>
             <div style={{ display:"grid", gap:14 }}>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>ФИО *</div><input placeholder="Иванова Наталья Владимировна" value={nTutor.name} onChange={e=>setNTutor({...nTutor,name:e.target.value})} /></div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nTutor.phone} onChange={e=>setNTutor({...nTutor,phone:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО *</div><input placeholder="Иванова Наталья Владимировна" value={nTutor.name} onChange={e=>setNTutor({...nTutor,name:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nTutor.phone} onChange={e=>setNTutor({...nTutor,phone:e.target.value})} /></div>
               <div>
-                <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Предметы</div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы</div>
                 <div style={{ maxHeight:200, overflowY:"auto", display:"flex", flexDirection:"column", gap:10 }}>
                   {courseCategories.map(cat=>(
                     <div key={cat.id}>
@@ -2263,8 +2263,8 @@ export default function App() {
                           <button key={s} onClick={()=>setNTutor(prev=>({...prev,subjects:prev.subjects.includes(s)?prev.subjects.filter(x=>x!==s):[...prev.subjects,s]}))}
                             style={{ padding:"4px 10px", borderRadius:20, fontSize:11, border:"1px solid", cursor:"pointer",
                               background:nTutor.subjects.includes(s)?`${cat.color}28`:"transparent",
-                              borderColor:nTutor.subjects.includes(s)?cat.color:"#2d3252",
-                              color:nTutor.subjects.includes(s)?cat.color:"#64748b" }}>{s}</button>
+                              borderColor:nTutor.subjects.includes(s)?cat.color:"#d7e2ee",
+                              color:nTutor.subjects.includes(s)?cat.color:"#55677a" }}>{s}</button>
                         ))}
                       </div>
                     </div>
@@ -2273,19 +2273,19 @@ export default function App() {
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                 <div>
-                  <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Тип ставки</div>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Тип ставки</div>
                   <select value={nTutor.rateType} onChange={e=>setNTutor({...nTutor,rateType:e.target.value})}>
                     <option value="percent">% от занятия</option>
                     <option value="fixed">Фиксированная ₽</option>
                   </select>
                 </div>
                 <div>
-                  <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>{nTutor.rateType==="percent"?"Процент (%)":"Сумма (₽)"}</div>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>{nTutor.rateType==="percent"?"Процент (%)":"Сумма (₽)"}</div>
                   <input type="number" value={nTutor.rateValue} onChange={e=>setNTutor({...nTutor,rateValue:e.target.value})} />
                 </div>
               </div>
               <div>
-                <div style={{ fontSize:12, color:"#64748b", marginBottom:8 }}>Цвет</div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:8 }}>Цвет</div>
                 <div style={{ display:"flex", gap:8 }}>
                   {COLORS.map(c=>(
                     <div key={c} onClick={()=>setNTutor({...nTutor,color:c})}
@@ -2308,29 +2308,29 @@ export default function App() {
             <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>Новый ученик</h2>
             <div style={{ display:"grid", gap:14 }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>ФИО *</div><input placeholder="Иванов Иван" value={nStudent.name} onChange={e=>setNStudent({...nStudent,name:e.target.value})} /></div>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Возраст</div><input type="number" value={nStudent.age} onChange={e=>setNStudent({...nStudent,age:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО *</div><input placeholder="Иванов Иван" value={nStudent.name} onChange={e=>setNStudent({...nStudent,name:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Возраст</div><input type="number" value={nStudent.age} onChange={e=>setNStudent({...nStudent,age:e.target.value})} /></div>
               </div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nStudent.phone} onChange={e=>setNStudent({...nStudent,phone:e.target.value})} /></div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>ФИО родителя</div><input value={nStudent.parentName} onChange={e=>setNStudent({...nStudent,parentName:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nStudent.phone} onChange={e=>setNStudent({...nStudent,phone:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО родителя</div><input value={nStudent.parentName} onChange={e=>setNStudent({...nStudent,parentName:e.target.value})} /></div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>🏫 Школа / лицей</div><input placeholder="Школа №15" value={nStudent.school} onChange={e=>setNStudent({...nStudent,school:e.target.value})} /></div>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Класс</div><input placeholder="9А" value={nStudent.grade||""} onChange={e=>setNStudent({...nStudent,grade:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>🏫 Школа / лицей</div><input placeholder="Школа №15" value={nStudent.school} onChange={e=>setNStudent({...nStudent,school:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Класс</div><input placeholder="9А" value={nStudent.grade||""} onChange={e=>setNStudent({...nStudent,grade:e.target.value})} /></div>
               </div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>📍 Адрес</div><input placeholder="ул. Ленина, д. 12, кв. 34" value={nStudent.address} onChange={e=>setNStudent({...nStudent,address:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>📍 Адрес</div><input placeholder="ул. Ленина, д. 12, кв. 34" value={nStudent.address} onChange={e=>setNStudent({...nStudent,address:e.target.value})} /></div>
               <div>
-                <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Предметы</div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы</div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
                   {allSubjects.map(s=>(
                     <button key={s} onClick={()=>setNStudent(prev=>({...prev,subjects:prev.subjects.includes(s)?prev.subjects.filter(x=>x!==s):[...prev.subjects,s]}))}
                       style={{ padding:"5px 12px", borderRadius:20, fontSize:12, border:"1px solid", cursor:"pointer",
                         background:nStudent.subjects.includes(s)?"rgba(99,102,241,0.2)":"transparent",
-                        borderColor:nStudent.subjects.includes(s)?"#6366f1":"#2d3252",
-                        color:nStudent.subjects.includes(s)?"#818cf8":"#64748b" }}>{s}</button>
+                        borderColor:nStudent.subjects.includes(s)?"#1da0d4":"#d7e2ee",
+                        color:nStudent.subjects.includes(s)?"#1da0d4":"#55677a" }}>{s}</button>
                   ))}
                 </div>
               </div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Статус</div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Статус</div>
                 <select value={nStudent.status} onChange={e=>setNStudent({...nStudent,status:e.target.value})}>
                   {Object.entries(statusCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                 </select>
@@ -2349,12 +2349,12 @@ export default function App() {
           <div className="mo" style={{ width:580, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
 
             {/* ── TYPE SWITCHER ── */}
-            <div style={{ display:"flex", gap:0, marginBottom:20, background:"#1a1e2e", borderRadius:12, padding:4 }}>
+            <div style={{ display:"flex", gap:0, marginBottom:20, background:"#f2f6fa", borderRadius:12, padding:4 }}>
               {[["individual","👤 Индивидуальное"],["group","👥 Групповое"]].map(([k,l])=>(
                 <button key={k} onClick={()=>{ setLessonType(k); setGroupStudents([]); }}
                   style={{ flex:1, padding:"10px", borderRadius:9, fontSize:13, fontWeight:700, border:"none", cursor:"pointer", fontFamily:"inherit", transition:"all .2s",
-                    background:lessonType===k?"linear-gradient(135deg,#6366f1,#8b5cf6)":"transparent",
-                    color:lessonType===k?"white":"#64748b" }}>{l}</button>
+                    background:lessonType===k?"linear-gradient(135deg,#1da0d4,#5cb85c)":"transparent",
+                    color:lessonType===k?"white":"#55677a" }}>{l}</button>
               ))}
             </div>
 
@@ -2365,14 +2365,14 @@ export default function App() {
             <div style={{ display:"grid", gap:13 }}>
 
               {/* TUTOR */}
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Преподаватель *</div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Преподаватель *</div>
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                   {tutors.map(t=>(
                     <button key={t.id} onClick={()=>setNLesson({...nLesson,tutorId:String(t.id)})}
                       style={{ display:"flex", alignItems:"center", gap:7, padding:"7px 12px", borderRadius:10, fontSize:12, border:"1px solid", cursor:"pointer", fontFamily:"inherit", transition:"all .15s",
                         background:nLesson.tutorId===String(t.id)?`${t.color}22`:"transparent",
-                        borderColor:nLesson.tutorId===String(t.id)?t.color:"#2d3252",
-                        color:nLesson.tutorId===String(t.id)?t.color:"#64748b" }}>
+                        borderColor:nLesson.tutorId===String(t.id)?t.color:"#d7e2ee",
+                        color:nLesson.tutorId===String(t.id)?t.color:"#55677a" }}>
                       <div style={{ width:8,height:8,borderRadius:"50%",background:t.color }} />{t.short}
                     </button>
                   ))}
@@ -2381,7 +2381,7 @@ export default function App() {
 
               {/* SUBJECT + PRICE */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Предмет / курс *</div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предмет / курс *</div>
                   <select value={nLesson.subject} onChange={e=>setNLesson({...nLesson,subject:e.target.value})}>
                     <option value="">Выберите курс</option>
                     {courseCategories.map(cat=>(
@@ -2392,17 +2392,17 @@ export default function App() {
                   </select>
                 </div>
                 {lessonType==="individual" && (
-                  <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Стоимость (₽)</div>
+                  <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Стоимость (₽)</div>
                     <input type="number" value={nLesson.price} onChange={e=>setNLesson({...nLesson,price:e.target.value})} />
                     {nLesson.tutorId && nLesson.price && (
-                      <div style={{ fontSize:11, color:"#22c55e", marginTop:4 }}>
+                      <div style={{ fontSize:11, color:"#5cb85c", marginTop:4 }}>
                         → педагог: {calcEarning({price:Number(nLesson.price)}, tutors.find(t=>t.id===Number(nLesson.tutorId)))}₽
                       </div>
                     )}
                   </div>
                 )}
                 {lessonType==="group" && (
-                  <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Название группы</div>
+                  <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Название группы</div>
                     <input placeholder="напр. Группа ОГЭ Пн" value={groupName} onChange={e=>setGroupName(e.target.value)} />
                   </div>
                 )}
@@ -2410,20 +2410,20 @@ export default function App() {
 
               {/* DATE / TIME / DURATION */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Дата *</div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Дата *</div>
                   <input type="date" value={nLesson.date} onChange={e=>setNLesson({...nLesson,date:e.target.value})} />
                 </div>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Время</div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Время</div>
                   <input type="time" value={nLesson.time} onChange={e=>setNLesson({...nLesson,time:e.target.value})} />
                 </div>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Длительность</div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Длительность</div>
                   <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
                     {[45,60,90,120].map(d=>(
                       <button key={d} onClick={()=>setNLesson({...nLesson,duration:d})}
                         style={{ padding:"5px 8px", borderRadius:7, fontSize:11, border:"1px solid", cursor:"pointer", fontFamily:"inherit",
                           background:Number(nLesson.duration)===d?"rgba(99,102,241,0.25)":"transparent",
-                          borderColor:Number(nLesson.duration)===d?"#6366f1":"#2d3252",
-                          color:Number(nLesson.duration)===d?"#818cf8":"#64748b" }}>{d}м</button>
+                          borderColor:Number(nLesson.duration)===d?"#1da0d4":"#d7e2ee",
+                          color:Number(nLesson.duration)===d?"#1da0d4":"#55677a" }}>{d}м</button>
                     ))}
                   </div>
                 </div>
@@ -2431,7 +2431,7 @@ export default function App() {
 
               {/* ── INDIVIDUAL: one student ── */}
               {lessonType==="individual" && (
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Ученик *</div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Ученик *</div>
                   <select value={nLesson.studentId} onChange={e=>setNLesson({...nLesson,studentId:e.target.value})}>
                     <option value="">Выберите ученика</option>
                     {students.map(s=><option key={s.id} value={s.id}>{s.name} {s.school?`· ${s.school}`:""}</option>)}
@@ -2443,23 +2443,23 @@ export default function App() {
               {lessonType==="group" && (
                 <div>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                    <div style={{ fontSize:12, color:"#64748b" }}>Ученики группы ({groupStudents.length})</div>
-                    <div style={{ fontSize:11, color:"#475569" }}>Суммарно: {groupStudents.reduce((s,g)=>s+Number(g.price||0),0).toLocaleString("ru")}₽</div>
+                    <div style={{ fontSize:12, color:"#55677a" }}>Ученики группы ({groupStudents.length})</div>
+                    <div style={{ fontSize:11, color:"#7a8a9c" }}>Суммарно: {groupStudents.reduce((s,g)=>s+Number(g.price||0),0).toLocaleString("ru")}₽</div>
                   </div>
                   {/* added students */}
                   {groupStudents.map((gs,i)=>{
                     const st = students.find(s=>s.id===Number(gs.studentId));
                     return (
-                      <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:"#1a1e2e", borderRadius:9, marginBottom:6, border:"1px solid #2d3252" }}>
-                        <Av name={st?.name||"?"} color="#6366f1" size={26} />
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:"#f2f6fa", borderRadius:9, marginBottom:6, border:"1px solid #d7e2ee" }}>
+                        <Av name={st?.name||"?"} color="#1da0d4" size={26} />
                         <div style={{ flex:1, fontSize:13, fontWeight:600 }}>{st?.name||"—"}</div>
                         <div style={{ width:90 }}>
                           <input type="number" value={gs.price} placeholder="Цена" onChange={e=>{ const ng=[...groupStudents]; ng[i]={...ng[i],price:e.target.value}; setGroupStudents(ng); }}
                             style={{ fontSize:12, padding:"4px 8px" }} />
                         </div>
-                        <span style={{ fontSize:11, color:"#475569" }}>₽</span>
+                        <span style={{ fontSize:11, color:"#7a8a9c" }}>₽</span>
                         <button onClick={()=>setGroupStudents(groupStudents.filter((_,j)=>j!==i))}
-                          style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>✗</button>
+                          style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>✗</button>
                       </div>
                     );
                   })}
@@ -2473,52 +2473,52 @@ export default function App() {
                       ))}
                     </select>
                   </div>
-                  <div style={{ fontSize:11, color:"#475569", marginTop:6 }}>
+                  <div style={{ fontSize:11, color:"#7a8a9c", marginTop:6 }}>
                     💡 Цена берётся автоматически из прайса. Можно изменить для каждого ученика отдельно.
                   </div>
                 </div>
               )}
 
               {/* ── RECURRING ── */}
-              <div style={{ background:"#1a1e2e", borderRadius:12, padding:"12px 14px" }}>
+              <div style={{ background:"#f2f6fa", borderRadius:12, padding:"12px 14px" }}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                   <div>
                     <div style={{ fontSize:13, fontWeight:600 }}>🔁 Повторяющееся занятие</div>
-                    <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>Создать серию занятий</div>
+                    <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>Создать серию занятий</div>
                   </div>
-                  <div onClick={()=>setRecurModal(r=>!r)} style={{ width:40, height:22, borderRadius:11, background:recurModal?"#6366f1":"#2d3252", cursor:"pointer", transition:"all .2s", position:"relative", flexShrink:0 }}>
+                  <div onClick={()=>setRecurModal(r=>!r)} style={{ width:40, height:22, borderRadius:11, background:recurModal?"#1da0d4":"#d7e2ee", cursor:"pointer", transition:"all .2s", position:"relative", flexShrink:0 }}>
                     <div style={{ position:"absolute", top:3, left:recurModal?20:3, width:16, height:16, borderRadius:"50%", background:"white", transition:"all .2s" }} />
                   </div>
                 </div>
                 {recurModal && (
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:12 }}>
                     <div>
-                      <div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Кол-во занятий</div>
+                      <div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Кол-во занятий</div>
                       <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
                         {[4,8,12,16].map(n=>(
                           <button key={n} onClick={()=>setRecurCount(n)}
                             style={{ padding:"4px 10px", borderRadius:7, fontSize:12, border:"1px solid", cursor:"pointer", fontFamily:"inherit",
                               background:recurCount===n?"rgba(99,102,241,0.25)":"transparent",
-                              borderColor:recurCount===n?"#6366f1":"#2d3252",
-                              color:recurCount===n?"#818cf8":"#64748b" }}>{n}</button>
+                              borderColor:recurCount===n?"#1da0d4":"#d7e2ee",
+                              color:recurCount===n?"#1da0d4":"#55677a" }}>{n}</button>
                         ))}
                         <input type="number" value={recurCount} onChange={e=>setRecurCount(Number(e.target.value))} style={{ width:55, padding:"4px 6px", fontSize:12 }} />
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Повторять каждые</div>
+                      <div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Повторять каждые</div>
                       <div style={{ display:"flex", gap:5 }}>
                         {[[7,"Нед."],[14,"2 нед."],[30,"Мес."]].map(([d,l])=>(
                           <button key={d} onClick={()=>setRecurInterval(d)}
                             style={{ padding:"4px 10px", borderRadius:7, fontSize:12, border:"1px solid", cursor:"pointer", fontFamily:"inherit",
                               background:recurInterval===d?"rgba(99,102,241,0.25)":"transparent",
-                              borderColor:recurInterval===d?"#6366f1":"#2d3252",
-                              color:recurInterval===d?"#818cf8":"#64748b" }}>{l}</button>
+                              borderColor:recurInterval===d?"#1da0d4":"#d7e2ee",
+                              color:recurInterval===d?"#1da0d4":"#55677a" }}>{l}</button>
                         ))}
                       </div>
                     </div>
                     {nLesson.date && (
-                      <div style={{ gridColumn:"1/-1", background:"rgba(99,102,241,0.08)", borderRadius:8, padding:"8px 12px", fontSize:11, color:"#818cf8" }}>
+                      <div style={{ gridColumn:"1/-1", background:"rgba(99,102,241,0.08)", borderRadius:8, padding:"8px 12px", fontSize:11, color:"#1da0d4" }}>
                         📅 Будет создано {recurCount} занятий каждые {recurInterval} дн. начиная с {nLesson.date}
                       </div>
                     )}
@@ -2588,21 +2588,21 @@ export default function App() {
           <div className="mo" onClick={e=>e.stopPropagation()}>
             <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>Записать оплату</h2>
             <div style={{ display:"grid", gap:14 }}>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Ученик *</div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Ученик *</div>
                 <select value={nPayment.studentId} onChange={e=>setNPayment({...nPayment,studentId:e.target.value})}>
                   <option value="">Выберите</option>
                   {students.map(s=><option key={s.id} value={s.id}>{s.name} (баланс: {s.balance}₽)</option>)}
                 </select>
               </div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Сумма (₽) *</div><input type="number" value={nPayment.amount} onChange={e=>setNPayment({...nPayment,amount:e.target.value})} /></div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Способ</div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Сумма (₽) *</div><input type="number" value={nPayment.amount} onChange={e=>setNPayment({...nPayment,amount:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Способ</div>
                 <select value={nPayment.method} onChange={e=>setNPayment({...nPayment,method:e.target.value})}>
                   <option value="card">💳 Карта</option>
                   <option value="cash">💵 Наличные</option>
                   <option value="transfer">📱 Перевод</option>
                 </select>
               </div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Комментарий</div><input value={nPayment.comment} onChange={e=>setNPayment({...nPayment,comment:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Комментарий</div><input value={nPayment.comment} onChange={e=>setNPayment({...nPayment,comment:e.target.value})} /></div>
               <div style={{ display:"flex", gap:10, marginTop:8 }}>
                 <button className="bp" style={{ flex:1 }} onClick={addPayment}>Записать</button>
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
@@ -2619,19 +2619,19 @@ export default function App() {
             {nSalary.tutorId && (()=>{ const t=tutors.find(x=>x.id===Number(nSalary.tutorId)); const d=t?tDebt(t.id):0; return t?(
               <div style={{ background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.2)", borderRadius:10, padding:"12px 14px", marginBottom:18, fontSize:13 }}>
                 <div style={{ fontWeight:600, marginBottom:2 }}>{t.short}</div>
-                <div style={{ color:"#f59e0b" }}>К выплате: <strong>{d.toLocaleString("ru")}₽</strong></div>
+                <div style={{ color:"#f5a623" }}>К выплате: <strong>{d.toLocaleString("ru")}₽</strong></div>
               </div>
             ):null; })()}
             <div style={{ display:"grid", gap:14 }}>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Преподаватель *</div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Преподаватель *</div>
                 <select value={nSalary.tutorId} onChange={e=>setNSalary({...nSalary,tutorId:e.target.value})}>
                   <option value="">Выберите</option>
                   {tutors.map(t=><option key={t.id} value={t.id}>{t.short} (к выплате: {tDebt(t.id)}₽)</option>)}
                 </select>
               </div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Сумма (₽) *</div><input type="number" value={nSalary.amount} onChange={e=>setNSalary({...nSalary,amount:e.target.value})} /></div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Месяц</div><input type="month" value={nSalary.month} onChange={e=>setNSalary({...nSalary,month:e.target.value})} /></div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Комментарий</div><input value={nSalary.comment} onChange={e=>setNSalary({...nSalary,comment:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Сумма (₽) *</div><input type="number" value={nSalary.amount} onChange={e=>setNSalary({...nSalary,amount:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Месяц</div><input type="month" value={nSalary.month} onChange={e=>setNSalary({...nSalary,month:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Комментарий</div><input value={nSalary.comment} onChange={e=>setNSalary({...nSalary,comment:e.target.value})} /></div>
               <div style={{ display:"flex", gap:10, marginTop:8 }}>
                 <button className="bp" style={{ flex:1 }} onClick={addSalary}>Выплатить</button>
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
@@ -2648,9 +2648,9 @@ export default function App() {
               {["Составить","Предпросмотр","Отправить"].map((s,i)=>(
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:8 }}>
                   <div style={{ width:24, height:24, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700,
-                    background:mStep>i+1?"#22c55e":mStep===i+1?"#6366f1":"#1e2433", color:mStep>=i+1?"white":"#475569" }}>{mStep>i+1?"✓":i+1}</div>
-                  <span style={{ fontSize:12, color:mStep===i+1?"#e2e8f0":"#475569", fontWeight:mStep===i+1?600:400 }}>{s}</span>
-                  {i<2 && <span style={{ color:"#2d3252", fontSize:16, marginLeft:4 }}>›</span>}
+                    background:mStep>i+1?"#5cb85c":mStep===i+1?"#1da0d4":"#dbe6f0", color:mStep>=i+1?"white":"#7a8a9c" }}>{mStep>i+1?"✓":i+1}</div>
+                  <span style={{ fontSize:12, color:mStep===i+1?"#22344a":"#7a8a9c", fontWeight:mStep===i+1?600:400 }}>{s}</span>
+                  {i<2 && <span style={{ color:"#d7e2ee", fontSize:16, marginLeft:4 }}>›</span>}
                 </div>
               ))}
             </div>
@@ -2658,41 +2658,41 @@ export default function App() {
               <div>
                 <h2 style={{ margin:"0 0 20px", fontSize:18, fontWeight:700 }}>Новая рассылка</h2>
                 <div style={{ display:"grid", gap:14 }}>
-                  <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Название</div><input value={mDraft.title} onChange={e=>setMDraft({...mDraft,title:e.target.value})} /></div>
+                  <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Название</div><input value={mDraft.title} onChange={e=>setMDraft({...mDraft,title:e.target.value})} /></div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                     <div>
-                      <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Канал</div>
+                      <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Канал</div>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                         {Object.entries(channelCfg).map(([k,v])=>(
                           <button key={k} onClick={()=>setMDraft({...mDraft,channel:k})}
                             style={{ padding:"7px", borderRadius:9, fontSize:11, border:"1px solid", cursor:"pointer",
                               background:mDraft.channel===k?`${v.color}22`:"transparent",
-                              borderColor:mDraft.channel===k?v.color:"#2d3252",
-                              color:mDraft.channel===k?v.color:"#64748b" }}>{v.icon} {v.label}</button>
+                              borderColor:mDraft.channel===k?v.color:"#d7e2ee",
+                              color:mDraft.channel===k?v.color:"#55677a" }}>{v.icon} {v.label}</button>
                         ))}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Аудитория</div>
+                      <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Аудитория</div>
                       <div style={{ display:"flex", flexDirection:"column", gap:5, maxHeight:210, overflowY:"auto" }}>
                         {Object.entries(audLabels).map(([k,v])=>(
                           <button key={k} onClick={()=>setMDraft({...mDraft,audience:k})}
                             style={{ padding:"6px 10px", borderRadius:8, fontSize:11, border:"1px solid", cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:6,
-                              background:mDraft.audience===k?"rgba(99,102,241,0.2)":"#1a1e2e",
-                              borderColor:mDraft.audience===k?"#6366f1":"#2d3252",
-                              color:mDraft.audience===k?"#818cf8":"#64748b" }}>
+                              background:mDraft.audience===k?"rgba(99,102,241,0.2)":"#f2f6fa",
+                              borderColor:mDraft.audience===k?"#1da0d4":"#d7e2ee",
+                              color:mDraft.audience===k?"#1da0d4":"#55677a" }}>
                             {audIcons[k]} <span style={{ flex:1 }}>{v}</span>
-                            <span style={{ background:"#2d3252", color:"#475569", borderRadius:10, padding:"1px 5px", fontSize:10, fontWeight:700 }}>{audMap[k]?.length||0}</span>
+                            <span style={{ background:"#d7e2ee", color:"#7a8a9c", borderRadius:10, padding:"1px 5px", fontSize:10, fontWeight:700 }}>{audMap[k]?.length||0}</span>
                           </button>
                         ))}
                       </div>
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Текст</div>
+                    <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Текст</div>
                     <textarea rows={4} value={mDraft.text} onChange={e=>setMDraft({...mDraft,text:e.target.value})} style={{ resize:"vertical", lineHeight:1.6 }} />
-                    <div style={{ fontSize:11, color:"#475569", marginTop:5 }}>
-                      Переменные: <span style={{ color:"#818cf8" }}>{"{{studentName}}"}</span> · <span style={{ color:"#818cf8" }}>{"{{parentName}}"}</span> · <span style={{ color:"#818cf8" }}>{"{{balance}}"}</span>
+                    <div style={{ fontSize:11, color:"#7a8a9c", marginTop:5 }}>
+                      Переменные: <span style={{ color:"#1da0d4" }}>{"{{studentName}}"}</span> · <span style={{ color:"#1da0d4" }}>{"{{parentName}}"}</span> · <span style={{ color:"#1da0d4" }}>{"{{balance}}"}</span>
                     </div>
                   </div>
                   <div style={{ display:"flex", gap:10 }}>
@@ -2705,17 +2705,17 @@ export default function App() {
             {mStep===2 && (
               <div>
                 <h2 style={{ margin:"0 0 6px", fontSize:18, fontWeight:700 }}>Предпросмотр</h2>
-                <div style={{ color:"#475569", fontSize:13, marginBottom:14 }}>{channelCfg[mDraft.channel]?.icon} {channelCfg[mDraft.channel]?.label} · {audMap[mDraft.audience]?.length||0} получателей</div>
+                <div style={{ color:"#7a8a9c", fontSize:13, marginBottom:14 }}>{channelCfg[mDraft.channel]?.icon} {channelCfg[mDraft.channel]?.label} · {audMap[mDraft.audience]?.length||0} получателей</div>
                 <div style={{ maxHeight:320, overflowY:"auto", display:"flex", flexDirection:"column", gap:8 }}>
                   {(audMap[mDraft.audience]||[]).length===0
-                    ? <div style={{ textAlign:"center", color:"#475569", padding:"30px 0" }}>Нет получателей</div>
+                    ? <div style={{ textAlign:"center", color:"#7a8a9c", padding:"30px 0" }}>Нет получателей</div>
                     : (audMap[mDraft.audience]||[]).map(s=>(
-                      <div key={s.id} style={{ background:"#1a1e2e", borderRadius:12, padding:12 }}>
+                      <div key={s.id} style={{ background:"#f2f6fa", borderRadius:12, padding:12 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                          <Av name={s.name} color="#6366f1" size={26} />
-                          <div style={{ fontSize:12, fontWeight:600 }}>{s.name} <span style={{ color:"#475569", fontWeight:400 }}>· {s.phone}</span></div>
+                          <Av name={s.name} color="#1da0d4" size={26} />
+                          <div style={{ fontSize:12, fontWeight:600 }}>{s.name} <span style={{ color:"#7a8a9c", fontWeight:400 }}>· {s.phone}</span></div>
                         </div>
-                        <div style={{ fontSize:12, color:"#94a3b8", background:"#161925", borderRadius:8, padding:"9px 12px", lineHeight:1.6 }}>{renderText(mDraft.text,s)}</div>
+                        <div style={{ fontSize:12, color:"#6d7f92", background:"#ffffff", borderRadius:8, padding:"9px 12px", lineHeight:1.6 }}>{renderText(mDraft.text,s)}</div>
                       </div>
                     ))
                   }
@@ -2730,8 +2730,8 @@ export default function App() {
               <div style={{ textAlign:"center", padding:"20px 0" }}>
                 <div style={{ fontSize:52, marginBottom:14 }}>🚀</div>
                 <h2 style={{ margin:"0 0 10px", fontSize:20, fontWeight:700 }}>Подтвердите отправку</h2>
-                <div style={{ color:"#64748b", fontSize:14, marginBottom:24 }}>
-                  Будет отправлено <span style={{ color:"#6366f1", fontWeight:700 }}>{audMap[mDraft.audience]?.length||0} сообщений</span> через {channelCfg[mDraft.channel]?.label}.
+                <div style={{ color:"#55677a", fontSize:14, marginBottom:24 }}>
+                  Будет отправлено <span style={{ color:"#1da0d4", fontWeight:700 }}>{audMap[mDraft.audience]?.length||0} сообщений</span> через {channelCfg[mDraft.channel]?.label}.
                 </div>
                 <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
                   <button className="bp" style={{ minWidth:160 }} onClick={sendMailing}>📤 Отправить</button>
@@ -2751,14 +2751,14 @@ export default function App() {
             <h2 style={{ margin:"0 0 20px", fontSize:20, fontWeight:700 }}>📩 Новый запрос от родителя</h2>
             <div style={{ display:"grid", gap:14 }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>ФИО родителя *</div><input placeholder="Иванова Мария" value={nRequest.parentName} onChange={e=>setNRequest({...nRequest,parentName:e.target.value})} /></div>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nRequest.phone} onChange={e=>setNRequest({...nRequest,phone:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО родителя *</div><input placeholder="Иванова Мария" value={nRequest.parentName} onChange={e=>setNRequest({...nRequest,parentName:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nRequest.phone} onChange={e=>setNRequest({...nRequest,phone:e.target.value})} /></div>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Имя ребёнка</div><input placeholder="Иванов Артём" value={nRequest.studentName} onChange={e=>setNRequest({...nRequest,studentName:e.target.value})} /></div>
-                <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Возраст</div><input type="number" placeholder="10" value={nRequest.age} onChange={e=>setNRequest({...nRequest,age:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Имя ребёнка</div><input placeholder="Иванов Артём" value={nRequest.studentName} onChange={e=>setNRequest({...nRequest,studentName:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Возраст</div><input type="number" placeholder="10" value={nRequest.age} onChange={e=>setNRequest({...nRequest,age:e.target.value})} /></div>
               </div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Интересующий курс</div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Интересующий курс</div>
                 <select value={nRequest.course} onChange={e=>setNRequest({...nRequest,course:e.target.value})}>
                   <option value="">Выберите курс</option>
                   {courseCategories.map(cat=>(
@@ -2768,10 +2768,10 @@ export default function App() {
                   ))}
                 </select>
               </div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Комментарий / пожелания</div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Комментарий / пожелания</div>
                 <textarea rows={3} placeholder="Опишите запрос родителя..." value={nRequest.comment} onChange={e=>setNRequest({...nRequest,comment:e.target.value})} />
               </div>
-              <div><div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>Статус</div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Статус</div>
                 <select value={nRequest.status} onChange={e=>setNRequest({...nRequest,status:e.target.value})}>
                   <option value="new">Новый</option>
                   <option value="contacted">Связались</option>
@@ -2794,7 +2794,7 @@ export default function App() {
         <div className="ov" onClick={()=>setImportModal(false)}>
           <div className="mo" style={{ width:640 }} onClick={e=>e.stopPropagation()}>
             <h2 style={{ margin:"0 0 6px", fontSize:20, fontWeight:700 }}>📥 Импорт из Excel</h2>
-            <div style={{ fontSize:13, color:"#475569", marginBottom:18 }}>Найдено <strong style={{ color:"#818cf8" }}>{importPreview.length}</strong> учеников в файле</div>
+            <div style={{ fontSize:13, color:"#7a8a9c", marginBottom:18 }}>Найдено <strong style={{ color:"#1da0d4" }}>{importPreview.length}</strong> учеников в файле</div>
 
             {/* mode toggle */}
             <div style={{ display:"flex", gap:8, marginBottom:16 }}>
@@ -2802,43 +2802,43 @@ export default function App() {
                 <button key={k} onClick={()=>setImportMode(k)}
                   style={{ padding:"7px 16px", borderRadius:9, fontSize:12, fontWeight:600, border:"1px solid", cursor:"pointer",
                     background:importMode===k?"rgba(99,102,241,0.2)":"transparent",
-                    borderColor:importMode===k?"#6366f1":"#2d3252",
-                    color:importMode===k?"#818cf8":"#64748b" }}>{l}</button>
+                    borderColor:importMode===k?"#1da0d4":"#d7e2ee",
+                    color:importMode===k?"#1da0d4":"#55677a" }}>{l}</button>
               ))}
             </div>
             {importMode==="replace" && (
-              <div style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#ef4444", marginBottom:14 }}>
+              <div style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#e2574c", marginBottom:14 }}>
                 ⚠️ Все текущие данные учеников будут удалены и заменены импортированными!
               </div>
             )}
 
             {/* preview table */}
-            <div style={{ maxHeight:320, overflowY:"auto", background:"#1a1e2e", borderRadius:12, marginBottom:16 }}>
+            <div style={{ maxHeight:320, overflowY:"auto", background:"#f2f6fa", borderRadius:12, marginBottom:16 }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                 <thead>
-                  <tr style={{ borderBottom:"1px solid #2d3252" }}>
+                  <tr style={{ borderBottom:"1px solid #d7e2ee" }}>
                     {["ФИО","Телефон","Родитель","Школа","Предметы","Статус","Баланс"].map(h=>(
-                      <th key={h} style={{ padding:"10px 12px", textAlign:"left", color:"#475569", fontWeight:600, fontSize:11, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
+                      <th key={h} style={{ padding:"10px 12px", textAlign:"left", color:"#7a8a9c", fontWeight:600, fontSize:11, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {importPreview.map((s,i)=>(
                     <tr key={i} style={{ borderBottom:"1px solid #2a2e42" }}>
-                      <td style={{ padding:"9px 12px", fontWeight:600, color:"#e2e8f0" }}>{s.name}</td>
-                      <td style={{ padding:"9px 12px", color:"#94a3b8" }}>{s.phone||"—"}</td>
-                      <td style={{ padding:"9px 12px", color:"#94a3b8" }}>{s.parentName||"—"}</td>
-                      <td style={{ padding:"9px 12px", color:"#94a3b8" }}>{s.school||"—"}</td>
-                      <td style={{ padding:"9px 12px" }}>{s.subjects.slice(0,2).map(sub=><Tag key={sub} c="#818cf8" bg="rgba(99,102,241,0.12)">{sub}</Tag>)}</td>
-                      <td style={{ padding:"9px 12px" }}><Tag c={statusCfg[s.status]?.color||"#94a3b8"} bg={statusCfg[s.status]?.bg||"rgba(148,163,184,0.1)"}>{statusCfg[s.status]?.label||s.status}</Tag></td>
-                      <td style={{ padding:"9px 12px", color:s.balance>=0?"#22c55e":"#ef4444", fontWeight:600 }}>{s.balance}₽</td>
+                      <td style={{ padding:"9px 12px", fontWeight:600, color:"#22344a" }}>{s.name}</td>
+                      <td style={{ padding:"9px 12px", color:"#6d7f92" }}>{s.phone||"—"}</td>
+                      <td style={{ padding:"9px 12px", color:"#6d7f92" }}>{s.parentName||"—"}</td>
+                      <td style={{ padding:"9px 12px", color:"#6d7f92" }}>{s.school||"—"}</td>
+                      <td style={{ padding:"9px 12px" }}>{s.subjects.slice(0,2).map(sub=><Tag key={sub} c="#1da0d4" bg="rgba(99,102,241,0.12)">{sub}</Tag>)}</td>
+                      <td style={{ padding:"9px 12px" }}><Tag c={statusCfg[s.status]?.color||"#6d7f92"} bg={statusCfg[s.status]?.bg||"rgba(148,163,184,0.1)"}>{statusCfg[s.status]?.label||s.status}</Tag></td>
+                      <td style={{ padding:"9px 12px", color:s.balance>=0?"#5cb85c":"#e2574c", fontWeight:600 }}>{s.balance}₽</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            <div style={{ fontSize:12, color:"#475569", marginBottom:16 }}>
+            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:16 }}>
               💡 Система автоматически распознаёт колонки. Убедитесь что данные выглядят правильно перед импортом.
             </div>
             <div style={{ display:"flex", gap:10 }}>
@@ -2850,7 +2850,7 @@ export default function App() {
       )}
 
       {notif && (
-        <div className="notif" style={{ background:notif.type==="success"?"rgba(34,197,94,0.15)":"rgba(239,68,68,0.15)", border:`1px solid ${notif.type==="success"?"#22c55e":"#ef4444"}`, color:notif.type==="success"?"#22c55e":"#ef4444" }}>
+        <div className="notif" style={{ background:notif.type==="success"?"rgba(34,197,94,0.15)":"rgba(239,68,68,0.15)", border:`1px solid ${notif.type==="success"?"#5cb85c":"#e2574c"}`, color:notif.type==="success"?"#5cb85c":"#e2574c" }}>
           {notif.type==="success"?"✓":"✗"} {notif.msg}
         </div>
       )}
