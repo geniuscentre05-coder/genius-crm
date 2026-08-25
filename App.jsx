@@ -793,6 +793,49 @@ export default function App() {
   const selStudentLive = selStudent ? (students.find(x=>x.id===selStudent.id) || selStudent) : null;
   const totalSalPaid = salaries.reduce((s,p)=>s+p.amount,0);
 
+  // ── Simple app-wide password gate ──
+  // NOTE: this is a basic deterrent, not real security — the password lives in front-end
+  // code and is verified in the browser. Anyone with technical knowledge could bypass it.
+  // It stops casual link-sharing access, not a determined attacker.
+  const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "";
+  const [unlocked, setUnlocked] = useState(() => {
+    if (!APP_PASSWORD) return true;
+    try { return sessionStorage.getItem("genius_crm_unlocked") === "1"; } catch(e) { return false; }
+  });
+  const [pwInput, setPwInput] = useState("");
+  const [pwError, setPwError] = useState(false);
+
+  if (APP_PASSWORD && !unlocked) {
+    return (
+      <div style={{ fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif", background:"linear-gradient(135deg,#1da0d4,#5cb85c)", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ background:"#ffffff", borderRadius:20, padding:36, width:340, boxShadow:"0 24px 48px rgba(18,40,61,.25)", textAlign:"center" }}>
+          <img src="/logo.jpg" alt="Гений" style={{ width:64, height:64, borderRadius:"50%", margin:"0 auto 16px" }} />
+          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:22, color:"#12283d", marginBottom:4 }}>Гений CRM</div>
+          <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:20 }}>Введите пароль для доступа</div>
+          <input
+            type="password"
+            autoFocus
+            placeholder="Пароль"
+            value={pwInput}
+            onChange={e=>{ setPwInput(e.target.value); setPwError(false); }}
+            onKeyDown={e=>{
+              if (e.key==="Enter") {
+                if (pwInput===APP_PASSWORD) { try{sessionStorage.setItem("genius_crm_unlocked","1");}catch(e){} setUnlocked(true); }
+                else setPwError(true);
+              }
+            }}
+            style={{ marginBottom:pwError?6:16, borderColor:pwError?"#e2574c":undefined }}
+          />
+          {pwError && <div style={{ color:"#e2574c", fontSize:12, marginBottom:14 }}>Неверный пароль</div>}
+          <button className="bp" style={{ width:"100%" }} onClick={()=>{
+            if (pwInput===APP_PASSWORD) { try{sessionStorage.setItem("genius_crm_unlocked","1");}catch(e){} setUnlocked(true); }
+            else setPwError(true);
+          }}>Войти</button>
+        </div>
+      </div>
+    );
+  }
+
   if (cloudLoading) {
     return (
       <div style={{ fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif", background:"#eef3f8", minHeight:"100vh", color:"#22344a", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -874,14 +917,14 @@ export default function App() {
           <div>
             <div style={{ marginBottom:28 }}>
               <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:28, fontWeight:800, color:"#12283d", margin:0 }}>Дашборд</h1>
-              <div style={{ color:"#7a8a9c", fontSize:14, marginTop:4 }}>Понедельник, 9 марта 2026</div>
+              <div style={{ color:"#7a8a9c", fontSize:14, marginTop:4 }}>{new Date().toLocaleDateString("ru-RU", { weekday:"long", day:"numeric", month:"long", year:"numeric" })}</div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:28 }}>
               {[
                 { label:"Активных учеников", value:students.filter(s=>s.status==="active").length, icon:Users, color:"#1da0d4" },
                 { label:"Преподавателей",    value:tutors.filter(t=>t.status==="active").length,   icon:GraduationCap, color:"#5cb85c" },
                 { label:"Занятий впереди",   value:lessons.filter(l=>l.status==="scheduled").length,icon:Calendar,color:"#f5a623" },
-                { label:"Выручка в марте",   value:`${(totalRevenue/1000).toFixed(1)}к`,           icon:Wallet, color:"#d6539a" },
+                { label:`Выручка в ${new Date().toLocaleDateString("ru-RU",{month:"long"})}`, value:`${(payments.filter(p=>p.date.slice(0,7)===new Date().toISOString().slice(0,7)).reduce((s,p)=>s+p.amount,0)/1000).toFixed(1)}к`, icon:Wallet, color:"#d6539a" },
               ].map((s,i)=>(
                 <div key={i} className="card" style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, padding:20 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
@@ -934,6 +977,59 @@ export default function App() {
                 {tutors.every(t=>tDebt(t.id)<=0) && <div style={{ color:"#7a8a9c", fontSize:13, textAlign:"center", padding:"20px 0" }}>🎉 Все выплаты сделаны!</div>}
               </div>
             </div>
+
+            {/* ── MINI CALENDAR ── */}
+            {(() => {
+              const now = new Date();
+              const [calMonth, calYear] = [now.getMonth(), now.getFullYear()];
+              const firstDay = new Date(calYear, calMonth, 1);
+              const startOffset = (firstDay.getDay() + 6) % 7; // Monday-first
+              const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+              const fmtD = d => d.toISOString().split("T")[0];
+              const lessonsByDay = {};
+              lessons.forEach(l => {
+                if (l.status==="cancelled") return;
+                const d = new Date(l.date);
+                if (d.getMonth()===calMonth && d.getFullYear()===calYear) {
+                  lessonsByDay[d.getDate()] = (lessonsByDay[d.getDate()]||0)+1;
+                }
+              });
+              const cells = [];
+              for (let i=0;i<startOffset;i++) cells.push(null);
+              for (let d=1; d<=daysInMonth; d++) cells.push(d);
+              const todayNum = now.getDate();
+              return (
+                <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, padding:22, marginTop:20 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                    <h3 style={{ margin:0, fontSize:15, fontWeight:600, display:"flex", alignItems:"center", gap:8 }}>
+                      <Calendar size={16} color="#1da0d4" /> {now.toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}
+                    </h3>
+                    <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>goView("schedule")}>Открыть расписание</button>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4, marginBottom:6 }}>
+                    {["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map(d=>(
+                      <div key={d} style={{ textAlign:"center", fontSize:11, color:"#7a8a9c", fontWeight:600, padding:"4px 0" }}>{d}</div>
+                    ))}
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
+                    {cells.map((d,i)=>{
+                      if (d===null) return <div key={i} />;
+                      const isToday = d===todayNum;
+                      const count = lessonsByDay[d]||0;
+                      return (
+                        <div key={i} onClick={()=>goView("schedule")}
+                          style={{ aspectRatio:"1", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer",
+                            background:isToday?"linear-gradient(135deg,#1da0d4,#5cb85c)":count>0?"rgba(29,160,212,0.08)":"transparent",
+                            color:isToday?"#ffffff":"#22344a", fontWeight:isToday?700:500, fontSize:13, transition:"background .15s" }}>
+                          {d}
+                          {count>0 && <div style={{ width:4, height:4, borderRadius:"50%", background:isToday?"#ffffff":"#1da0d4", marginTop:2 }} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -1388,7 +1484,7 @@ export default function App() {
           const DAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
           const HOURS = Array.from({length:13},(_,i)=>i+8);
 
-          const today = new Date("2026-03-09");
+          const today = new Date();
           const todayDay = today.getDay() === 0 ? 6 : today.getDay()-1;
           const weekStart = new Date(today);
           weekStart.setDate(today.getDate() - todayDay + weekOffset*7);
