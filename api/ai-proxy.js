@@ -1,13 +1,13 @@
 // api/ai-proxy.js
-// Vercel serverless function (формат отличается от Netlify: тут используется
-// module.exports = async (req, res) => {...}, а не exports.handler).
+// Vercel serverless function — ES module format (package.json has "type": "module",
+// so this file MUST use export default, not module.exports, or it fails to load).
 //
 // Ключ берётся из переменной окружения DEEPSEEK_API_KEY, которую нужно
-// задать в Vercel: Project Settings → Environment Variables.
+// задать в Vercel: Project Settings → Environments → Production → Environment Variables.
 
 const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -57,4 +57,4 @@ module.exports = async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: "Не удалось связаться с DeepSeek API", details: err.message });
   }
-};
+}
