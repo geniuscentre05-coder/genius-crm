@@ -434,7 +434,39 @@ export default function App() {
     if (m < 0 || (m === 0 && now.getDate() < b.getDate())) a--;
     return a;
   }
+
+  // ── Edit existing student ──
+  const [editingStudentId, setEditingStudentId] = useState(null);
+  const [nStudentEdit, setNStudentEdit] = useState(null);
+  function startEditStudent(s) {
+    setNStudentEdit({
+      name: s.name, birthDate: s.birthDate||"", school: s.school||"", grade: s.grade||"",
+      phone: s.phone||"", extraPhones: s.extraPhones||[], parentName: s.parentName||"", parentPhone: s.parentPhone||"",
+      address: s.address||"", notes: s.notes||"", tuitionNote: s.tuitionNote||"", status: s.status,
+      subjectTeachers: s.subjectTeachers?.length ? s.subjectTeachers : (s.subjects||[]).map(sub=>({subject:sub,tutorId:""})),
+    });
+    setEditingStudentId(s.id);
+    setModal("editStudent");
+  }
+  function saveEditStudent() {
+    if (!nStudentEdit.name) return;
+    setStudents(students.map(s => s.id===editingStudentId ? {
+      ...s,
+      name: nStudentEdit.name, birthDate: nStudentEdit.birthDate,
+      age: calcAge(nStudentEdit.birthDate) ?? s.age,
+      school: nStudentEdit.school, grade: nStudentEdit.grade,
+      phone: nStudentEdit.phone, extraPhones: nStudentEdit.extraPhones.filter(Boolean),
+      parentName: nStudentEdit.parentName, parentPhone: nStudentEdit.parentPhone,
+      address: nStudentEdit.address, notes: nStudentEdit.notes, tuitionNote: nStudentEdit.tuitionNote,
+      status: nStudentEdit.status,
+      subjectTeachers: nStudentEdit.subjectTeachers.filter(st=>st.subject),
+      subjects: nStudentEdit.subjectTeachers.filter(st=>st.subject).map(st=>st.subject),
+    } : s));
+    setModal(null); setEditingStudentId(null); setNStudentEdit(null);
+    notify("Данные ученика обновлены");
+  }
   const [nTutor,    setNTutor]    = useState({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+  const [editingTutorId, setEditingTutorId] = useState(null);
   const [nLesson,   setNLesson]   = useState({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
   const [lessonType,  setLessonType]  = useState("individual"); // individual | group
   const [groupStudents, setGroupStudents] = useState([]); // [{studentId, price}]
@@ -560,8 +592,9 @@ export default function App() {
     if (importMode === "replace") {
       setStudents(importPreview);
     } else {
-      const existingNames = students.map(s=>s.name.toLowerCase());
-      const newOnes = importPreview.filter(s=>!existingNames.includes(s.name.toLowerCase()));
+      const normalize = n => n.toLowerCase().trim().replace(/\s+/g," ").replace(/[.,]/g,"");
+      const existingNames = students.map(s=>normalize(s.name));
+      const newOnes = importPreview.filter(s=>!existingNames.includes(normalize(s.name)));
       setStudents([...students, ...newOnes]);
       notify(`Добавлено ${newOnes.length} учеников, пропущено ${importPreview.length-newOnes.length} дублей`);
     }
@@ -629,11 +662,23 @@ export default function App() {
     if (!nTutor.name || !nTutor.phone) return;
     const parts = nTutor.name.trim().split(" ");
     const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
+    if (editingTutorId) {
+      setTutors(tutors.map(t => t.id===editingTutorId ? { ...t, ...nTutor, short, rateValue:Number(nTutor.rateValue) } : t));
+      setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+      setEditingTutorId(null);
+      setModal(null); notify("Данные преподавателя обновлены");
+      return;
+    }
     const newTutor = { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue), files:[] };
     setTutors([...tutors, newTutor]);
     setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
     setModal(null); notify("Преподаватель добавлен — прикрепите документы в его карточке");
     setView("tutors"); setSelStudent(null); setTTab("overview"); setSelTutor(newTutor);
+  };
+  const startEditTutor = (t) => {
+    setNTutor({ name:t.name, phone:t.phone, address:t.address||"", notes:t.notes||"", subjects:t.subjects||[], rateType:t.rateType, rateValue:t.rateValue, status:t.status, color:t.color });
+    setEditingTutorId(t.id);
+    setModal("addTutor");
   };
   const addLesson = () => {
     if (!nLesson.studentId || !nLesson.subject || !nLesson.date || !nLesson.tutorId) return;
@@ -899,6 +944,7 @@ export default function App() {
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                     <button className="bp" onClick={()=>{ setNSalary({...nSalary,tutorId:String(t.id)}); setModal("addSalary"); }}>💰 Выплатить зарплату</button>
                     <button className="bg" onClick={()=>printSchedule(myL, tutors, students, `Преподаватель: ${t.short}`)}>🖨️ Расписание преподавателя</button>
+                    <button className="bg" onClick={()=>startEditTutor(t)}>✏️ Редактировать</button>
                   </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
@@ -1176,6 +1222,7 @@ export default function App() {
                     <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"flex-end" }}>
                       <Tag c={statusCfg[selStudentLive.status]?.color} bg={statusCfg[selStudentLive.status]?.bg}>{statusCfg[selStudentLive.status]?.label}</Tag>
                       <button className="bg" onClick={()=>printSchedule(lessons.filter(l=>l.studentId===selStudentLive.id), tutors, students, `Ученик: ${selStudentLive.name}`)}>🖨️ Расписание ученика</button>
+                      <button className="bg" onClick={()=>startEditStudent(selStudentLive)}>✏️ Редактировать</button>
                     </div>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
@@ -2438,9 +2485,9 @@ export default function App() {
       {/* ══ MODALS ══ */}
 
       {modal==="addTutor" && (
-        <div className="ov" onClick={()=>setModal(null)}>
+        <div className="ov" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" }); }}>
           <div className="mo" onClick={e=>e.stopPropagation()}>
-            <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>Новый преподаватель</h2>
+            <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>{editingTutorId ? "Редактирование преподавателя" : "Новый преподаватель"}</h2>
             <div style={{ display:"grid", gap:14 }}>
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО *</div><input placeholder="Иванова Наталья Владимировна" value={nTutor.name} onChange={e=>setNTutor({...nTutor,name:e.target.value})} /></div>
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nTutor.phone} onChange={e=>setNTutor({...nTutor,phone:e.target.value})} /></div>
@@ -2488,8 +2535,8 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display:"flex", gap:10, marginTop:8 }}>
-                <button className="bp" style={{ flex:1 }} onClick={addTutor}>Добавить</button>
-                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+                <button className="bp" style={{ flex:1 }} onClick={addTutor}>{editingTutorId ? "Сохранить" : "Добавить"}</button>
+                <button className="bg" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" }); }}>Отмена</button>
               </div>
             </div>
           </div>
@@ -2588,6 +2635,81 @@ export default function App() {
         </div>
       )}
 
+      {modal==="editStudent" && nStudentEdit && (
+        <div className="ov" onClick={()=>{ setModal(null); setEditingStudentId(null); setNStudentEdit(null); }}>
+          <div className="mo" style={{ width:560, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 18px", fontSize:20, fontWeight:700 }}>Редактирование ученика</h2>
+            <div style={{ display:"grid", gap:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <input placeholder="ФИО *" value={nStudentEdit.name} onChange={e=>setNStudentEdit({...nStudentEdit,name:e.target.value})} />
+                <div>
+                  <input type="date" value={nStudentEdit.birthDate} onChange={e=>setNStudentEdit({...nStudentEdit,birthDate:e.target.value})} />
+                  {nStudentEdit.birthDate && <div style={{ fontSize:11, color:"#7a8a9c", marginTop:4 }}>Возраст: {calcAge(nStudentEdit.birthDate)} лет</div>}
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <input placeholder="🏫 Школа" value={nStudentEdit.school} onChange={e=>setNStudentEdit({...nStudentEdit,school:e.target.value})} />
+                <input placeholder="Класс" value={nStudentEdit.grade} onChange={e=>setNStudentEdit({...nStudentEdit,grade:e.target.value})} />
+              </div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО родителя</div><input value={nStudentEdit.parentName} onChange={e=>setNStudentEdit({...nStudentEdit,parentName:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input value={nStudentEdit.phone} onChange={e=>setNStudentEdit({...nStudentEdit,phone:e.target.value})} /></div>
+              {nStudentEdit.extraPhones.map((p,i)=>(
+                <div key={i} style={{ display:"flex", gap:8 }}>
+                  <input placeholder="Дополнительный телефон" value={p} onChange={e=>{ const arr=[...nStudentEdit.extraPhones]; arr[i]=e.target.value; setNStudentEdit({...nStudentEdit,extraPhones:arr}); }} />
+                  <button onClick={()=>setNStudentEdit({...nStudentEdit,extraPhones:nStudentEdit.extraPhones.filter((_,j)=>j!==i)})} style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>✗</button>
+                </div>
+              ))}
+              <button className="bg" style={{ width:"fit-content", fontSize:12 }} onClick={()=>setNStudentEdit({...nStudentEdit,extraPhones:[...nStudentEdit.extraPhones,""]})}>+ Ещё телефон</button>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>📍 Адрес</div><input value={nStudentEdit.address} onChange={e=>setNStudentEdit({...nStudentEdit,address:e.target.value})} /></div>
+
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы и педагоги</div>
+                {nStudentEdit.subjectTeachers.map((st,si)=>(
+                  <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
+                    <select value={st.subject} onChange={e=>{ const arr=[...nStudentEdit.subjectTeachers]; arr[si]={...arr[si],subject:e.target.value}; setNStudentEdit({...nStudentEdit,subjectTeachers:arr}); }}>
+                      <option value="">Предмет...</option>
+                      {courseCategories.map(cat=>(
+                        <optgroup key={cat.id} label={cat.label}>
+                          {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <select value={st.tutorId} onChange={e=>{ const arr=[...nStudentEdit.subjectTeachers]; arr[si]={...arr[si],tutorId:e.target.value}; setNStudentEdit({...nStudentEdit,subjectTeachers:arr}); }}>
+                      <option value="">Педагог...</option>
+                      {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                    </select>
+                    {nStudentEdit.subjectTeachers.length>1 && (
+                      <button onClick={()=>setNStudentEdit({...nStudentEdit,subjectTeachers:nStudentEdit.subjectTeachers.filter((_,j)=>j!==si)})}
+                        style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", borderRadius:6, padding:"4px 8px", cursor:"pointer", flexShrink:0 }}>✗</button>
+                    )}
+                  </div>
+                ))}
+                <button className="bg" style={{ fontSize:11 }} onClick={()=>setNStudentEdit({...nStudentEdit,subjectTeachers:[...nStudentEdit.subjectTeachers,{subject:"",tutorId:""}]})}>+ Ещё предмет</button>
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Статус</div>
+                  <select value={nStudentEdit.status} onChange={e=>setNStudentEdit({...nStudentEdit,status:e.target.value})}>
+                    {Object.entries(statusCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Условия оплаты</div>
+                  <input placeholder="напр. 5000₽/мес" value={nStudentEdit.tuitionNote} onChange={e=>setNStudentEdit({...nStudentEdit,tuitionNote:e.target.value})} />
+                </div>
+              </div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Примечания</div><textarea rows={2} value={nStudentEdit.notes} onChange={e=>setNStudentEdit({...nStudentEdit,notes:e.target.value})} /></div>
+
+              <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                <button className="bp" style={{ flex:1 }} onClick={saveEditStudent}>Сохранить</button>
+                <button className="bg" onClick={()=>{ setModal(null); setEditingStudentId(null); setNStudentEdit(null); }}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modal==="addLesson" && (
         <div className="ov" onClick={()=>{ setModal(null); setRecurModal(false); setLessonType("individual"); setGroupStudents([]); setGroupName(""); }}>
           <div className="mo" style={{ width:580, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
@@ -2673,7 +2795,30 @@ export default function App() {
                 </div>
               </div>
 
-              {/* ── INDIVIDUAL: one student ── */}
+              {/* ── CONFLICT WARNING ── */}
+              {(() => {
+                if (!nLesson.tutorId || !nLesson.date || !nLesson.time) return null;
+                const [h, m] = nLesson.time.split(":").map(Number);
+                const startMin = h*60+m;
+                const endMin = startMin + Number(nLesson.duration||60);
+                const conflicts = lessons.filter(l => {
+                  if (l.tutorId !== Number(nLesson.tutorId)) return false;
+                  if (l.date !== nLesson.date) return false;
+                  if (l.status === "cancelled") return false;
+                  if (!l.time) return false;
+                  const [lh, lm] = l.time.split(":").map(Number);
+                  const lStart = lh*60+lm;
+                  const lEnd = lStart + Number(l.duration||60);
+                  return startMin < lEnd && endMin > lStart;
+                });
+                if (conflicts.length===0) return null;
+                return (
+                  <div style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.3)", borderRadius:10, padding:"10px 14px", fontSize:12, color:"#e2574c" }}>
+                    ⚠️ У этого преподавателя уже есть занятие в это время: {conflicts.map(c=>`${c.time} — ${c.studentName||c.groupName}`).join(", ")}. Проверьте, не пересекается ли расписание.
+                  </div>
+                );
+              })()}
+
               {lessonType==="individual" && (
                 <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Ученик *</div>
                   <select value={nLesson.studentId} onChange={e=>setNLesson({...nLesson,studentId:e.target.value})}>
