@@ -879,11 +879,18 @@ export default function App() {
 
       {/* SIDEBAR */}
       <div style={{ width:300, background:"linear-gradient(180deg, #1da0d4 0%, #17a6c9 45%, #5cb85c 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
-        <div style={{ padding:"0 16px 28px", display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:10 }}>
-          <img src="/logo.jpg" alt="Гений" style={{ width:110, height:110, borderRadius:"50%", boxShadow:"0 4px 14px rgba(18,40,61,.3)", flexShrink:0 }} />
+        <div style={{ padding:"0 16px 30px", display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:12 }}>
+          <div style={{ position:"relative", width:140, height:140, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            {/* Decorative geometric accents around the logo, echoing the brand's diamond/circle motif */}
+            <div style={{ position:"absolute", width:20, height:20, background:"#f5a623", borderRadius:5, transform:"rotate(45deg)", top:-2, left:14, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
+            <div style={{ position:"absolute", width:16, height:16, background:"#ffffff", borderRadius:"50%", bottom:2, left:-4, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
+            <div style={{ position:"absolute", width:22, height:22, background:"#5cb85c", borderRadius:6, transform:"rotate(45deg)", bottom:-4, right:10, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
+            <div style={{ position:"absolute", inset:0, borderRadius:"50%", border:"3px solid rgba(255,255,255,0.35)" }} />
+            <img src="/logo.jpg" alt="Гений" style={{ width:126, height:126, borderRadius:"50%", boxShadow:"0 6px 20px rgba(18,40,61,.35)", flexShrink:0, position:"relative", zIndex:1 }} />
+          </div>
           <div>
-            <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:32, fontWeight:400, color:"#ffffff", lineHeight:1.15 }}>Гений</div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.9)", marginTop:4, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>Образовательный центр</div>
+            <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:34, fontWeight:400, color:"#ffffff", lineHeight:1.15 }}>Гений</div>
+            <div style={{ fontSize:13, color:"rgba(255,255,255,0.9)", marginTop:5, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>Образовательный центр</div>
           </div>
         </div>
         {nav.map(n=>(
@@ -1493,7 +1500,7 @@ export default function App() {
         {/* ── SCHEDULE ── */}
         {view==="schedule" && (()=>{
           const DAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
-          const SLOTS = Array.from({length:26},(_,i)=>{ const h=8+Math.floor(i/2); const m=i%2===0?"00":"30"; return `${String(h).padStart(2,"0")}:${m}`; });
+          const SLOTS = Array.from({length:29},(_,i)=>{ const h=8+Math.floor(i/2); const m=i%2===0?"00":"30"; return `${String(h).padStart(2,"0")}:${m}`; });
 
           const today = new Date();
           const todayDay = today.getDay() === 0 ? 6 : today.getDay()-1;
@@ -1555,13 +1562,13 @@ export default function App() {
                     <button className="bg" style={{ padding:"5px 12px" }} onClick={()=>setWeekOffset(w=>w+1)}>›</button>
                   </div>
                   <div style={{ display:"flex", gap:4, background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:10, padding:4 }}>
-                    {[["week","📅 Неделя"],["tutors","👥 По педагогам"],["list","☰ Список"]].map(([k,l])=>(
+                    {[["week",Calendar,"Неделя"],["tutors",Users,"По педагогам"],["list",BookOpen,"Список"]].map(([k,Ic,l])=>(
                       <button key={k} className="stab" onClick={()=>setSchedView(k)}
-                        style={{ background:schedView===k?"rgba(99,102,241,0.25)":"transparent", color:schedView===k?"#1da0d4":"#55677a" }}>{l}</button>
+                        style={{ background:schedView===k?"rgba(29,160,212,0.15)":"transparent", color:schedView===k?"#1da0d4":"#55677a", display:"flex", alignItems:"center", gap:6, fontSize:14 }}><Ic size={15} />{l}</button>
                     ))}
                   </div>
-                  <button className="bp" onClick={()=>setModal("addLesson")}>+ Добавить занятие</button>
-                  <button className="bg" onClick={()=>printSchedule(allLessonsFiltered, tutors, students, `${fmtLabel(weekDates[0])} — ${fmtLabel(weekDates[6])}`)}>🖨️ Печать</button>
+                  <button className="bp" onClick={()=>setModal("addLesson")} style={{ fontSize:14, display:"flex", alignItems:"center", gap:6 }}><Plus size={15} /> Добавить занятие</button>
+                  <button className="bg" style={{ fontSize:14 }} onClick={()=>printSchedule(allLessonsFiltered, tutors, students, `${fmtLabel(weekDates[0])} — ${fmtLabel(weekDates[6])}`)}><Printer size={14} /> Печать</button>
                 </div>
               </div>
 
@@ -1583,56 +1590,59 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Edit panel */}
+              {/* Edit lesson — popup modal */}
               {editLesson && (
-                <div style={{ background:"#ffffff", border:"1px solid #1da0d4", borderRadius:14, padding:20, marginBottom:20 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-                    <div style={{ fontSize:15, fontWeight:700 }}>✏️ Редактирование занятия</div>
-                    <div style={{ display:"flex", gap:8 }}>
-                      <button className="bp" style={{ padding:"6px 16px", fontSize:13 }} onClick={saveEdit}>Сохранить</button>
-                      <button style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", color:"#e2574c", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit" }} onClick={()=>deleteLesson(editLesson.id)}>🗑 Удалить</button>
+                <div className="ov" onClick={()=>setEditLesson(null)}>
+                  <div className="mo" style={{ width:640 }} onClick={e=>e.stopPropagation()}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+                      <div style={{ fontSize:19, fontWeight:700, color:"#12283d", display:"flex", alignItems:"center", gap:8 }}><Pencil size={18} color="#1da0d4" /> Редактирование занятия</div>
+                      <button onClick={()=>setEditLesson(null)} style={{ background:"transparent", border:"none", cursor:"pointer", color:"#7a8a9c", display:"flex" }}><X size={20} /></button>
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+                      <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Ученик</div>
+                        <select value={editLesson.studentId} onChange={e=>{ const s=students.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,studentId:Number(e.target.value),studentName:s?.name||""}); }}>
+                          {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </div>
+                      <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Преподаватель</div>
+                        <select value={editLesson.tutorId} onChange={e=>{ const t=tutors.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,tutorId:Number(e.target.value),tutorShort:t?.short||""}); }}>
+                          {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ gridColumn:"1/-1" }}><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Предмет</div>
+                        <select value={editLesson.subject} onChange={e=>setEditLesson({...editLesson,subject:e.target.value})}>
+                          {courseCategories.map(cat=>(
+                            <optgroup key={cat.id} label={cat.label}>
+                              {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </div>
+                      <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Статус</div>
+                        <select value={editLesson.status} onChange={e=>setEditLesson({...editLesson,status:e.target.value})}>
+                          {Object.entries(lsnCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                        </select>
+                      </div>
+                      <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Дата</div>
+                        <input type="date" value={editLesson.date} onChange={e=>setEditLesson({...editLesson,date:e.target.value})} />
+                      </div>
+                      <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Время</div>
+                        <input type="time" value={editLesson.time} onChange={e=>setEditLesson({...editLesson,time:e.target.value})} />
+                      </div>
+                      <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Длительность (мин)</div>
+                        <input type="number" value={editLesson.duration} onChange={e=>setEditLesson({...editLesson,duration:Number(e.target.value)})} />
+                      </div>
+                      <div style={{ gridColumn:"1/-1" }}><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Стоимость (₽)</div>
+                        <input type="number" value={editLesson.price} onChange={e=>setEditLesson({...editLesson,price:Number(e.target.value)})} />
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", gap:10, marginTop:20, flexWrap:"wrap" }}>
+                      <button className="bp" style={{ flex:1 }} onClick={saveEdit}>Сохранить</button>
+                      <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"10px 18px", borderRadius:10, cursor:"pointer", fontSize:14, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }} onClick={()=>deleteLesson(editLesson.id)}><Trash2 size={15} /> Удалить</button>
                       {editLesson.isGroup && editLesson.groupId && (
-                        <button style={{ background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.4)", color:"#e2574c", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", fontWeight:700 }} onClick={()=>deleteGroup(editLesson.groupId)}>🗑 Удалить всю группу</button>
+                        <button style={{ background:"rgba(226,87,76,0.15)", border:"1px solid rgba(226,87,76,0.4)", color:"#e2574c", padding:"10px 18px", borderRadius:10, cursor:"pointer", fontSize:14, fontFamily:"inherit", fontWeight:700, display:"flex", alignItems:"center", gap:6 }} onClick={()=>deleteGroup(editLesson.groupId)}><Trash2 size={15} /> Удалить группу</button>
                       )}
-                      <button className="bg" style={{ padding:"6px 14px", fontSize:13 }} onClick={()=>setEditLesson(null)}>Отмена</button>
-                    </div>
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
-                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Ученик</div>
-                      <select value={editLesson.studentId} onChange={e=>{ const s=students.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,studentId:Number(e.target.value),studentName:s?.name||""}); }}>
-                        {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                    </div>
-                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Преподаватель</div>
-                      <select value={editLesson.tutorId} onChange={e=>{ const t=tutors.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,tutorId:Number(e.target.value),tutorShort:t?.short||""}); }}>
-                        {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
-                      </select>
-                    </div>
-                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Предмет</div>
-                      <select value={editLesson.subject} onChange={e=>setEditLesson({...editLesson,subject:e.target.value})}>
-                        {courseCategories.map(cat=>(
-                    <optgroup key={cat.id} label={cat.label}>
-                      {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
-                    </optgroup>
-                  ))}
-                      </select>
-                    </div>
-                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Статус</div>
-                      <select value={editLesson.status} onChange={e=>setEditLesson({...editLesson,status:e.target.value})}>
-                        {Object.entries(lsnCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
-                      </select>
-                    </div>
-                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Дата</div>
-                      <input type="date" value={editLesson.date} onChange={e=>setEditLesson({...editLesson,date:e.target.value})} />
-                    </div>
-                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Время</div>
-                      <input type="time" value={editLesson.time} onChange={e=>setEditLesson({...editLesson,time:e.target.value})} />
-                    </div>
-                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Длительность (мин)</div>
-                      <input type="number" value={editLesson.duration} onChange={e=>setEditLesson({...editLesson,duration:Number(e.target.value)})} />
-                    </div>
-                    <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Стоимость (₽)</div>
-                      <input type="number" value={editLesson.price} onChange={e=>setEditLesson({...editLesson,price:Number(e.target.value)})} />
+                      <button className="bg" onClick={()=>setEditLesson(null)}>Отмена</button>
                     </div>
                   </div>
                 </div>
@@ -1690,8 +1700,8 @@ export default function App() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ padding:"8px 14px", borderTop:"1px solid #dbe6f0", fontSize:11, color:"#a9b8c6" }}>
-                    💡 Нажмите на занятие — редактировать · Нажмите на пустую ячейку — добавить в это время
+                  <div style={{ padding:"10px 14px", borderTop:"1px solid #dbe6f0", fontSize:12, color:"#7a8a9c" }}>
+                    Нажмите на занятие — редактировать · Нажмите на пустую ячейку — добавить в это время
                   </div>
                 </div>
               )}
@@ -1737,7 +1747,7 @@ export default function App() {
               {schedView==="tutors" && (()=>{
                 const DAYS_FULL = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"];
                 const DAYS_SHORT = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
-                const SLOTS = Array.from({length:26},(_,i)=>{ const h=8+Math.floor(i/2); const m=i%2===0?"00":"30"; return `${String(h).padStart(2,"0")}:${m}`; });
+                const SLOTS = Array.from({length:29},(_,i)=>{ const h=8+Math.floor(i/2); const m=i%2===0?"00":"30"; return `${String(h).padStart(2,"0")}:${m}`; });
                 const activeTutors = schedTutorFilter==="all" ? tutors : tutors.filter(t=>t.id===Number(schedTutorFilter));
 
                 const printTutorSchedule = () => {
@@ -1856,8 +1866,8 @@ export default function App() {
                         </tbody>
                       </table>
                     </div>
-                    <div style={{ padding:"8px 0", fontSize:11, color:"#a9b8c6", marginTop:8 }}>
-                      💡 Нажмите на ячейку — создать занятие · Нажмите на занятие — редактировать
+                    <div style={{ padding:"10px 0", fontSize:12, color:"#7a8a9c", marginTop:8 }}>
+                      Нажмите на ячейку — создать занятие · Нажмите на занятие — редактировать
                     </div>
                   </div>
                 );
@@ -3233,7 +3243,7 @@ export default function App() {
               <div style={{ background:"#f2f6fa", borderRadius:12, padding:"12px 14px" }}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                   <div>
-                    <div style={{ fontSize:13, fontWeight:600 }}>🔁 Повторяющееся занятие</div>
+                    <div style={{ fontSize:14, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}><Calendar size={15} color="#1da0d4" /> Повторяющееся занятие</div>
                     <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>Создать серию занятий</div>
                   </div>
                   <div onClick={()=>setRecurModal(r=>!r)} style={{ width:40, height:22, borderRadius:11, background:recurModal?"#1da0d4":"#d7e2ee", cursor:"pointer", transition:"all .2s", position:"relative", flexShrink:0 }}>
@@ -3278,7 +3288,7 @@ export default function App() {
                       }
                       return (
                         <div style={{ background:"rgba(29,160,212,0.08)", borderRadius:8, padding:"8px 12px", fontSize:11, color:"#1da0d4" }}>
-                          📅 Будет создано занятий: {cnt} — с {nLesson.date} по {recurEndDate}
+                          Будет создано занятий: {cnt} — с {nLesson.date} по {recurEndDate}
                         </div>
                       );
                     })()}
