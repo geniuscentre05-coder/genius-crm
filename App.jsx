@@ -317,6 +317,7 @@ export default function App() {
   const [editRule,   setEditRule]   = useState(null);
   const [pricingTab, setPricingTab] = useState("prices");
   const [reportMonth, setReportMonth] = useState("2026-03");
+  const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
   const [reportTab, setReportTab] = useState("finance");
   const [reqSearch, setReqSearch] = useState("");
   const [candSearch, setCandSearch] = useState("");
@@ -981,11 +982,12 @@ export default function App() {
             {/* ── MINI CALENDAR ── */}
             {(() => {
               const now = new Date();
-              const [calMonth, calYear] = [now.getMonth(), now.getFullYear()];
+              const viewDate = new Date(now.getFullYear(), now.getMonth() + calendarMonthOffset, 1);
+              const calMonth = viewDate.getMonth();
+              const calYear = viewDate.getFullYear();
               const firstDay = new Date(calYear, calMonth, 1);
               const startOffset = (firstDay.getDay() + 6) % 7; // Monday-first
               const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
-              const fmtD = d => d.toISOString().split("T")[0];
               const lessonsByDay = {};
               lessons.forEach(l => {
                 if (l.status==="cancelled") return;
@@ -997,32 +999,37 @@ export default function App() {
               const cells = [];
               for (let i=0;i<startOffset;i++) cells.push(null);
               for (let d=1; d<=daysInMonth; d++) cells.push(d);
+              const isCurrentMonth = calMonth===now.getMonth() && calYear===now.getFullYear();
               const todayNum = now.getDate();
               return (
-                <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, padding:22, marginTop:20 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-                    <h3 style={{ margin:0, fontSize:15, fontWeight:600, display:"flex", alignItems:"center", gap:8 }}>
-                      <Calendar size={16} color="#1da0d4" /> {now.toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}
+                <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:14, padding:16, marginTop:20, maxWidth:320 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                    <button className="bg" style={{ padding:"3px 8px", fontSize:11 }} onClick={()=>setCalendarMonthOffset(o=>o-1)}>‹</button>
+                    <h3 style={{ margin:0, fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6, color:"#12283d" }}>
+                      <Calendar size={13} color="#1da0d4" /> {viewDate.toLocaleDateString("ru-RU",{month:"long",year:"numeric"})}
                     </h3>
-                    <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>goView("schedule")}>Открыть расписание</button>
+                    <button className="bg" style={{ padding:"3px 8px", fontSize:11 }} onClick={()=>setCalendarMonthOffset(o=>o+1)}>›</button>
                   </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4, marginBottom:6 }}>
+                  {calendarMonthOffset!==0 && (
+                    <button className="bg" style={{ fontSize:10, padding:"2px 8px", marginBottom:8, display:"block", marginLeft:"auto", marginRight:"auto" }} onClick={()=>setCalendarMonthOffset(0)}>Сегодня</button>
+                  )}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2, marginBottom:4 }}>
                     {["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map(d=>(
-                      <div key={d} style={{ textAlign:"center", fontSize:11, color:"#7a8a9c", fontWeight:600, padding:"4px 0" }}>{d}</div>
+                      <div key={d} style={{ textAlign:"center", fontSize:9, color:"#a9b8c6", fontWeight:600 }}>{d}</div>
                     ))}
                   </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2 }}>
                     {cells.map((d,i)=>{
                       if (d===null) return <div key={i} />;
-                      const isToday = d===todayNum;
+                      const isToday = isCurrentMonth && d===todayNum;
                       const count = lessonsByDay[d]||0;
                       return (
                         <div key={i} onClick={()=>goView("schedule")}
-                          style={{ aspectRatio:"1", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer",
+                          style={{ aspectRatio:"1", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", borderRadius:6, cursor:"pointer",
                             background:isToday?"linear-gradient(135deg,#1da0d4,#5cb85c)":count>0?"rgba(29,160,212,0.08)":"transparent",
-                            color:isToday?"#ffffff":"#22344a", fontWeight:isToday?700:500, fontSize:13, transition:"background .15s" }}>
+                            color:isToday?"#ffffff":"#22344a", fontWeight:isToday?700:500, fontSize:11, transition:"background .15s" }}>
                           {d}
-                          {count>0 && <div style={{ width:4, height:4, borderRadius:"50%", background:isToday?"#ffffff":"#1da0d4", marginTop:2 }} />}
+                          {count>0 && <div style={{ width:3, height:3, borderRadius:"50%", background:isToday?"#ffffff":"#1da0d4", marginTop:1 }} />}
                         </div>
                       );
                     })}
