@@ -246,6 +246,35 @@ function Tag({ c, bg, children }) {
   return <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, margin:2, color:c, background:bg }}>{children}</span>;
 }
 
+function AttachmentsBlock({ title = "Документы", files = [], onUpload, onDelete, uploading }) {
+  const inputRef = useRef(null);
+  return (
+    <div style={{ background:"#f2f6fa", borderRadius:12, padding:16, marginTop:16 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:"#12283d" }}>📎 {title}</div>
+        <button className="bg" style={{ fontSize:11, padding:"5px 10px" }} disabled={uploading} onClick={()=>inputRef.current?.click()}>
+          {uploading ? "Загрузка..." : "+ Загрузить файл"}
+        </button>
+        <input ref={inputRef} type="file" style={{ display:"none" }} onChange={e=>{ const f=e.target.files[0]; if(f) onUpload(f); e.target.value=""; }} />
+      </div>
+      {files.length===0 ? (
+        <div style={{ fontSize:12, color:"#7a8a9c" }}>Файлов пока нет — договор, скан паспорта и т.п.</div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          {files.map((f,i)=>(
+            <div key={i} style={{ display:"flex", alignItems:"center", gap:8, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:8, padding:"7px 10px" }}>
+              <span style={{ fontSize:14 }}>📄</span>
+              <a href={f.url} target="_blank" rel="noopener noreferrer" style={{ flex:1, fontSize:12, color:"#1da0d4", textDecoration:"none", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</a>
+              <span style={{ fontSize:10, color:"#7a8a9c" }}>{f.uploadedAt}</span>
+              <button onClick={()=>onDelete(f)} style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontSize:11, fontFamily:"inherit" }}>🗑</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   // ── Load from localStorage or use defaults (instant local cache) ──
   const saved = loadFromLS();
@@ -395,8 +424,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules]);
 
-  const [nStudent,  setNStudent]  = useState({ name:"", age:"", phone:"", parentName:"", subjects:[], status:"trial", balance:0, address:"", school:"" });
-  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+  function emptyChild() { return { name:"", birthDate:"", school:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }], status:"trial", tuitionNote:"" }; }
+  const [familyForm, setFamilyForm] = useState({ parentName:"", phone:"", extraPhones:[], address:"", notes:"", children:[emptyChild()] });
+  function calcAge(birthDate) {
+    if (!birthDate) return null;
+    const b = new Date(birthDate); const now = new Date();
+    let a = now.getFullYear() - b.getFullYear();
+    const m = now.getMonth() - b.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < b.getDate())) a--;
+    return a;
+  }
+  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
   const [nLesson,   setNLesson]   = useState({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
   const [lessonType,  setLessonType]  = useState("individual"); // individual | group
   const [groupStudents, setGroupStudents] = useState([]); // [{studentId, price}]
@@ -463,6 +501,43 @@ export default function App() {
 
   const notify = (msg, type = "success") => { setNotif({ msg, type }); setTimeout(() => setNotif(null), 3000); };
 
+  // ── File attachments (Supabase Storage) ──
+  const [uploadingFile, setUploadingFile] = useState(false);
+  async function uploadAttachment(kind, entityId, file) {
+    if (!file) return;
+    setUploadingFile(true);
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9а-яА-Я._-]/g, "_");
+      const path = `${kind}/${entityId}/${Date.now()}_${safeName}`;
+      const { error: upErr } = await supabase.storage.from("attachments").upload(path, file);
+      if (upErr) { notify("Не удалось загрузить файл: " + upErr.message, "error"); setUploadingFile(false); return; }
+      const { data: urlData } = supabase.storage.from("attachments").getPublicUrl(path);
+      const fileEntry = { name: file.name, url: urlData.publicUrl, path, uploadedAt: new Date().toISOString().split("T")[0] };
+      if (kind === "students") {
+        setStudents(prev => prev.map(s => s.id===entityId ? { ...s, files: [...(s.files||[]), fileEntry] } : s));
+      } else {
+        setTutors(prev => prev.map(t => t.id===entityId ? { ...t, files: [...(t.files||[]), fileEntry] } : t));
+      }
+      notify("Файл загружен");
+    } catch (e) {
+      notify("Ошибка загрузки файла", "error");
+    }
+    setUploadingFile(false);
+  }
+  async function deleteAttachment(kind, entityId, fileEntry) {
+    if (!window.confirm(`Удалить файл «${fileEntry.name}»?`)) return;
+    try {
+      if (fileEntry.path) await supabase.storage.from("attachments").remove([fileEntry.path]);
+    } catch (e) {}
+    if (kind === "students") {
+      setStudents(prev => prev.map(s => s.id===entityId ? { ...s, files:(s.files||[]).filter(f=>f.path!==fileEntry.path) } : s));
+    } else {
+      setTutors(prev => prev.map(t => t.id===entityId ? { ...t, files:(t.files||[]).filter(f=>f.path!==fileEntry.path) } : t));
+    }
+    notify("Файл удалён");
+  }
+
+
   // ── Excel import ──
   const handleExcelFile = async (e) => {
     const file = e.target.files[0];
@@ -514,23 +589,47 @@ export default function App() {
 
   const tLessons   = id => lessons.filter(l => l.tutorId === id);
   const tCompleted = id => lessons.filter(l => l.tutorId === id && l.status === "completed");
-  const tStudents  = id => { const ids = [...new Set(tCompleted(id).map(l=>l.studentId))]; return students.filter(s=>ids.includes(s.id)); };
+  const tStudents  = id => { const ids = [...new Set(tLessons(id).map(l=>l.studentId))]; return students.filter(s=>ids.includes(s.id)); };
   const tEarned    = id => { const t=tutors.find(x=>x.id===id); return tCompleted(id).reduce((s,l)=>s+calcEarning(l,t),0); };
   const tPaid      = id => salaries.filter(p=>p.tutorId===id).reduce((s,p)=>s+p.amount,0);
   const tDebt      = id => tEarned(id) - tPaid(id);
 
   const addStudent = () => {
-    if (!nStudent.name || !nStudent.phone) return;
-    setStudents([...students, { ...nStudent, id:Date.now(), age:Number(nStudent.age), totalLessons:0 }]);
-    setNStudent({ name:"", age:"", phone:"", parentName:"", subjects:[], status:"trial", balance:0, address:"", school:"" });
-    setModal(null); notify("Ученик добавлен");
+    const validChildren = familyForm.children.filter(c=>c.name.trim());
+    if (validChildren.length===0 || !familyForm.phone) return;
+    const familyId = validChildren.length > 1 ? "fam_"+Date.now() : undefined;
+    const newStudents = validChildren.map((c, i) => ({
+      id: Date.now()+i,
+      name: c.name,
+      birthDate: c.birthDate,
+      age: calcAge(c.birthDate) ?? 0,
+      phone: familyForm.phone,
+      extraPhones: familyForm.extraPhones.filter(Boolean),
+      parentName: familyForm.parentName,
+      parentPhone: familyForm.phone,
+      address: familyForm.address,
+      notes: familyForm.notes,
+      school: c.school,
+      grade: c.grade,
+      subjectTeachers: c.subjectTeachers.filter(st=>st.subject),
+      subjects: c.subjectTeachers.filter(st=>st.subject).map(st=>st.subject),
+      status: c.status,
+      tuitionNote: c.tuitionNote,
+      balance: 0,
+      totalLessons: 0,
+      familyId,
+      files: [],
+    }));
+    setStudents([...students, ...newStudents]);
+    setFamilyForm({ parentName:"", phone:"", extraPhones:[], address:"", notes:"", children:[emptyChild()] });
+    setModal(null); notify(newStudents.length>1 ? `Добавлено детей: ${newStudents.length}` : "Ученик добавлен");
   };
   const addTutor = () => {
     if (!nTutor.name || !nTutor.phone) return;
     const parts = nTutor.name.trim().split(" ");
     const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
-    setTutors([...tutors, { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue) }]);
-    setNTutor({ name:"", phone:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+    setTutors([...tutors, { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue), files:[] }]);
+    setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
     setModal(null); notify("Преподаватель добавлен");
   };
   const addLesson = () => {
@@ -586,6 +685,7 @@ export default function App() {
   const goView = v => { setView(v); setSelTutor(null); setSelStudent(null); };
 
   const totalRevenue = payments.reduce((s,p)=>s+p.amount,0);
+  const selStudentLive = selStudent ? (students.find(x=>x.id===selStudent.id) || selStudent) : null;
   const totalSalPaid = salaries.reduce((s,p)=>s+p.amount,0);
 
   if (cloudLoading) {
@@ -787,12 +887,16 @@ export default function App() {
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:22, fontWeight:700, color:"#12283d" }}>{t.name}</div>
                     <div style={{ fontSize:13, color:"#7a8a9c", marginTop:4 }}>{t.phone}</div>
+                    {t.address && <div style={{ fontSize:12, color:"#7a8a9c", marginTop:2 }}>📍 {t.address}</div>}
                     <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8 }}>
                       {t.subjects.map(s=><Tag key={s} c="#1da0d4" bg="rgba(99,102,241,0.15)">{s}</Tag>)}
                       <Tag c={statusCfg[t.status]?.color} bg={statusCfg[t.status]?.bg}>{statusCfg[t.status]?.label}</Tag>
                     </div>
                   </div>
-                  <button className="bp" onClick={()=>{ setNSalary({...nSalary,tutorId:String(t.id)}); setModal("addSalary"); }}>💰 Выплатить зарплату</button>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    <button className="bp" onClick={()=>{ setNSalary({...nSalary,tutorId:String(t.id)}); setModal("addSalary"); }}>💰 Выплатить зарплату</button>
+                    <button className="bg" onClick={()=>printSchedule(myL, tutors, students, `Преподаватель: ${t.short}`)}>🖨️ Расписание преподавателя</button>
+                  </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
                   {[
@@ -808,6 +912,18 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+                {t.notes && (
+                  <div style={{ background:"#f2f6fa", borderRadius:10, padding:"12px 14px", marginTop:16, fontSize:13, color:"#22344a", lineHeight:1.6 }}>
+                    <span style={{ fontWeight:700, color:"#12283d" }}>Примечания: </span>{t.notes}
+                  </div>
+                )}
+                <AttachmentsBlock
+                  title="Документы преподавателя"
+                  files={t.files||[]}
+                  uploading={uploadingFile}
+                  onUpload={(file)=>uploadAttachment("tutors", t.id, file)}
+                  onDelete={(f)=>deleteAttachment("tutors", t.id, f)}
+                />
               </div>
               {/* tabs */}
               <div style={{ display:"flex", gap:4, marginBottom:20, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:12, padding:6, width:"fit-content" }}>
@@ -856,9 +972,27 @@ export default function App() {
               )}
 
               {/* TAB students */}
-              {tTab==="students" && (
-                <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, overflow:"hidden" }}>
-                  {mySt.length===0 ? <div style={{ padding:40, textAlign:"center", color:"#7a8a9c" }}>Нет учеников</div> : (
+              {tTab==="students" && (()=>{
+                const activeSt = mySt.filter(s=>s.status!=="inactive");
+                const pastSt = mySt.filter(s=>s.status==="inactive");
+                const printStudentList = (list, label) => {
+                  const w = window.open("","_blank");
+                  const rows = list.map(s=>`<tr><td>${s.name}</td><td>${(s.subjects||[]).join(", ")}</td><td>${statusCfg[s.status]?.label||s.status}</td><td>${s.balance}₽</td></tr>`).join("");
+                  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${label}</title><style>
+                    body{font-family:Arial,sans-serif;padding:20px;color:#111}
+                    table{width:100%;border-collapse:collapse;font-size:13px}
+                    th{background:#f3f4f6;padding:8px 10px;text-align:left;border-bottom:2px solid #e5e7eb}
+                    td{padding:7px 10px;border-bottom:1px solid #e5e7eb}
+                    @media print{button{display:none}}
+                  </style></head><body>
+                    <h2>${label} — ${t.short}</h2>
+                    <button onclick="window.print()" style="margin-bottom:14px;padding:8px 20px;background:#1da0d4;color:white;border:none;border-radius:8px;cursor:pointer">🖨️ Распечатать</button>
+                    <table><thead><tr><th>Ученик</th><th>Предметы</th><th>Статус</th><th>Баланс</th></tr></thead><tbody>${rows}</tbody></table>
+                  </body></html>`);
+                  w.document.close();
+                };
+                const renderTable = (list) => (
+                  list.length===0 ? <div style={{ padding:24, textAlign:"center", color:"#7a8a9c", fontSize:13 }}>Нет учеников</div> : (
                     <table style={{ width:"100%", borderCollapse:"collapse" }}>
                       <thead>
                         <tr style={{ borderBottom:"1px solid #dbe6f0" }}>
@@ -868,10 +1002,10 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {mySt.map(s=>{
+                        {list.map(s=>{
                           const cnt = myC.filter(l=>l.studentId===s.id).length;
                           return (
-                            <tr key={s.id} style={{ borderBottom:"1px solid #f2f6fa" }}>
+                            <tr key={s.id} className="rh" style={{ borderBottom:"1px solid #f2f6fa" }} onClick={()=>{ setSelStudent(s); goView("students"); }}>
                               <td style={{ padding:"12px 16px" }}>
                                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                                   <Av name={s.name} color="#1da0d4" size={32} />
@@ -881,7 +1015,7 @@ export default function App() {
                                   </div>
                                 </div>
                               </td>
-                              <td style={{ padding:"12px 16px" }}>{s.subjects.map(sub=><Tag key={sub} c="#1da0d4" bg="rgba(99,102,241,0.12)">{sub}</Tag>)}</td>
+                              <td style={{ padding:"12px 16px" }}>{s.subjects.map(sub=><Tag key={sub} c="#1da0d4" bg="rgba(29,160,212,0.12)">{sub}</Tag>)}</td>
                               <td style={{ padding:"12px 16px" }}><Tag c={statusCfg[s.status]?.color} bg={statusCfg[s.status]?.bg}>{statusCfg[s.status]?.label}</Tag></td>
                               <td style={{ padding:"12px 16px", fontWeight:700, color:s.balance>=0?"#5cb85c":"#e2574c" }}>{s.balance}₽</td>
                               <td style={{ padding:"12px 16px", color:"#6d7f92", fontWeight:600 }}>{cnt}</td>
@@ -890,9 +1024,27 @@ export default function App() {
                         })}
                       </tbody>
                     </table>
-                  )}
-                </div>
-              )}
+                  )
+                );
+                return (
+                  <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+                    <div>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:"#12283d" }}>✅ Активные ({activeSt.length})</div>
+                        <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>printStudentList(activeSt, "Активные ученики")}>🖨️ Печать</button>
+                      </div>
+                      <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, overflow:"hidden" }}>{renderTable(activeSt)}</div>
+                    </div>
+                    <div>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:"#12283d" }}>🕓 Ранее посещавшие ({pastSt.length})</div>
+                        <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>printStudentList(pastSt, "Ранее посещавшие ученики")}>🖨️ Печать</button>
+                      </div>
+                      <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:14, overflow:"hidden" }}>{renderTable(pastSt)}</div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* TAB lessons */}
               {tTab==="lessons" && (
@@ -1001,21 +1153,33 @@ export default function App() {
                 <button className="bg" style={{ marginBottom:20 }} onClick={()=>setSelStudent(null)}>← Назад</button>
                 <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:18, padding:28 }}>
                   <div style={{ display:"flex", gap:20, alignItems:"flex-start", marginBottom:20 }}>
-                    <Av name={selStudent.name} color="#1da0d4" size={60} />
+                    <Av name={selStudentLive.name} color="#1da0d4" size={60} />
                     <div style={{ flex:1 }}>
-                      <div style={{ fontSize:20, fontWeight:700 }}>{selStudent.name}</div>
-                      <div style={{ fontSize:13, color:"#7a8a9c", marginTop:4 }}>{selStudent.age} лет · {selStudent.phone}</div>
-                      <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>👤 Родитель: {selStudent.parentName}</div>
-                      {selStudent.school && <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>🏫 {selStudent.school}{selStudent.grade ? ` · ${selStudent.grade} класс` : ""}</div>}
-                      {selStudent.address && <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>📍 {selStudent.address}</div>}
+                      <div style={{ fontSize:20, fontWeight:700 }}>{selStudentLive.name}</div>
+                      <div style={{ fontSize:13, color:"#7a8a9c", marginTop:4 }}>{selStudentLive.birthDate ? `${calcAge(selStudentLive.birthDate)} лет (${selStudentLive.birthDate})` : (selStudentLive.age ? `${selStudentLive.age} лет` : "")} · {selStudentLive.phone}{selStudentLive.extraPhones?.length>0 ? `, ${selStudentLive.extraPhones.join(", ")}` : ""}</div>
+                      <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>👤 Родитель: {selStudentLive.parentName}{selStudentLive.parentPhone ? ` · ${selStudentLive.parentPhone}` : ""}</div>
+                      {selStudentLive.school && <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>🏫 {selStudentLive.school}{selStudentLive.grade ? ` · ${selStudentLive.grade} класс` : ""}</div>}
+                      {selStudentLive.address && <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>📍 {selStudentLive.address}</div>}
+                      {selStudentLive.familyId && students.filter(s=>s.familyId===selStudentLive.familyId && s.id!==selStudentLive.id).length>0 && (
+                        <div style={{ fontSize:12, color:"#55677a", marginTop:6 }}>
+                          👨‍👩‍👧‍👦 Братья/сёстры в центре: {students.filter(s=>s.familyId===selStudentLive.familyId && s.id!==selStudentLive.id).map((sib,i,arr)=>(
+                            <span key={sib.id}>
+                              <span style={{ color:"#1da0d4", cursor:"pointer", fontWeight:600 }} onClick={()=>setSelStudent(sib)}>{sib.name}</span>{i<arr.length-1?", ":""}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <Tag c={statusCfg[selStudent.status]?.color} bg={statusCfg[selStudent.status]?.bg}>{statusCfg[selStudent.status]?.label}</Tag>
+                    <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"flex-end" }}>
+                      <Tag c={statusCfg[selStudentLive.status]?.color} bg={statusCfg[selStudentLive.status]?.bg}>{statusCfg[selStudentLive.status]?.label}</Tag>
+                      <button className="bg" onClick={()=>printSchedule(lessons.filter(l=>l.studentId===selStudentLive.id), tutors, students, `Ученик: ${selStudentLive.name}`)}>🖨️ Расписание ученика</button>
+                    </div>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
                     {[
-                      { l:"Баланс",  v:`${selStudent.balance}₽`, c:selStudent.balance>=0?"#5cb85c":"#e2574c" },
-                      { l:"Занятий", v:selStudent.totalLessons,   c:"#1da0d4" },
-                      { l:"Предметов",v:selStudent.subjects.length,c:"#f5a623"},
+                      { l:"Баланс",  v:`${selStudentLive.balance}₽`, c:selStudentLive.balance>=0?"#5cb85c":"#e2574c" },
+                      { l:"Занятий", v:selStudentLive.totalLessons,   c:"#1da0d4" },
+                      { l:"Предметов",v:selStudentLive.subjects.length,c:"#f5a623"},
                     ].map((m,i)=>(
                       <div key={i} style={{ background:"#f2f6fa", borderRadius:12, padding:14, textAlign:"center" }}>
                         <div style={{ fontSize:11, color:"#7a8a9c", marginBottom:4 }}>{m.l}</div>
@@ -1023,9 +1187,34 @@ export default function App() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ marginBottom:16 }}>{selStudent.subjects.map(s=><Tag key={s} c="#1da0d4" bg="rgba(99,102,241,0.15)">{s}</Tag>)}</div>
+                  <div style={{ marginBottom:16, display:"flex", flexDirection:"column", gap:6 }}>
+                    {(selStudentLive.subjectTeachers?.length ? selStudentLive.subjectTeachers : (selStudentLive.subjects||[]).map(s=>({subject:s,tutorId:""}))).map((st,i)=>{
+                      const tu = tutors.find(t=>t.id===Number(st.tutorId));
+                      return (
+                        <div key={i} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <Tag c="#1da0d4" bg="rgba(29,160,212,0.15)">{st.subject}</Tag>
+                          {tu && <span style={{ fontSize:12, color:"#55677a" }}>— {tu.short}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {selStudentLive.tuitionNote && (
+                    <div style={{ fontSize:12, color:"#22344a", marginBottom:12 }}><strong>Условия оплаты:</strong> {selStudentLive.tuitionNote}</div>
+                  )}
+                  {selStudentLive.notes && (
+                    <div style={{ background:"#f2f6fa", borderRadius:10, padding:"12px 14px", marginBottom:16, fontSize:13, color:"#22344a", lineHeight:1.6 }}>
+                      <span style={{ fontWeight:700, color:"#12283d" }}>Примечания: </span>{selStudentLive.notes}
+                    </div>
+                  )}
+                  <AttachmentsBlock
+                    title="Документы ученика (договор, сканы)"
+                    files={selStudentLive.files||[]}
+                    uploading={uploadingFile}
+                    onUpload={(file)=>uploadAttachment("students", selStudentLive.id, file)}
+                    onDelete={(f)=>deleteAttachment("students", selStudentLive.id, f)}
+                  />
                   <h4 style={{ color:"#6d7f92", fontSize:13, marginBottom:12, fontWeight:600 }}>История занятий</h4>
-                  {lessons.filter(l=>l.studentId===selStudent.id).map(l=>(
+                  {lessons.filter(l=>l.studentId===selStudentLive.id).map(l=>(
                     <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"#f2f6fa", borderRadius:10, marginBottom:8 }}>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:13, fontWeight:600 }}>{l.subject}</div>
@@ -2252,6 +2441,8 @@ export default function App() {
             <div style={{ display:"grid", gap:14 }}>
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО *</div><input placeholder="Иванова Наталья Владимировна" value={nTutor.name} onChange={e=>setNTutor({...nTutor,name:e.target.value})} /></div>
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nTutor.phone} onChange={e=>setNTutor({...nTutor,phone:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>📍 Адрес</div><input placeholder="ул. Ленина, д. 12, кв. 34" value={nTutor.address} onChange={e=>setNTutor({...nTutor,address:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Примечания</div><textarea rows={2} placeholder="Любая дополнительная информация" value={nTutor.notes} onChange={e=>setNTutor({...nTutor,notes:e.target.value})} /></div>
               <div>
                 <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы</div>
                 <div style={{ maxHeight:200, overflowY:"auto", display:"flex", flexDirection:"column", gap:10 }}>
@@ -2304,39 +2495,89 @@ export default function App() {
 
       {modal==="addStudent" && (
         <div className="ov" onClick={()=>setModal(null)}>
-          <div className="mo" onClick={e=>e.stopPropagation()}>
-            <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>Новый ученик</h2>
+          <div className="mo" style={{ width:620, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 4px", fontSize:20, fontWeight:700 }}>Новый ученик / семья</h2>
+            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:18 }}>Если из одной семьи несколько детей — добавьте их всех сразу, контакты родителя общие</div>
             <div style={{ display:"grid", gap:14 }}>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО *</div><input placeholder="Иванов Иван" value={nStudent.name} onChange={e=>setNStudent({...nStudent,name:e.target.value})} /></div>
-                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Возраст</div><input type="number" value={nStudent.age} onChange={e=>setNStudent({...nStudent,age:e.target.value})} /></div>
-              </div>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nStudent.phone} onChange={e=>setNStudent({...nStudent,phone:e.target.value})} /></div>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО родителя</div><input value={nStudent.parentName} onChange={e=>setNStudent({...nStudent,parentName:e.target.value})} /></div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>🏫 Школа / лицей</div><input placeholder="Школа №15" value={nStudent.school} onChange={e=>setNStudent({...nStudent,school:e.target.value})} /></div>
-                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Класс</div><input placeholder="9А" value={nStudent.grade||""} onChange={e=>setNStudent({...nStudent,grade:e.target.value})} /></div>
-              </div>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>📍 Адрес</div><input placeholder="ул. Ленина, д. 12, кв. 34" value={nStudent.address} onChange={e=>setNStudent({...nStudent,address:e.target.value})} /></div>
-              <div>
-                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы</div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                  {allSubjects.map(s=>(
-                    <button key={s} onClick={()=>setNStudent(prev=>({...prev,subjects:prev.subjects.includes(s)?prev.subjects.filter(x=>x!==s):[...prev.subjects,s]}))}
-                      style={{ padding:"5px 12px", borderRadius:20, fontSize:12, border:"1px solid", cursor:"pointer",
-                        background:nStudent.subjects.includes(s)?"rgba(99,102,241,0.2)":"transparent",
-                        borderColor:nStudent.subjects.includes(s)?"#1da0d4":"#d7e2ee",
-                        color:nStudent.subjects.includes(s)?"#1da0d4":"#55677a" }}>{s}</button>
-                  ))}
+
+              <div style={{ fontSize:12, fontWeight:700, color:"#1da0d4", textTransform:"uppercase" }}>Контакты семьи</div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО родителя *</div><input placeholder="Иванова Мария Петровна" value={familyForm.parentName} onChange={e=>setFamilyForm({...familyForm,parentName:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={familyForm.phone} onChange={e=>setFamilyForm({...familyForm,phone:e.target.value})} /></div>
+              {familyForm.extraPhones.map((p,i)=>(
+                <div key={i} style={{ display:"flex", gap:8 }}>
+                  <input placeholder="Дополнительный телефон" value={p} onChange={e=>{ const arr=[...familyForm.extraPhones]; arr[i]=e.target.value; setFamilyForm({...familyForm,extraPhones:arr}); }} />
+                  <button onClick={()=>setFamilyForm({...familyForm,extraPhones:familyForm.extraPhones.filter((_,j)=>j!==i)})} style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>✗</button>
                 </div>
-              </div>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Статус</div>
-                <select value={nStudent.status} onChange={e=>setNStudent({...nStudent,status:e.target.value})}>
-                  {Object.entries(statusCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
-                </select>
-              </div>
+              ))}
+              <button className="bg" style={{ width:"fit-content", fontSize:12 }} onClick={()=>setFamilyForm({...familyForm,extraPhones:[...familyForm.extraPhones,""]})}>+ Ещё телефон</button>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>📍 Адрес</div><input placeholder="ул. Ленина, д. 12, кв. 34" value={familyForm.address} onChange={e=>setFamilyForm({...familyForm,address:e.target.value})} /></div>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Примечания</div><textarea rows={2} placeholder="Любая дополнительная информация" value={familyForm.notes} onChange={e=>setFamilyForm({...familyForm,notes:e.target.value})} /></div>
+
+              <div style={{ height:1, background:"#dbe6f0", margin:"6px 0" }} />
+              <div style={{ fontSize:12, fontWeight:700, color:"#1da0d4", textTransform:"uppercase" }}>Дети</div>
+
+              {familyForm.children.map((child, ci) => (
+                <div key={ci} style={{ background:"#f2f6fa", borderRadius:12, padding:16, display:"grid", gap:12 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#12283d" }}>Ребёнок {ci+1}</div>
+                    {familyForm.children.length>1 && (
+                      <button onClick={()=>setFamilyForm({...familyForm, children: familyForm.children.filter((_,j)=>j!==ci)})}
+                        style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>Удалить</button>
+                    )}
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <input placeholder="ФИО ребёнка *" value={child.name} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],name:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
+                    <div>
+                      <input type="date" value={child.birthDate} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],birthDate:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
+                      {child.birthDate && <div style={{ fontSize:11, color:"#7a8a9c", marginTop:4 }}>Возраст: {calcAge(child.birthDate)} лет</div>}
+                    </div>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <input placeholder="🏫 Школа" value={child.school} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],school:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
+                    <input placeholder="Класс" value={child.grade} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],grade:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы и педагоги</div>
+                    {child.subjectTeachers.map((st,si)=>(
+                      <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
+                        <select value={st.subject} onChange={e=>{ const arr=[...familyForm.children]; const sts=[...arr[ci].subjectTeachers]; sts[si]={...sts[si],subject:e.target.value}; arr[ci]={...arr[ci],subjectTeachers:sts}; setFamilyForm({...familyForm,children:arr}); }}>
+                          <option value="">Предмет...</option>
+                          {courseCategories.map(cat=>(
+                            <optgroup key={cat.id} label={cat.label}>
+                              {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
+                            </optgroup>
+                          ))}
+                        </select>
+                        <select value={st.tutorId} onChange={e=>{ const arr=[...familyForm.children]; const sts=[...arr[ci].subjectTeachers]; sts[si]={...sts[si],tutorId:e.target.value}; arr[ci]={...arr[ci],subjectTeachers:sts}; setFamilyForm({...familyForm,children:arr}); }}>
+                          <option value="">Педагог...</option>
+                          {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                        </select>
+                        {child.subjectTeachers.length>1 && (
+                          <button onClick={()=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],subjectTeachers:arr[ci].subjectTeachers.filter((_,j)=>j!==si)}; setFamilyForm({...familyForm,children:arr}); }}
+                            style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", borderRadius:6, padding:"4px 8px", cursor:"pointer", flexShrink:0 }}>✗</button>
+                        )}
+                      </div>
+                    ))}
+                    <button className="bg" style={{ fontSize:11 }} onClick={()=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],subjectTeachers:[...arr[ci].subjectTeachers,{subject:"",tutorId:""}]}; setFamilyForm({...familyForm,children:arr}); }}>+ Ещё предмет</button>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <div>
+                      <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Статус</div>
+                      <select value={child.status} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],status:e.target.value}; setFamilyForm({...familyForm,children:arr}); }}>
+                        {Object.entries(statusCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Условия оплаты</div>
+                      <input placeholder="напр. 5000₽/мес" value={child.tuitionNote} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],tuitionNote:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <button className="bg" onClick={()=>setFamilyForm({...familyForm, children:[...familyForm.children, emptyChild()]})}>+ Добавить ещё ребёнка</button>
+
               <div style={{ display:"flex", gap:10, marginTop:8 }}>
-                <button className="bp" style={{ flex:1 }} onClick={addStudent}>Добавить</button>
+                <button className="bp" style={{ flex:1 }} onClick={addStudent}>Добавить {familyForm.children.filter(c=>c.name.trim()).length>1?`(детей: ${familyForm.children.filter(c=>c.name.trim()).length})`:""}</button>
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
               </div>
             </div>
