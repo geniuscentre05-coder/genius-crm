@@ -874,20 +874,20 @@ export default function App() {
       `}</style>
 
       {/* SIDEBAR */}
-      <div style={{ width:220, background:"linear-gradient(180deg, #1da0d4 0%, #17a6c9 45%, #5cb85c 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
+      <div style={{ width:260, background:"linear-gradient(180deg, #1da0d4 0%, #17a6c9 45%, #5cb85c 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
         <div style={{ padding:"0 16px 28px", display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:10 }}>
-          <img src="/logo.jpg" alt="Гений" style={{ width:76, height:76, borderRadius:"50%", boxShadow:"0 4px 14px rgba(18,40,61,.3)", flexShrink:0 }} />
+          <img src="/logo.jpg" alt="Гений" style={{ width:86, height:86, borderRadius:"50%", boxShadow:"0 4px 14px rgba(18,40,61,.3)", flexShrink:0 }} />
           <div>
-            <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:400, color:"#ffffff", lineHeight:1.15 }}>Гений</div>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.9)", marginTop:4, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>Образовательный центр</div>
+            <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:29, fontWeight:400, color:"#ffffff", lineHeight:1.15 }}>Гений</div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.9)", marginTop:4, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>Образовательный центр</div>
           </div>
         </div>
         {nav.map(n=>(
           <button key={n.id} className={`nb ${view===n.id?"on":""}`} onClick={()=>goView(n.id)}
-            style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 20px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"rgba(255,255,255,0.85)", fontSize:14, fontWeight:500, cursor:"pointer", width:"100%", textAlign:"left" }}>
-            <n.icon size={17} strokeWidth={2} style={{ flexShrink:0 }} />{n.label}
+            style={{ display:"flex", alignItems:"center", gap:12, padding:"13px 22px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"rgba(255,255,255,0.9)", fontSize:15.5, fontWeight:600, cursor:"pointer", width:"100%", textAlign:"left" }}>
+            <n.icon size={19} strokeWidth={2} style={{ flexShrink:0 }} />{n.label}
             {n.id==="requests" && requests.filter(r=>r.status==="new").length>0 && (
-              <span style={{ marginLeft:"auto", background:"#e2574c", color:"white", fontSize:10, fontWeight:700, borderRadius:10, padding:"1px 6px" }}>{requests.filter(r=>r.status==="new").length}</span>
+              <span style={{ marginLeft:"auto", background:"#e2574c", color:"white", fontSize:11, fontWeight:700, borderRadius:10, padding:"2px 7px" }}>{requests.filter(r=>r.status==="new").length}</span>
             )}
           </button>
         ))}
