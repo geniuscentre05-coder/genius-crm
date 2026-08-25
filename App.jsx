@@ -801,7 +801,7 @@ export default function App() {
         <div style={{ padding:"0 16px 28px", display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:10 }}>
           <img src="/logo.jpg" alt="Гений" style={{ width:76, height:76, borderRadius:"50%", boxShadow:"0 4px 14px rgba(18,40,61,.3)", flexShrink:0 }} />
           <div>
-            <div style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", fontSize:23, fontWeight:800, color:"#ffffff", lineHeight:1.15, letterSpacing:"0.01em" }}>Гений</div>
+            <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:400, color:"#ffffff", lineHeight:1.15 }}>Гений</div>
             <div style={{ fontSize:10, color:"rgba(255,255,255,0.9)", marginTop:4, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>Образовательный центр</div>
           </div>
         </div>
