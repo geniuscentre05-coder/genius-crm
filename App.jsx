@@ -3,7 +3,7 @@ import { supabase } from "./supabaseClient";
 import {
   LayoutGrid, GraduationCap, Users, BookOpen, Calendar, Wallet, CreditCard,
   BarChart3, Inbox, Send, Sparkles, Plus, Trash2, Printer, Pencil, Paperclip,
-  FileText, MapPin, Phone, X, Check, ChevronLeft, UploadCloud,
+  FileText, MapPin, Phone, X, Check, ChevronLeft, UploadCloud, UserPlus, Mail,
 } from "lucide-react";
 
 // ─── CLOUD + LOCAL STORAGE HELPERS ───────────────────────────────────────────
@@ -311,6 +311,7 @@ export default function App() {
   const [nRequest,  setNRequest]  = useState({ parentName:"", phone:"", studentName:"", age:"", course:"", comment:"", status:"new" });
   const [pricing,    setPricing]    = useState(saved?.pricing   || initialPricing);
   const [courseCatalog, setCourseCatalog] = useState(saved?.courseCatalog || initialCourseCatalog);
+  const [candidates, setCandidates] = useState(saved?.candidates || []);
   const [rules,      setRules]      = useState(saved?.rules     || initialRules);
   const [editPricing,setEditPricing]= useState(null);
   const [editRule,   setEditRule]   = useState(null);
@@ -318,6 +319,10 @@ export default function App() {
   const [reportMonth, setReportMonth] = useState("2026-03");
   const [reportTab, setReportTab] = useState("finance");
   const [reqSearch, setReqSearch] = useState("");
+  const [candSearch, setCandSearch] = useState("");
+  const [candFilter, setCandFilter] = useState("all");
+  const [selCandidate, setSelCandidate] = useState(null);
+  const [nCandidate, setNCandidate] = useState({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" });
   const [reqFilter, setReqFilter] = useState("all");
 
   const [selTutor,  setSelTutor]   = useState(null);
@@ -360,6 +365,7 @@ export default function App() {
     if (data.pricing) setPricing(data.pricing);
     if (data.rules) setRules(data.rules);
     if (data.courseCatalog) setCourseCatalog(data.courseCatalog);
+    if (data.candidates) setCandidates(data.candidates);
     saveToLS(data);
   }
 
@@ -382,7 +388,7 @@ export default function App() {
           // No cloud record yet — push current (local/demo) data as the first snapshot
           await supabase.from("crm_state").upsert({
             id: CLOUD_ID,
-            data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog },
+            data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog, candidates },
             updated_at: new Date().toISOString(),
           });
         }
@@ -413,7 +419,7 @@ export default function App() {
 
   // ── Auto-save to localStorage + Supabase (debounced) ──
   useEffect(() => {
-    saveToLS({ tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog });
+    saveToLS({ tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog, candidates });
     setSaveIndicator(true);
     const t = setTimeout(() => setSaveIndicator(false), 1500);
 
@@ -430,7 +436,7 @@ export default function App() {
       try {
         const { error } = await supabase.from("crm_state").upsert({
           id: CLOUD_ID,
-          data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog },
+          data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog, candidates },
           updated_at: new Date().toISOString(),
         });
         if (error) console.error("Supabase save error:", error);
@@ -445,7 +451,7 @@ export default function App() {
       clearTimeout(cloudSaveTimeout.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog]);
+  }, [tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog, candidates]);
 
   function emptyChild() { return { name:"", birthDate:"", school:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }], status:"trial", tuitionNote:"" }; }
   const [familyForm, setFamilyForm] = useState({ parentName:"", phone:"", extraPhones:[], address:"", notes:"", children:[emptyChild()] });
@@ -571,6 +577,8 @@ export default function App() {
       const fileEntry = { name: file.name, url: urlData.publicUrl, path, uploadedAt: new Date().toISOString().split("T")[0] };
       if (kind === "students") {
         setStudents(prev => prev.map(s => s.id===entityId ? { ...s, files: [...(s.files||[]), fileEntry] } : s));
+      } else if (kind === "candidates") {
+        setCandidates(prev => prev.map(c => c.id===entityId ? { ...c, files: [...(c.files||[]), fileEntry] } : c));
       } else {
         setTutors(prev => prev.map(t => t.id===entityId ? { ...t, files: [...(t.files||[]), fileEntry] } : t));
       }
@@ -587,6 +595,8 @@ export default function App() {
     } catch (e) {}
     if (kind === "students") {
       setStudents(prev => prev.map(s => s.id===entityId ? { ...s, files:(s.files||[]).filter(f=>f.path!==fileEntry.path) } : s));
+    } else if (kind === "candidates") {
+      setCandidates(prev => prev.map(c => c.id===entityId ? { ...c, files:(c.files||[]).filter(f=>f.path!==fileEntry.path) } : c));
     } else {
       setTutors(prev => prev.map(t => t.id===entityId ? { ...t, files:(t.files||[]).filter(f=>f.path!==fileEntry.path) } : t));
     }
@@ -704,6 +714,28 @@ export default function App() {
     setEditingTutorId(t.id);
     setModal("addTutor");
   };
+
+  // ── Candidates (job applicants) ──
+  const addCandidate = () => {
+    if (!nCandidate.name || !nCandidate.phone) return;
+    const newCandidate = { ...nCandidate, id:Date.now(), date:new Date().toISOString().split("T")[0], files:[] };
+    setCandidates([newCandidate, ...candidates]);
+    setNCandidate({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" });
+    setModal(null); notify("Соискатель добавлен — прикрепите резюме в его карточке");
+    setView("candidates"); setSelCandidate(newCandidate);
+  };
+  const hireCandidate = (c) => {
+    if (!window.confirm(`Принять ${c.name} на работу как преподавателя?`)) return;
+    const parts = c.name.trim().split(" ");
+    const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
+    const newTutor = { name:c.name, short, phone:c.phone, address:"", notes:c.notes||"", subjects:c.subjects||[], rateType:"percent", rateValue:50, status:"active", color:COLORS[tutors.length % COLORS.length], id:Date.now(), files:c.files||[] };
+    setTutors([...tutors, newTutor]);
+    setCandidates(candidates.map(x=>x.id===c.id?{...x,status:"hired"}:x));
+    setSelCandidate(null);
+    notify(`${c.name} принят(а) в штат преподавателей!`);
+    setView("tutors"); setSelTutor(newTutor); setTTab("overview");
+  };
+
   const addLesson = () => {
     if (!nLesson.studentId || !nLesson.subject || !nLesson.date || !nLesson.tutorId) return;
     const st = students.find(s=>s.id===Number(nLesson.studentId));
@@ -751,6 +783,7 @@ export default function App() {
     { id:"reports",   icon:BarChart3,     label:"Отчёты"         },
     { id:"requests",  icon:Inbox,         label:"Запросы родит." },
     { id:"mailings",  icon:Send,          label:"Рассылки"       },
+    { id:"candidates",icon:UserPlus,      label:"Соискатели"     },
     { id:"ai",        icon:Sparkles,      label:"ИИ-Помощник"    },
   ];
 
@@ -2520,7 +2553,109 @@ export default function App() {
           </div>
         )}
 
-        {/* ── AI ASSISTANT ── */}
+        {/* ── CANDIDATES (job applicants) ── */}
+        {view==="candidates" && (()=>{
+          const candCfg = {
+            new:        { label:"Новый",         color:"#1da0d4", bg:"rgba(29,160,212,0.12)" },
+            interview:  { label:"Собеседование",  color:"#f5a623", bg:"rgba(245,166,35,0.12)" },
+            hired:      { label:"Принят",         color:"#5cb85c", bg:"rgba(92,184,92,0.12)"  },
+            rejected:   { label:"Отказано",       color:"#e2574c", bg:"rgba(226,87,76,0.12)"  },
+          };
+          const filtered = candidates.filter(c=>{
+            const q = candSearch.toLowerCase();
+            const matchQ = !q || c.name.toLowerCase().includes(q) || c.phone.includes(q) || (c.subjects||[]).some(s=>s.toLowerCase().includes(q));
+            const matchF = candFilter==="all" || c.status===candFilter;
+            return matchQ && matchF;
+          });
+          if (selCandidate) {
+            const c = candidates.find(x=>x.id===selCandidate.id) || selCandidate;
+            return (
+              <div>
+                <button className="bg" style={{ marginBottom:20 }} onClick={()=>setSelCandidate(null)}><ChevronLeft size={14} /> Назад</button>
+                <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:18, padding:28 }}>
+                  <div style={{ display:"flex", gap:20, alignItems:"flex-start", marginBottom:20 }}>
+                    <Av name={c.name} color="#f5a623" size={60} />
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:20, fontWeight:700, color:"#12283d" }}>{c.name}</div>
+                      <div style={{ fontSize:13, color:"#7a8a9c", marginTop:4, display:"flex", alignItems:"center", gap:6 }}><Phone size={12} /> {c.phone}</div>
+                      {c.email && <div style={{ fontSize:13, color:"#7a8a9c", marginTop:2, display:"flex", alignItems:"center", gap:6 }}><Mail size={12} /> {c.email}</div>}
+                    </div>
+                    <Tag c={candCfg[c.status]?.color} bg={candCfg[c.status]?.bg}>{candCfg[c.status]?.label}</Tag>
+                  </div>
+                  {c.subjects?.length>0 && (
+                    <div style={{ marginBottom:16 }}>{c.subjects.map(s=><Tag key={s} c="#1da0d4" bg="rgba(29,160,212,0.12)">{s}</Tag>)}</div>
+                  )}
+                  {c.notes && (
+                    <div style={{ background:"#f2f6fa", borderRadius:10, padding:"12px 14px", marginBottom:16, fontSize:13, color:"#22344a", lineHeight:1.6 }}>
+                      <span style={{ fontWeight:700, color:"#12283d" }}>Примечания: </span>{c.notes}
+                    </div>
+                  )}
+                  <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+                    <select value={c.status} onChange={e=>setCandidates(candidates.map(x=>x.id===c.id?{...x,status:e.target.value}:x))} style={{ maxWidth:200 }}>
+                      {Object.entries(candCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                    {c.status!=="hired" && (
+                      <button className="bp" onClick={()=>hireCandidate(c)}><UserPlus size={14} /> Принять на работу</button>
+                    )}
+                    <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"9px 16px", borderRadius:10, cursor:"pointer", fontSize:14, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
+                      onClick={()=>{ if(window.confirm(`Удалить анкету "${c.name}"?`)){ setCandidates(candidates.filter(x=>x.id!==c.id)); setSelCandidate(null); notify("Анкета удалена"); } }}><Trash2 size={14} /> Удалить</button>
+                  </div>
+                  <AttachmentsBlock
+                    title="Резюме и документы"
+                    files={c.files||[]}
+                    uploading={uploadingFile}
+                    onUpload={(file)=>uploadAttachment("candidates", c.id, file)}
+                    onDelete={(f)=>deleteAttachment("candidates", c.id, f)}
+                  />
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+                <div>
+                  <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Соискатели</h1>
+                  <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Анкеты кандидатов на должность преподавателя · {candidates.length}</div>
+                </div>
+                <button className="bp" onClick={()=>setModal("addCandidate")}><Plus size={15} /> Добавить соискателя</button>
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
+                {Object.entries(candCfg).map(([k,v])=>{
+                  const cnt = candidates.filter(c=>c.status===k).length;
+                  return (
+                    <div key={k} onClick={()=>setCandFilter(candFilter===k?"all":k)} style={{ background:"#ffffff", border:`1px solid ${candFilter===k?v.color:"#dbe6f0"}`, boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:12, padding:"12px 16px", cursor:"pointer", textAlign:"center", transition:"all .2s" }}>
+                      <div style={{ fontSize:22, fontWeight:700, color:v.color }}>{cnt}</div>
+                      <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>{v.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ marginBottom:16 }}>
+                <input placeholder="Поиск по имени, телефону, предмету..." value={candSearch} onChange={e=>setCandSearch(e.target.value)} />
+              </div>
+
+              <div style={{ display:"grid", gap:12 }}>
+                {filtered.length===0 && <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:"50px", textAlign:"center", color:"#7a8a9c" }}>Анкет не найдено</div>}
+                {filtered.map(c=>(
+                  <div key={c.id} className="rh" style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:14, padding:"16px 20px", display:"flex", alignItems:"center", gap:14 }} onClick={()=>setSelCandidate(c)}>
+                    <Av name={c.name} color="#f5a623" size={40} />
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14, fontWeight:700, color:"#12283d" }}>{c.name}</div>
+                      <div style={{ fontSize:12, color:"#7a8a9c" }}>{c.phone}{c.subjects?.length ? ` · ${c.subjects.join(", ")}` : ""}</div>
+                    </div>
+                    {c.files?.length>0 && <span style={{ fontSize:11, color:"#7a8a9c", display:"flex", alignItems:"center", gap:4 }}><Paperclip size={12} /> {c.files.length}</span>}
+                    <Tag c={candCfg[c.status]?.color} bg={candCfg[c.status]?.bg}>{candCfg[c.status]?.label}</Tag>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+
         {view==="ai" && (
           <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 64px)", maxWidth:800 }}>
             <div style={{ marginBottom:20 }}>
@@ -3263,6 +3398,48 @@ export default function App() {
               <div style={{ display:"flex", gap:10, marginTop:4 }}>
                 <button className="bp" style={{ flex:1 }} onClick={()=>{ if(!nRequest.parentName||!nRequest.phone)return; setRequests([{...nRequest,id:Date.now(),date:new Date().toISOString().split("T")[0],assignedTutorId:null},...requests]); setNRequest({parentName:"",phone:"",studentName:"",age:"",course:"",comment:"",status:"new"}); setModal(null); notify("Запрос добавлен"); }}>Добавить запрос</button>
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADD CANDIDATE MODAL ── */}
+      {modal==="addCandidate" && (
+        <div className="ov" onClick={()=>{ setModal(null); setNCandidate({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" }); }}>
+          <div className="mo" style={{ width:520 }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 20px", fontSize:20, fontWeight:700, color:"#12283d", display:"flex", alignItems:"center", gap:8 }}><UserPlus size={19} /> Новый соискатель</h2>
+            <div style={{ display:"grid", gap:14 }}>
+              <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>ФИО *</div><input placeholder="Иванова Мария Сергеевна" value={nCandidate.name} onChange={e=>setNCandidate({...nCandidate,name:e.target.value})} /></div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nCandidate.phone} onChange={e=>setNCandidate({...nCandidate,phone:e.target.value})} /></div>
+                <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Email</div><input placeholder="mail@example.com" value={nCandidate.email} onChange={e=>setNCandidate({...nCandidate,email:e.target.value})} /></div>
+              </div>
+              <div>
+                <div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Может преподавать</div>
+                <div style={{ maxHeight:160, overflowY:"auto", display:"flex", flexDirection:"column", gap:8, background:"#f8fafc", border:"1px solid #e7eef5", borderRadius:10, padding:10 }}>
+                  {courseCategories.map(cat=>(
+                    <div key={cat.id}>
+                      <div style={{ fontSize:10, color:cat.color, fontWeight:700, textTransform:"uppercase", marginBottom:5 }}>{cat.label}</div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                        {cat.courses.map(s=>(
+                          <button key={s} onClick={()=>setNCandidate(prev=>({...prev,subjects:prev.subjects.includes(s)?prev.subjects.filter(x=>x!==s):[...prev.subjects,s]}))}
+                            style={{ padding:"4px 10px", borderRadius:20, fontSize:11, border:"1px solid", cursor:"pointer",
+                              background:nCandidate.subjects.includes(s)?`${cat.color}28`:"transparent",
+                              borderColor:nCandidate.subjects.includes(s)?cat.color:"#d7e2ee",
+                              color:nCandidate.subjects.includes(s)?cat.color:"#55677a" }}>{s}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Примечания</div>
+                <textarea rows={3} placeholder="Опыт работы, впечатление от разговора и т.п." value={nCandidate.notes} onChange={e=>setNCandidate({...nCandidate,notes:e.target.value})} />
+              </div>
+              <div style={{ display:"flex", gap:10, marginTop:4 }}>
+                <button className="bp" style={{ flex:1 }} onClick={addCandidate}>Добавить</button>
+                <button className="bg" onClick={()=>{ setModal(null); setNCandidate({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" }); }}>Отмена</button>
               </div>
             </div>
           </div>
