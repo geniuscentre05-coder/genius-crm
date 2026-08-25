@@ -20,7 +20,7 @@ function loadFromLS() {
 function printSchedule(lessons, tutors, students, weekLabel) {
   const rows = lessons.sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:a.time>b.time?1:-1).map(l => {
     const t = tutors.find(x=>x.id===l.tutorId);
-    return `<tr><td>${l.date}</td><td>${l.time||"—"}</td><td>${l.studentName}</td><td>${l.subject}</td><td>${t?.short||"—"}</td><td>${l.duration} мин</td><td>${l.price}₽</td><td>${l.status==="completed"?"✓ Проведено":l.status==="cancelled"?"✗ Отменено":"Запланировано"}</td></tr>`;
+    return `<tr><td>${l.date}</td><td>${l.time||"—"}</td><td>${l.studentName}</td><td>${l.subject}</td><td>${t?.short||"—"}</td><td>${l.duration} мин</td><td>${l.price}₽</td><td>${lsnCfg[l.status]?.label||l.status}</td></tr>`;
   }).join("");
   const w = window.open("","_blank");
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Расписание</title><style>
@@ -238,10 +238,12 @@ const statusCfg = {
   inactive: { label:"Неактивен", color:"#e2574c", bg:"rgba(239,68,68,0.12)"   },
 };
 const lsnCfg = {
-  scheduled:{ label:"Запланировано", color:"#1da0d4" },
-  completed: { label:"Проведено",    color:"#5cb85c" },
-  cancelled: { label:"Отменено",     color:"#e2574c" },
-  noshow:    { label:"Не явился",    color:"#f5a623" },
+  scheduled:     { label:"Запланировано",              color:"#1da0d4" },
+  completed:     { label:"Проведено",                  color:"#5cb85c" },
+  cancelled:     { label:"Отменено",                   color:"#a9b8c6" },
+  noshow_burned: { label:"Не пришёл — сгорело",         color:"#e2574c" },
+  sick_valid:    { label:"Болен (уважительная)",        color:"#17a6c9" },
+  sick_invalid:  { label:"Болен (неуважительная)",      color:"#f5a623" },
 };
 const channelCfg = {
   whatsapp:{ label:"WhatsApp", icon:"💬", color:"#25d366" },
@@ -1850,8 +1852,9 @@ export default function App() {
                                     </div>
                                     <div style={{ fontSize:10, color:"#6d7f92" }}>{l.subject} · {l.time}</div>
                                     {l.isGroup && <div style={{ fontSize:9, color:"#f5a623" }}>{l.studentName}</div>}
-                                    {l.status==="completed" && <div style={{ fontSize:9, color:"#5cb85c" }}>✓</div>}
-                                    {l.status==="cancelled" && <div style={{ fontSize:9, color:"#e2574c" }}>✗</div>}
+                                    {l.status!=="scheduled" && (
+                                      <div style={{ fontSize:8, color:lsnCfg[l.status]?.color, fontWeight:700, marginTop:1 }}>{lsnCfg[l.status]?.label}</div>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -2014,7 +2017,8 @@ export default function App() {
                                             style={{ background:isActive?`${t.color}44`:`${t.color}20`, border:`1px solid ${isActive?t.color:t.color+"44"}`, borderLeft:`3px solid ${t.color}`, borderRadius:4, padding:"3px 5px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
                                             <div style={{ fontSize:10, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:74 }}>{l.studentName}</div>
                                             <div style={{ fontSize:9, color:"#6d7f92" }}>{l.subject}</div>
-                                            <div style={{ fontSize:9, color:"#55677a" }}>{l.time}{l.status==="completed"?" ✓":l.status==="cancelled"?" ✗":""}</div>
+                                            <div style={{ fontSize:9, color:"#55677a" }}>{l.time}</div>
+                                            {l.status!=="scheduled" && <div style={{ fontSize:8, color:lsnCfg[l.status]?.color, fontWeight:700 }}>{lsnCfg[l.status]?.label}</div>}
                                           </div>
                                         );
                                       })}
@@ -3322,7 +3326,7 @@ export default function App() {
                 const conflicts = lessons.filter(l => {
                   if (l.tutorId !== Number(nLesson.tutorId)) return false;
                   if (l.date !== nLesson.date) return false;
-                  if (l.status === "cancelled") return false;
+                  if (["cancelled","noshow_burned","sick_valid","sick_invalid"].includes(l.status)) return false;
                   if (!l.time) return false;
                   const [lh, lm] = l.time.split(":").map(Number);
                   const lStart = lh*60+lm;
