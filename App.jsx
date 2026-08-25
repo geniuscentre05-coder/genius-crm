@@ -2627,34 +2627,43 @@ export default function App() {
 
       {modal==="addStudent" && (
         <div className="ov" onClick={()=>setModal(null)}>
-          <div className="mo" style={{ width:620, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
-            <h2 style={{ margin:"0 0 4px", fontSize:20, fontWeight:700 }}>Новый ученик / семья</h2>
-            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:18 }}>Если из одной семьи несколько детей — добавьте их всех сразу, контакты родителя общие</div>
+          <div className="mo" style={{ width:640, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 4px", fontSize:21, fontWeight:700, color:"#12283d" }}>Новый ученик</h2>
+            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:20 }}>Если из одной семьи несколько детей — добавьте их всех сразу, контакты родителя общие</div>
             <div style={{ display:"grid", gap:14 }}>
 
-              <div style={{ fontSize:12, fontWeight:700, color:"#1da0d4", textTransform:"uppercase" }}>Контакты семьи</div>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО родителя *</div><input placeholder="Иванова Мария Петровна" value={familyForm.parentName} onChange={e=>setFamilyForm({...familyForm,parentName:e.target.value})} /></div>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={familyForm.phone} onChange={e=>setFamilyForm({...familyForm,phone:e.target.value})} /></div>
+              <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:11, fontWeight:700, color:"#1da0d4", textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                <Users size={14} /> Контакты семьи
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>ФИО родителя *</div><input placeholder="Иванова Мария Петровна" value={familyForm.parentName} onChange={e=>setFamilyForm({...familyForm,parentName:e.target.value})} /></div>
+                <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em", display:"flex", alignItems:"center", gap:4 }}><Phone size={11} /> Телефон *</div><input placeholder="+7 900 000-00-00" value={familyForm.phone} onChange={e=>setFamilyForm({...familyForm,phone:e.target.value})} /></div>
+              </div>
               {familyForm.extraPhones.map((p,i)=>(
                 <div key={i} style={{ display:"flex", gap:8 }}>
                   <input placeholder="Дополнительный телефон" value={p} onChange={e=>{ const arr=[...familyForm.extraPhones]; arr[i]=e.target.value; setFamilyForm({...familyForm,extraPhones:arr}); }} />
-                  <button onClick={()=>setFamilyForm({...familyForm,extraPhones:familyForm.extraPhones.filter((_,j)=>j!==i)})} style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>✗</button>
+                  <button onClick={()=>setFamilyForm({...familyForm,extraPhones:familyForm.extraPhones.filter((_,j)=>j!==i)})} style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center" }}><X size={13} /></button>
                 </div>
               ))}
-              <button className="bg" style={{ width:"fit-content", fontSize:12 }} onClick={()=>setFamilyForm({...familyForm,extraPhones:[...familyForm.extraPhones,""]})}>+ Ещё телефон</button>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>📍 Адрес</div><input placeholder="ул. Ленина, д. 12, кв. 34" value={familyForm.address} onChange={e=>setFamilyForm({...familyForm,address:e.target.value})} /></div>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Примечания</div><textarea rows={2} placeholder="Любая дополнительная информация" value={familyForm.notes} onChange={e=>setFamilyForm({...familyForm,notes:e.target.value})} /></div>
+              <button className="bg" style={{ width:"fit-content", fontSize:12 }} onClick={()=>setFamilyForm({...familyForm,extraPhones:[...familyForm.extraPhones,""]})}><Plus size={13} /> Ещё телефон</button>
+              <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em", display:"flex", alignItems:"center", gap:4 }}><MapPin size={11} /> Адрес</div><input placeholder="ул. Ленина, д. 12, кв. 34" value={familyForm.address} onChange={e=>setFamilyForm({...familyForm,address:e.target.value})} /></div>
+              <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Примечания</div><textarea rows={2} placeholder="Любая дополнительная информация" value={familyForm.notes} onChange={e=>setFamilyForm({...familyForm,notes:e.target.value})} /></div>
 
-              <div style={{ height:1, background:"#dbe6f0", margin:"6px 0" }} />
-              <div style={{ fontSize:12, fontWeight:700, color:"#1da0d4", textTransform:"uppercase" }}>Дети</div>
+              <div style={{ height:1, background:"#dbe6f0", margin:"8px 0" }} />
+              <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:11, fontWeight:700, color:"#1da0d4", textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                <GraduationCap size={14} /> Дети
+              </div>
 
               {familyForm.children.map((child, ci) => (
-                <div key={ci} style={{ background:"#f2f6fa", borderRadius:12, padding:16, display:"grid", gap:12 }}>
+                <div key={ci} style={{ background:"#f8fafc", border:"1px solid #e7eef5", borderRadius:14, padding:18, display:"grid", gap:12 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:"#12283d" }}>Ребёнок {ci+1}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+                      <div style={{ width:26, height:26, borderRadius:"50%", background:"linear-gradient(135deg,#1da0d4,#5cb85c)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0 }}>{ci+1}</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:"#12283d" }}>Ребёнок {ci+1}</div>
+                    </div>
                     {familyForm.children.length>1 && (
                       <button onClick={()=>setFamilyForm({...familyForm, children: familyForm.children.filter((_,j)=>j!==ci)})}
-                        style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>Удалить</button>
+                        style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:12, fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}><Trash2 size={12} /> Удалить</button>
                     )}
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -2665,11 +2674,11 @@ export default function App() {
                     </div>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                    <input placeholder="🏫 Школа" value={child.school} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],school:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
+                    <input placeholder="Школа" value={child.school} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],school:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
                     <input placeholder="Класс" value={child.grade} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],grade:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
                   </div>
                   <div>
-                    <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы и педагоги</div>
+                    <div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Предметы и педагоги</div>
                     {child.subjectTeachers.map((st,si)=>(
                       <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
                         <select value={st.subject} onChange={e=>{ const arr=[...familyForm.children]; const sts=[...arr[ci].subjectTeachers]; sts[si]={...sts[si],subject:e.target.value}; arr[ci]={...arr[ci],subjectTeachers:sts}; setFamilyForm({...familyForm,children:arr}); }}>
@@ -2686,27 +2695,27 @@ export default function App() {
                         </select>
                         {child.subjectTeachers.length>1 && (
                           <button onClick={()=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],subjectTeachers:arr[ci].subjectTeachers.filter((_,j)=>j!==si)}; setFamilyForm({...familyForm,children:arr}); }}
-                            style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", borderRadius:6, padding:"4px 8px", cursor:"pointer", flexShrink:0 }}>✗</button>
+                            style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", borderRadius:6, padding:"4px 8px", cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center" }}><X size={13} /></button>
                         )}
                       </div>
                     ))}
-                    <button className="bg" style={{ fontSize:11 }} onClick={()=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],subjectTeachers:[...arr[ci].subjectTeachers,{subject:"",tutorId:""}]}; setFamilyForm({...familyForm,children:arr}); }}>+ Ещё предмет</button>
+                    <button className="bg" style={{ fontSize:11 }} onClick={()=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],subjectTeachers:[...arr[ci].subjectTeachers,{subject:"",tutorId:""}]}; setFamilyForm({...familyForm,children:arr}); }}><Plus size={12} /> Ещё предмет</button>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <div>
-                      <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Статус</div>
+                      <div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Статус</div>
                       <select value={child.status} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],status:e.target.value}; setFamilyForm({...familyForm,children:arr}); }}>
                         {Object.entries(statusCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                       </select>
                     </div>
                     <div>
-                      <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Условия оплаты</div>
+                      <div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Условия оплаты</div>
                       <input placeholder="напр. 5000₽/мес" value={child.tuitionNote} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],tuitionNote:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
                     </div>
                   </div>
                 </div>
               ))}
-              <button className="bg" onClick={()=>setFamilyForm({...familyForm, children:[...familyForm.children, emptyChild()]})}>+ Добавить ещё ребёнка</button>
+              <button className="bg" onClick={()=>setFamilyForm({...familyForm, children:[...familyForm.children, emptyChild()]})}><Plus size={14} /> Добавить ещё ребёнка</button>
 
               <div style={{ display:"flex", gap:10, marginTop:8 }}>
                 <button className="bp" style={{ flex:1 }} onClick={addStudent}>Добавить {familyForm.children.filter(c=>c.name.trim()).length>1?`(детей: ${familyForm.children.filter(c=>c.name.trim()).length})`:""}</button>
