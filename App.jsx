@@ -622,15 +622,18 @@ export default function App() {
     }));
     setStudents([...students, ...newStudents]);
     setFamilyForm({ parentName:"", phone:"", extraPhones:[], address:"", notes:"", children:[emptyChild()] });
-    setModal(null); notify(newStudents.length>1 ? `Добавлено детей: ${newStudents.length}` : "Ученик добавлен");
+    setModal(null); notify(newStudents.length>1 ? `Добавлено детей: ${newStudents.length} — прикрепите документы в карточке` : "Ученик добавлен — прикрепите документы в его карточке");
+    setView("students"); setSelTutor(null); setSelStudent(newStudents[0]);
   };
   const addTutor = () => {
     if (!nTutor.name || !nTutor.phone) return;
     const parts = nTutor.name.trim().split(" ");
     const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
-    setTutors([...tutors, { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue), files:[] }]);
+    const newTutor = { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue), files:[] };
+    setTutors([...tutors, newTutor]);
     setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
-    setModal(null); notify("Преподаватель добавлен");
+    setModal(null); notify("Преподаватель добавлен — прикрепите документы в его карточке");
+    setView("tutors"); setSelStudent(null); setTTab("overview"); setSelTutor(newTutor);
   };
   const addLesson = () => {
     if (!nLesson.studentId || !nLesson.subject || !nLesson.date || !nLesson.tutorId) return;
