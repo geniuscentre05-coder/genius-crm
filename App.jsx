@@ -1007,6 +1007,8 @@ export default function App() {
                     <button className="bp" onClick={()=>{ setNSalary({...nSalary,tutorId:String(t.id)}); setModal("addSalary"); }}>💰 Выплатить зарплату</button>
                     <button className="bg" onClick={()=>printSchedule(myL, tutors, students, `Преподаватель: ${t.short}`)}>🖨️ Расписание преподавателя</button>
                     <button className="bg" onClick={()=>startEditTutor(t)}>✏️ Редактировать</button>
+                    <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
+                      onClick={()=>{ if(window.confirm(`Удалить преподавателя "${t.name}"? Занятия и история останутся в системе.`)){ setTutors(tutors.filter(x=>x.id!==t.id)); setSelTutor(null); notify("Преподаватель удалён"); } }}><Trash2 size={13} /> Удалить</button>
                   </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
@@ -1285,6 +1287,8 @@ export default function App() {
                       <Tag c={statusCfg[selStudentLive.status]?.color} bg={statusCfg[selStudentLive.status]?.bg}>{statusCfg[selStudentLive.status]?.label}</Tag>
                       <button className="bg" onClick={()=>printSchedule(lessons.filter(l=>l.studentId===selStudentLive.id), tutors, students, `Ученик: ${selStudentLive.name}`)}>🖨️ Расписание ученика</button>
                       <button className="bg" onClick={()=>startEditStudent(selStudentLive)}>✏️ Редактировать</button>
+                      <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
+                        onClick={()=>{ if(window.confirm(`Удалить ученика "${selStudentLive.name}"? Занятия и история останутся в системе.`)){ setStudents(students.filter(x=>x.id!==selStudentLive.id)); setSelStudent(null); notify("Ученик удалён"); } }}><Trash2 size={13} /> Удалить</button>
                     </div>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
