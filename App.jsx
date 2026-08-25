@@ -798,11 +798,11 @@ export default function App() {
 
       {/* SIDEBAR */}
       <div style={{ width:220, background:"linear-gradient(180deg, #1da0d4 0%, #17a6c9 45%, #5cb85c 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
-        <div style={{ padding:"0 20px 28px", display:"flex", alignItems:"center", gap:12 }}>
-          <img src="/logo.jpg" alt="Гений" style={{ width:48, height:48, borderRadius:"50%", boxShadow:"0 2px 8px rgba(18,40,61,.25)", flexShrink:0 }} />
+        <div style={{ padding:"0 16px 28px", display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:10 }}>
+          <img src="/logo.jpg" alt="Гений" style={{ width:76, height:76, borderRadius:"50%", boxShadow:"0 4px 14px rgba(18,40,61,.3)", flexShrink:0 }} />
           <div>
-            <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:20, fontWeight:800, color:"#ffffff", lineHeight:1.1 }}>Гений</div>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.85)", marginTop:3, textTransform:"uppercase", letterSpacing:"0.04em" }}>Образовательный центр</div>
+            <div style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", fontSize:23, fontWeight:800, color:"#ffffff", lineHeight:1.15, letterSpacing:"0.01em" }}>Гений</div>
+            <div style={{ fontSize:10, color:"rgba(255,255,255,0.9)", marginTop:4, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>Образовательный центр</div>
           </div>
         </div>
         {nav.map(n=>(
