@@ -336,6 +336,12 @@ export default function App() {
   const [weekOffset,    setWeekOffset]    = useState(0);
   const [schedView,     setSchedView]     = useState("week");
   const [editLesson,    setEditLesson]    = useState(null);
+  const [editLessonType, setEditLessonType] = useState("individual");
+  const [editGroupRoster, setEditGroupRoster] = useState([]);
+  const [editGroupName, setEditGroupName] = useState("");
+  const [editRecurOn,       setEditRecurOn]       = useState(false);
+  const [editRecurWeekdays, setEditRecurWeekdays] = useState([]);
+  const [editRecurEndDate,  setEditRecurEndDate]  = useState("");
   const [schedTutorFilter, setSchedTutorFilter] = useState("all");
   const [recurModal,    setRecurModal]    = useState(false);
   const [recurCount,    setRecurCount]    = useState(4);
@@ -1528,11 +1534,74 @@ export default function App() {
             notify(`Создано ${recurCount} занятий`);
           };
 
+          const openEditLesson = (l) => {
+            if (!l) { setEditLesson(null); return; }
+            setEditLesson({...l});
+            setEditLessonType(l.isGroup ? "group" : "individual");
+            if (l.isGroup && l.groupId) {
+              const siblings = lessons.filter(x=>x.groupId===l.groupId);
+              setEditGroupRoster(siblings.map(s=>({ studentId:String(s.studentId), price:s.price })));
+              setEditGroupName(l.groupName||"");
+            } else {
+              setEditGroupRoster([{ studentId:String(l.studentId), price:l.price }]);
+              setEditGroupName("");
+            }
+            setEditRecurOn(false); setEditRecurWeekdays([]); setEditRecurEndDate("");
+          };
+          const closeEditLesson = () => { setEditLesson(null); };
+
           const saveEdit = () => {
             if (!editLesson) return;
-            setLessons(lessons.map(l=>l.id===editLesson.id ? {...l,...editLesson} : l));
+            const tu = tutors.find(t=>t.id===Number(editLesson.tutorId));
+            const shared = { subject:editLesson.subject, tutorId:Number(editLesson.tutorId), tutorShort:tu?.short||editLesson.tutorShort, date:editLesson.date, time:editLesson.time, duration:Number(editLesson.duration), status:editLesson.status };
+
+            // Compute list of extra recurring dates (excluding the original date itself)
+            const getExtraRecurDates = () => {
+              if (!editRecurOn || !editRecurEndDate || editRecurWeekdays.length===0) return [];
+              const dates = [];
+              const start = new Date(editLesson.date), end = new Date(editRecurEndDate);
+              for (let d=new Date(start); d<=end; d.setDate(d.getDate()+1)) {
+                const wd = (d.getDay()+6)%7;
+                const ds = d.toISOString().split("T")[0];
+                if (editRecurWeekdays.includes(wd) && ds!==editLesson.date) dates.push(ds);
+              }
+              return dates;
+            };
+            const extraDates = getExtraRecurDates();
+
+            if (editLessonType==="group") {
+              const validRoster = editGroupRoster.filter(r=>r.studentId);
+              if (validRoster.length===0) { notify("Добавьте хотя бы одного ученика в группу", "error"); return; }
+              const groupId = editLesson.groupId || Date.now();
+              const name = editGroupName || `Группа ${editLesson.subject} ${editLesson.time}`;
+              // Remove old records for this group (if any) and the original individual record
+              let base = lessons.filter(l => (editLesson.groupId ? l.groupId!==editLesson.groupId : true) && l.id!==editLesson.id);
+              const mainRows = validRoster.map((r,i)=>{
+                const st = students.find(s=>s.id===Number(r.studentId));
+                return { ...shared, id:groupId+i, studentId:Number(r.studentId), studentName:st?.name||"", price:Number(r.price||0), isGroup:true, groupId, groupName:name };
+              });
+              let all = [...base, ...mainRows];
+              extraDates.forEach((dateStr,di)=>{
+                const gid = groupId + (di+1)*1000;
+                validRoster.forEach((r,i)=>{
+                  const st = students.find(s=>s.id===Number(r.studentId));
+                  all.push({ ...shared, id:gid+i, date:dateStr, studentId:Number(r.studentId), studentName:st?.name||"", price:Number(r.price||0), isGroup:true, groupId:gid, groupName:name });
+                });
+              });
+              setLessons(all);
+            } else {
+              const st = students.find(s=>s.id===Number(editLesson.studentId));
+              const updated = { ...shared, id:editLesson.id, studentId:Number(editLesson.studentId), studentName:st?.name||editLesson.studentName, price:Number(editLesson.price), isGroup:false };
+              let base = lessons.filter(l => l.id!==editLesson.id);
+              let all = [...base, updated];
+              extraDates.forEach((dateStr,di)=>{
+                all.push({ ...updated, id:Date.now()+di+1, date:dateStr });
+              });
+              setLessons(all);
+            }
+            const totalCreated = 1 + extraDates.length;
             setEditLesson(null);
-            notify("Занятие обновлено");
+            notify(extraDates.length>0 ? `Занятие обновлено, создано ещё ${extraDates.length} по расписанию` : "Занятие обновлено");
           };
           const deleteLesson = id => {
             setLessons(lessons.filter(l=>l.id!==id));
@@ -1592,24 +1661,30 @@ export default function App() {
 
               {/* Edit lesson — popup modal */}
               {editLesson && (
-                <div className="ov" onClick={()=>setEditLesson(null)}>
-                  <div className="mo" style={{ width:640 }} onClick={e=>e.stopPropagation()}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+                <div className="ov" onClick={closeEditLesson}>
+                  <div className="mo" style={{ width:680, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
                       <div style={{ fontSize:19, fontWeight:700, color:"#12283d", display:"flex", alignItems:"center", gap:8 }}><Pencil size={18} color="#1da0d4" /> Редактирование занятия</div>
-                      <button onClick={()=>setEditLesson(null)} style={{ background:"transparent", border:"none", cursor:"pointer", color:"#7a8a9c", display:"flex" }}><X size={20} /></button>
+                      <button onClick={closeEditLesson} style={{ background:"transparent", border:"none", cursor:"pointer", color:"#7a8a9c", display:"flex" }}><X size={20} /></button>
                     </div>
+
+                    {/* TYPE SWITCHER */}
+                    <div style={{ display:"flex", gap:0, marginBottom:16, background:"#f2f6fa", borderRadius:12, padding:4 }}>
+                      {[["individual","Индивидуальное"],["group","Групповое"]].map(([k,l])=>(
+                        <button key={k} onClick={()=>setEditLessonType(k)}
+                          style={{ flex:1, padding:"9px", borderRadius:9, fontSize:13, fontWeight:700, border:"none", cursor:"pointer", fontFamily:"inherit", transition:"all .2s",
+                            background:editLessonType===k?"linear-gradient(135deg,#1da0d4,#5cb85c)":"transparent",
+                            color:editLessonType===k?"white":"#55677a" }}>{l}</button>
+                      ))}
+                    </div>
+
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-                      <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Ученик</div>
-                        <select value={editLesson.studentId} onChange={e=>{ const s=students.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,studentId:Number(e.target.value),studentName:s?.name||""}); }}>
-                          {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                      </div>
                       <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Преподаватель</div>
                         <select value={editLesson.tutorId} onChange={e=>{ const t=tutors.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,tutorId:Number(e.target.value),tutorShort:t?.short||""}); }}>
                           {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
                         </select>
                       </div>
-                      <div style={{ gridColumn:"1/-1" }}><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Предмет</div>
+                      <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Предмет</div>
                         <select value={editLesson.subject} onChange={e=>setEditLesson({...editLesson,subject:e.target.value})}>
                           {courseCategories.map(cat=>(
                             <optgroup key={cat.id} label={cat.label}>
@@ -1618,6 +1693,40 @@ export default function App() {
                           ))}
                         </select>
                       </div>
+
+                      {editLessonType==="individual" ? (
+                        <>
+                          <div style={{ gridColumn:"1/-1" }}><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Ученик</div>
+                            <select value={editLesson.studentId} onChange={e=>{ const s=students.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,studentId:Number(e.target.value),studentName:s?.name||""}); }}>
+                              {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                          <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Стоимость (₽)</div>
+                            <input type="number" value={editLesson.price} onChange={e=>setEditLesson({...editLesson,price:Number(e.target.value)})} />
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ gridColumn:"1/-1" }}>
+                          <div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Название группы</div>
+                          <input placeholder="напр. Группа ОГЭ Пн" value={editGroupName} onChange={e=>setEditGroupName(e.target.value)} style={{ marginBottom:10 }} />
+                          <div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Ученики группы ({editGroupRoster.filter(r=>r.studentId).length})</div>
+                          {editGroupRoster.map((gs,i)=>{
+                            const st = students.find(s=>s.id===Number(gs.studentId));
+                            return (
+                              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:"#f2f6fa", borderRadius:9, marginBottom:6, border:"1px solid #d7e2ee" }}>
+                                <select value={gs.studentId} onChange={e=>{ const arr=[...editGroupRoster]; arr[i]={...arr[i],studentId:e.target.value}; setEditGroupRoster(arr); }} style={{ flex:1 }}>
+                                  <option value="">Выберите ученика...</option>
+                                  {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                                <input type="number" value={gs.price} placeholder="Цена" onChange={e=>{ const arr=[...editGroupRoster]; arr[i]={...arr[i],price:e.target.value}; setEditGroupRoster(arr); }} style={{ width:90, fontSize:12, padding:"4px 8px" }} />
+                                <button onClick={()=>setEditGroupRoster(editGroupRoster.filter((_,j)=>j!==i))} style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}><X size={13} /></button>
+                              </div>
+                            );
+                          })}
+                          <button className="bg" style={{ fontSize:12 }} onClick={()=>setEditGroupRoster([...editGroupRoster,{studentId:"",price:""}])}><Plus size={13} /> Добавить ученика</button>
+                        </div>
+                      )}
+
                       <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Статус</div>
                         <select value={editLesson.status} onChange={e=>setEditLesson({...editLesson,status:e.target.value})}>
                           {Object.entries(lsnCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
@@ -1632,17 +1741,69 @@ export default function App() {
                       <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Длительность (мин)</div>
                         <input type="number" value={editLesson.duration} onChange={e=>setEditLesson({...editLesson,duration:Number(e.target.value)})} />
                       </div>
-                      <div style={{ gridColumn:"1/-1" }}><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Стоимость (₽)</div>
-                        <input type="number" value={editLesson.price} onChange={e=>setEditLesson({...editLesson,price:Number(e.target.value)})} />
-                      </div>
                     </div>
+
+                    {/* RECURRING / PIN SCHEDULE */}
+                    <div style={{ background:"#f2f6fa", borderRadius:12, padding:"14px 16px", marginTop:16 }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        <div style={{ fontSize:14, fontWeight:700, color:"#12283d", display:"flex", alignItems:"center", gap:6 }}><Calendar size={15} color="#1da0d4" /> Закрепить расписание</div>
+                        <div onClick={()=>setEditRecurOn(r=>!r)} style={{ width:40, height:22, borderRadius:11, background:editRecurOn?"#1da0d4":"#d7e2ee", cursor:"pointer", transition:"all .2s", position:"relative", flexShrink:0 }}>
+                          <div style={{ position:"absolute", top:3, left:editRecurOn?20:3, width:16, height:16, borderRadius:"50%", background:"white", transition:"all .2s" }} />
+                        </div>
+                      </div>
+                      {editRecurOn && (
+                        <div style={{ marginTop:12, display:"grid", gap:10 }}>
+                          <div>
+                            <div style={{ fontSize:12, color:"#55677a", marginBottom:5 }}>Дни недели</div>
+                            <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                              {["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map((d,idx)=>(
+                                <button key={idx} onClick={()=>setEditRecurWeekdays(prev=>prev.includes(idx)?prev.filter(x=>x!==idx):[...prev,idx])}
+                                  style={{ width:38, padding:"6px 0", borderRadius:7, fontSize:12, border:"1px solid", cursor:"pointer", fontFamily:"inherit", fontWeight:600,
+                                    background:editRecurWeekdays.includes(idx)?"#1da0d4":"transparent",
+                                    borderColor:editRecurWeekdays.includes(idx)?"#1da0d4":"#d7e2ee",
+                                    color:editRecurWeekdays.includes(idx)?"#ffffff":"#55677a" }}>{d}</button>
+                              ))}
+                            </div>
+                            <div style={{ fontSize:10, color:"#a9b8c6", marginTop:4 }}>Например Вт и Чт — начиная с даты этого занятия, на каждый такой день в периоде ниже</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize:12, color:"#55677a", marginBottom:5 }}>Период — до какой даты</div>
+                            <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:6 }}>
+                              {[["Неделя",7],["2 недели",14],["1 месяц",30],["2 месяца",60],["3 месяца",90],["Год",365]].map(([label,days])=>(
+                                <button key={days} onClick={()=>{
+                                  if (!editLesson.date) return;
+                                  const d = new Date(editLesson.date); d.setDate(d.getDate()+days);
+                                  setEditRecurEndDate(d.toISOString().split("T")[0]);
+                                }}
+                                  style={{ padding:"4px 10px", borderRadius:7, fontSize:12, border:"1px solid #d7e2ee", cursor:"pointer", fontFamily:"inherit", background:"transparent", color:"#55677a" }}>{label}</button>
+                              ))}
+                            </div>
+                            <input type="date" value={editRecurEndDate} onChange={e=>setEditRecurEndDate(e.target.value)} />
+                          </div>
+                          {editLesson.date && editRecurEndDate && editRecurWeekdays.length>0 && (()=>{
+                            const start = new Date(editLesson.date), end = new Date(editRecurEndDate);
+                            let cnt = 0;
+                            for (let d=new Date(start); d<=end; d.setDate(d.getDate()+1)) {
+                              const wd = (d.getDay()+6)%7;
+                              if (editRecurWeekdays.includes(wd) && d.toISOString().split("T")[0]!==editLesson.date) cnt++;
+                            }
+                            return (
+                              <div style={{ background:"rgba(29,160,212,0.08)", borderRadius:8, padding:"8px 12px", fontSize:11, color:"#1da0d4" }}>
+                                Будет дополнительно создано занятий: {cnt}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+
                     <div style={{ display:"flex", gap:10, marginTop:20, flexWrap:"wrap" }}>
                       <button className="bp" style={{ flex:1 }} onClick={saveEdit}>Сохранить</button>
                       <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"10px 18px", borderRadius:10, cursor:"pointer", fontSize:14, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }} onClick={()=>deleteLesson(editLesson.id)}><Trash2 size={15} /> Удалить</button>
                       {editLesson.isGroup && editLesson.groupId && (
                         <button style={{ background:"rgba(226,87,76,0.15)", border:"1px solid rgba(226,87,76,0.4)", color:"#e2574c", padding:"10px 18px", borderRadius:10, cursor:"pointer", fontSize:14, fontFamily:"inherit", fontWeight:700, display:"flex", alignItems:"center", gap:6 }} onClick={()=>deleteGroup(editLesson.groupId)}><Trash2 size={15} /> Удалить группу</button>
                       )}
-                      <button className="bg" onClick={()=>setEditLesson(null)}>Отмена</button>
+                      <button className="bg" onClick={closeEditLesson}>Отмена</button>
                     </div>
                   </div>
                 </div>
@@ -1681,7 +1842,7 @@ export default function App() {
                                 const tu=tutors.find(x=>x.id===l.tutorId);
                                 const isActive = editLesson?.id===l.id;
                                 return (
-                                  <div key={l.id} onClick={e=>{ e.stopPropagation(); setEditLesson(isActive?null:{...l}); }}
+                                  <div key={l.id} onClick={e=>{ e.stopPropagation(); openEditLesson(isActive?null:l); }}
                                     style={{ background: isActive?`${tu?.color||"#1da0d4"}33`:`${tu?.color||"#1da0d4"}18`, border:`1px solid ${isActive?tu?.color||"#1da0d4":(tu?.color||"#1da0d4")+"33"}`, borderLeft:`3px solid ${tu?.color||"#1da0d4"}`, borderRadius:6, padding:"4px 6px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
                                     <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                                       {l.isGroup && <span style={{ fontSize:8, background:"#f5a623", color:"black", borderRadius:3, padding:"1px 4px", fontWeight:700 }}>ГР</span>}
@@ -1734,7 +1895,7 @@ export default function App() {
                         </div>
                         <div style={{ display:"flex", gap:6, flexShrink:0 }}>
                           {l.status==="scheduled" && <button className="bg" style={{ fontSize:11, padding:"5px 10px" }} onClick={()=>completeLesson(l.id)}>✓</button>}
-                          <button className="bg" style={{ fontSize:11, padding:"5px 10px", background:isEditing?"rgba(99,102,241,0.25)":"" }} onClick={()=>setEditLesson(isEditing?null:{...l})}>✏️</button>
+                          <button className="bg" style={{ fontSize:11, padding:"5px 10px", background:isEditing?"rgba(99,102,241,0.25)":"" }} onClick={()=>openEditLesson(isEditing?null:l)}>✏️</button>
                           <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>{ setLessons(lessons.filter(x=>x.id!==l.id)); notify("Занятие удалено"); }}>🗑</button>
                         </div>
                       </div>
@@ -1849,7 +2010,7 @@ export default function App() {
                                         const isActive = editLesson?.id===l.id;
                                         return (
                                           <div key={l.id}
-                                            onClick={e=>{ e.stopPropagation(); setEditLesson(isActive?null:{...l}); }}
+                                            onClick={e=>{ e.stopPropagation(); openEditLesson(isActive?null:l); }}
                                             style={{ background:isActive?`${t.color}44`:`${t.color}20`, border:`1px solid ${isActive?t.color:t.color+"44"}`, borderLeft:`3px solid ${t.color}`, borderRadius:4, padding:"3px 5px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
                                             <div style={{ fontSize:10, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:74 }}>{l.studentName}</div>
                                             <div style={{ fontSize:9, color:"#6d7f92" }}>{l.subject}</div>
