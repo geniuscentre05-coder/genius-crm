@@ -55,7 +55,7 @@ function printReceipt(student, payment) {
     .footer{margin-top:30px;font-size:11px;color:#aaa;text-align:center}
     @media print{button{display:none}}
   </style></head><body>
-    <div class="logo">GENIUS CRM</div>
+    <div class="logo">Гений</div>
     <div class="subtitle">Образовательный центр «ГЕНИЙ»</div>
     <h2>Квитанция об оплате</h2>
     <div class="row"><span class="label">Дата</span><span class="value">${payment.date}</span></div>
@@ -315,6 +315,8 @@ export default function App() {
   const [editPricing,setEditPricing]= useState(null);
   const [editRule,   setEditRule]   = useState(null);
   const [pricingTab, setPricingTab] = useState("prices");
+  const [reportMonth, setReportMonth] = useState("2026-03");
+  const [reportTab, setReportTab] = useState("finance");
   const [reqSearch, setReqSearch] = useState("");
   const [reqFilter, setReqFilter] = useState("all");
 
@@ -796,9 +798,12 @@ export default function App() {
 
       {/* SIDEBAR */}
       <div style={{ width:220, background:"linear-gradient(180deg, #1da0d4 0%, #17a6c9 45%, #5cb85c 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
-        <div style={{ padding:"0 20px 28px" }}>
-          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:20, fontWeight:800, color:"#ffffff" }}>GENIUS CRM</div>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.75)", marginTop:2 }}>Образовательный центр «ГЕНИЙ»</div>
+        <div style={{ padding:"0 20px 28px", display:"flex", alignItems:"center", gap:12 }}>
+          <img src="/logo.jpg" alt="Гений" style={{ width:48, height:48, borderRadius:"50%", boxShadow:"0 2px 8px rgba(18,40,61,.25)", flexShrink:0 }} />
+          <div>
+            <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:20, fontWeight:800, color:"#ffffff", lineHeight:1.1 }}>Гений</div>
+            <div style={{ fontSize:10, color:"rgba(255,255,255,0.85)", marginTop:3, textTransform:"uppercase", letterSpacing:"0.04em" }}>Образовательный центр</div>
+          </div>
         </div>
         {nav.map(n=>(
           <button key={n.id} className={`nb ${view===n.id?"on":""}`} onClick={()=>goView(n.id)}
@@ -811,17 +816,17 @@ export default function App() {
         ))}
         <div style={{ marginTop:"auto", padding:16 }}>
           {/* Save / cloud sync indicator */}
-          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10, padding:"6px 10px", background: (saveIndicator||cloudSyncing)?"rgba(34,197,94,0.1)":"rgba(99,102,241,0.06)", border:`1px solid ${(saveIndicator||cloudSyncing)?"rgba(34,197,94,0.3)":"rgba(99,102,241,0.12)"}`, borderRadius:8, transition:"all .5s" }}>
-            <div style={{ width:7, height:7, borderRadius:"50%", background:(saveIndicator||cloudSyncing)?"#5cb85c":"#a9b8c6", transition:"all .5s" }} />
-            <span style={{ fontSize:11, color:(saveIndicator||cloudSyncing)?"#5cb85c":"#7a8a9c", fontWeight:500 }}>{cloudSyncing?"Синхронизация...":saveIndicator?"Сохранено ✓":"Облако · синхронизировано"}</span>
+          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10, padding:"6px 10px", background:"#ffffff", boxShadow:"0 1px 3px rgba(18,40,61,.15)", borderRadius:8, transition:"all .3s" }}>
+            <div style={{ width:7, height:7, borderRadius:"50%", background:(saveIndicator||cloudSyncing)?"#5cb85c":"#a9b8c6", transition:"all .3s", flexShrink:0 }} />
+            <span style={{ fontSize:11, color:(saveIndicator||cloudSyncing)?"#5cb85c":"#55677a", fontWeight:600 }}>{cloudSyncing?"Синхронизация...":saveIndicator?"Сохранено ✓":"Облако · синхронизировано"}</span>
           </div>
           {/* Import Excel */}
-          <button onClick={()=>fileInputRef.current?.click()} style={{ width:"100%", padding:"8px", background:"rgba(99,102,241,0.1)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:9, color:"#1da0d4", fontSize:12, fontWeight:600, cursor:"pointer", marginBottom:8, fontFamily:"inherit" }}>
-            📥 Импорт из Excel
+          <button onClick={()=>fileInputRef.current?.click()} style={{ width:"100%", padding:"8px", background:"#ffffff", border:"none", boxShadow:"0 1px 3px rgba(18,40,61,.15)", borderRadius:9, color:"#1da0d4", fontSize:12, fontWeight:700, cursor:"pointer", marginBottom:8, fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+            <UploadCloud size={14} /> Импорт из Excel
           </button>
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display:"none" }} onChange={handleExcelFile} />
-          <div style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.18)", borderRadius:12, padding:12, textAlign:"center" }}>
-            <div style={{ fontSize:10, color:"#55677a" }}>Должники</div>
+          <div style={{ background:"#ffffff", boxShadow:"0 1px 3px rgba(18,40,61,.15)", borderRadius:12, padding:12, textAlign:"center" }}>
+            <div style={{ fontSize:10, color:"#55677a", fontWeight:600 }}>Должники</div>
             <div style={{ fontSize:20, fontWeight:700, color:"#e2574c" }}>{students.filter(s=>s.balance<0).length}</div>
             <div style={{ fontSize:10, color:"#7a8a9c" }}>учеников</div>
           </div>
@@ -1918,15 +1923,14 @@ export default function App() {
         {view==="reports" && (()=>{
           const MONTHS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
           const allMonths = [...new Set([...payments.map(p=>p.date.slice(0,7)), ...lessons.filter(l=>l.status==="completed").map(l=>l.date.slice(0,7))])].sort();
-          const [reportMonth, setReportMonth] = useState(allMonths[allMonths.length-1] || "2026-03");
-          const [reportTab, setReportTab] = useState("finance");
+          const effectiveReportMonth = allMonths.includes(reportMonth) ? reportMonth : (allMonths[allMonths.length-1] || "2026-03");
 
           // Finance stats for selected month
-          const mPayments  = payments.filter(p=>p.date.startsWith(reportMonth));
+          const mPayments  = payments.filter(p=>p.date.startsWith(effectiveReportMonth));
           const mRevenue   = mPayments.reduce((s,p)=>s+p.amount,0);
-          const mLessons   = lessons.filter(l=>l.date.startsWith(reportMonth));
+          const mLessons   = lessons.filter(l=>l.date.startsWith(effectiveReportMonth));
           const mCompleted = mLessons.filter(l=>l.status==="completed");
-          const mSalaries  = salaries.filter(s=>s.month===reportMonth || s.date?.startsWith(reportMonth));
+          const mSalaries  = salaries.filter(s=>s.month===effectiveReportMonth || s.date?.startsWith(effectiveReportMonth));
           const mSalTotal  = mSalaries.reduce((s,p)=>s+p.amount,0);
           const mProfit    = mRevenue - mSalTotal;
           const mAvgCheck  = mPayments.length ? Math.round(mRevenue/mPayments.length) : 0;
@@ -1934,7 +1938,7 @@ export default function App() {
           // Students stats
           const mNewStudents = students.filter(s=>{
             const firstLesson = lessons.filter(l=>l.studentId===s.id).sort((a,b)=>a.date>b.date?1:-1)[0];
-            return firstLesson?.date?.startsWith(reportMonth);
+            return firstLesson?.date?.startsWith(effectiveReportMonth);
           });
           const mActiveStudents = [...new Set(mCompleted.map(l=>l.studentId))];
 
@@ -1964,7 +1968,7 @@ export default function App() {
 
           const printReport = () => {
             const w = window.open("","_blank");
-            const mLabel = `${MONTHS[parseInt(reportMonth.split("-")[1])-1]} ${reportMonth.split("-")[0]}`;
+            const mLabel = `${MONTHS[parseInt(effectiveReportMonth.split("-")[1])-1]} ${effectiveReportMonth.split("-")[0]}`;
             w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Отчёт ${mLabel}</title>
             <style>body{font-family:Arial,sans-serif;padding:24px;color:#111;max-width:900px;margin:0 auto}
             h1{font-size:20px;margin-bottom:4px}p{color:#777;font-size:13px;margin:0 0 20px}
@@ -2153,7 +2157,7 @@ export default function App() {
               {/* ── TAB: subjects ── */}
               {reportTab==="subjects" && (
                 <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, padding:24 }}>
-                  <div style={{ fontSize:14, fontWeight:600, marginBottom:20 }}>Занятий по предметам за {MONTHS[parseInt(reportMonth.split("-")[1])-1]}</div>
+                  <div style={{ fontSize:14, fontWeight:600, marginBottom:20 }}>Занятий по предметам за {MONTHS[parseInt(effectiveReportMonth.split("-")[1])-1]}</div>
                   {subjectArr.length===0
                     ? <div style={{ textAlign:"center", color:"#7a8a9c", padding:"40px 0" }}>Нет данных</div>
                     : subjectArr.map(([subj, cnt])=>(
@@ -2189,7 +2193,7 @@ export default function App() {
                       {trendData.map((d,i)=>(
                         <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
                           <div style={{ fontSize:10, color:"#7a8a9c", marginBottom:2 }}>{d.revenue>0?`${Math.round(d.revenue/1000)}к`:""}</div>
-                          <div style={{ width:"100%", background:`${d.month===MONTHS[parseInt(reportMonth.split("-")[1])-1]?"#1da0d4":"rgba(99,102,241,0.3)"}`, borderRadius:"4px 4px 0 0", height:`${Math.max(Math.round(d.revenue/maxRevenue*120),4)}px`, transition:"height .5s" }} />
+                          <div style={{ width:"100%", background:`${d.month===MONTHS[parseInt(effectiveReportMonth.split("-")[1])-1]?"#1da0d4":"rgba(99,102,241,0.3)"}`, borderRadius:"4px 4px 0 0", height:`${Math.max(Math.round(d.revenue/maxRevenue*120),4)}px`, transition:"height .5s" }} />
                           <div style={{ fontSize:11, color:"#7a8a9c" }}>{d.month}</div>
                         </div>
                       ))}
@@ -2202,7 +2206,7 @@ export default function App() {
                       {trendData.map((d,i)=>(
                         <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
                           <div style={{ fontSize:10, color:"#7a8a9c", marginBottom:2 }}>{d.lessons||""}</div>
-                          <div style={{ width:"100%", background:`${d.month===MONTHS[parseInt(reportMonth.split("-")[1])-1]?"#5cb85c":"rgba(34,197,94,0.3)"}`, borderRadius:"4px 4px 0 0", height:`${Math.max(Math.round(d.lessons/maxLessons*120),4)}px`, transition:"height .5s" }} />
+                          <div style={{ width:"100%", background:`${d.month===MONTHS[parseInt(effectiveReportMonth.split("-")[1])-1]?"#5cb85c":"rgba(34,197,94,0.3)"}`, borderRadius:"4px 4px 0 0", height:`${Math.max(Math.round(d.lessons/maxLessons*120),4)}px`, transition:"height .5s" }} />
                           <div style={{ fontSize:11, color:"#7a8a9c" }}>{d.month}</div>
                         </div>
                       ))}
@@ -2226,7 +2230,7 @@ export default function App() {
                           const mL = lessons.filter(l=>l.date.startsWith(m)&&l.status==="completed").length;
                           const mNew = students.filter(s=>{ const f=lessons.filter(l=>l.studentId===s.id).sort((a,b)=>a.date>b.date?1:-1)[0]; return f?.date?.startsWith(m); }).length;
                           const mAvg = mP.length ? Math.round(mRev/mP.length) : 0;
-                          const isSelected = m===reportMonth;
+                          const isSelected = m===effectiveReportMonth;
                           return (
                             <tr key={m} style={{ borderBottom:"1px solid #f2f6fa", background:isSelected?"rgba(99,102,241,0.06)":"transparent", cursor:"pointer" }} onClick={()=>setReportMonth(m)}>
                               <td style={{ padding:"11px 16px", fontWeight:isSelected?700:400, color:isSelected?"#1da0d4":"#22344a" }}>
