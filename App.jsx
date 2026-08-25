@@ -340,6 +340,8 @@ export default function App() {
   const [recurModal,    setRecurModal]    = useState(false);
   const [recurCount,    setRecurCount]    = useState(4);
   const [recurInterval, setRecurInterval] = useState(7);
+  const [recurWeekdays, setRecurWeekdays] = useState([]); // 0=Пн ... 6=Вс
+  const [recurEndDate,  setRecurEndDate]  = useState("");
   const [saveIndicator, setSaveIndicator] = useState(false);
   const [importModal,   setImportModal]   = useState(false);
   const [importPreview, setImportPreview] = useState([]);
@@ -513,6 +515,7 @@ export default function App() {
   ]);
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiProvider, setAiProvider] = useState("gemini");
   const aiMessagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -539,6 +542,7 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          provider: aiProvider,
           messages: [
             { role: "system", content: `Ты — ИИ-помощник CRM образовательного центра "ГЕНИЙ". Помогай администратору центра: отвечай на вопросы об учениках, преподавателях, расписании, финансах, помогай составлять сообщения родителям, объясняй как пользоваться разделами CRM. Отвечай кратко и по делу, на русском языке.\n\n${contextSummary}` },
             ...newMessages.map(m => ({ role: m.role, content: m.content })),
@@ -2765,9 +2769,19 @@ export default function App() {
 
         {view==="ai" && (
           <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 64px)", maxWidth:800 }}>
-            <div style={{ marginBottom:20 }}>
-              <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>✨ ИИ-Помощник</h1>
-              <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Задайте вопрос об учениках, расписании, финансах — или попросите составить сообщение</div>
+            <div style={{ marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
+              <div>
+                <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>✨ ИИ-Помощник</h1>
+                <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Задайте вопрос об учениках, расписании, финансах — или попросите составить сообщение</div>
+              </div>
+              <div style={{ display:"flex", gap:4, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:10, padding:4 }}>
+                {[["gemini","Gemini"],["deepseek","DeepSeek"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setAiProvider(k)}
+                    style={{ padding:"6px 14px", borderRadius:7, fontSize:12, fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", transition:"all .15s",
+                      background:aiProvider===k?"linear-gradient(135deg,#1da0d4,#5cb85c)":"transparent",
+                      color:aiProvider===k?"#ffffff":"#55677a" }}>{l}</button>
+                ))}
+              </div>
             </div>
             <div style={{ flex:1, background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, display:"flex", flexDirection:"column", overflow:"hidden" }}>
               <div style={{ flex:1, overflowY:"auto", padding:20, display:"flex", flexDirection:"column", gap:12 }}>
@@ -3158,6 +3172,17 @@ export default function App() {
                     <option value="">Выберите ученика</option>
                     {students.map(s=><option key={s.id} value={s.id}>{s.name} {s.school?`· ${s.school}`:""}</option>)}
                   </select>
+                  {nLesson.studentId && (()=>{
+                    const st = students.find(s=>s.id===Number(nLesson.studentId));
+                    if (!st) return null;
+                    return (
+                      <div style={{ marginTop:6, fontSize:12, color:"#55677a", display:"flex", alignItems:"center", gap:6 }}>
+                        <Phone size={12} color="#1da0d4" />
+                        {st.parentName ? `${st.parentName}: ` : "Родитель: "}
+                        <a href={`tel:${st.parentPhone||st.phone}`} style={{ color:"#1da0d4", fontWeight:600, textDecoration:"none" }}>{st.parentPhone||st.phone||"не указан"}</a>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -3174,7 +3199,10 @@ export default function App() {
                     return (
                       <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:"#f2f6fa", borderRadius:9, marginBottom:6, border:"1px solid #d7e2ee" }}>
                         <Av name={st?.name||"?"} color="#1da0d4" size={26} />
-                        <div style={{ flex:1, fontSize:13, fontWeight:600 }}>{st?.name||"—"}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:600 }}>{st?.name||"—"}</div>
+                          {st?.parentPhone || st?.phone ? <div style={{ fontSize:10, color:"#7a8a9c" }}>{st.parentPhone||st.phone}</div> : null}
+                        </div>
                         <div style={{ width:90 }}>
                           <input type="number" value={gs.price} placeholder="Цена" onChange={e=>{ const ng=[...groupStudents]; ng[i]={...ng[i],price:e.target.value}; setGroupStudents(ng); }}
                             style={{ fontSize:12, padding:"4px 8px" }} />
@@ -3213,37 +3241,47 @@ export default function App() {
                   </div>
                 </div>
                 {recurModal && (
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:12 }}>
+                  <div style={{ marginTop:12, display:"grid", gap:10 }}>
                     <div>
-                      <div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Кол-во занятий</div>
+                      <div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Дни недели</div>
                       <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
-                        {[4,8,12,16].map(n=>(
-                          <button key={n} onClick={()=>setRecurCount(n)}
-                            style={{ padding:"4px 10px", borderRadius:7, fontSize:12, border:"1px solid", cursor:"pointer", fontFamily:"inherit",
-                              background:recurCount===n?"rgba(99,102,241,0.25)":"transparent",
-                              borderColor:recurCount===n?"#1da0d4":"#d7e2ee",
-                              color:recurCount===n?"#1da0d4":"#55677a" }}>{n}</button>
+                        {["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map((d,idx)=>(
+                          <button key={idx} onClick={()=>setRecurWeekdays(prev=>prev.includes(idx)?prev.filter(x=>x!==idx):[...prev,idx])}
+                            style={{ width:38, padding:"6px 0", borderRadius:7, fontSize:12, border:"1px solid", cursor:"pointer", fontFamily:"inherit", fontWeight:600,
+                              background:recurWeekdays.includes(idx)?"#1da0d4":"transparent",
+                              borderColor:recurWeekdays.includes(idx)?"#1da0d4":"#d7e2ee",
+                              color:recurWeekdays.includes(idx)?"#ffffff":"#55677a" }}>{d}</button>
                         ))}
-                        <input type="number" value={recurCount} onChange={e=>setRecurCount(Number(e.target.value))} style={{ width:55, padding:"4px 6px", fontSize:12 }} />
                       </div>
+                      <div style={{ fontSize:10, color:"#a9b8c6", marginTop:4 }}>Например, выберите Вт и Чт — занятия создадутся на каждый такой день в периоде ниже</div>
                     </div>
                     <div>
-                      <div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Повторять каждые</div>
-                      <div style={{ display:"flex", gap:5 }}>
-                        {[[7,"Нед."],[14,"2 нед."],[30,"Мес."]].map(([d,l])=>(
-                          <button key={d} onClick={()=>setRecurInterval(d)}
-                            style={{ padding:"4px 10px", borderRadius:7, fontSize:12, border:"1px solid", cursor:"pointer", fontFamily:"inherit",
-                              background:recurInterval===d?"rgba(99,102,241,0.25)":"transparent",
-                              borderColor:recurInterval===d?"#1da0d4":"#d7e2ee",
-                              color:recurInterval===d?"#1da0d4":"#55677a" }}>{l}</button>
+                      <div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Период — до какой даты</div>
+                      <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:6 }}>
+                        {[["2 недели",14],["1 месяц",30],["2 месяца",60],["3 месяца",90]].map(([label,days])=>(
+                          <button key={days} onClick={()=>{
+                            if (!nLesson.date) return;
+                            const d = new Date(nLesson.date); d.setDate(d.getDate()+days);
+                            setRecurEndDate(d.toISOString().split("T")[0]);
+                          }}
+                            style={{ padding:"4px 10px", borderRadius:7, fontSize:12, border:"1px solid #d7e2ee", cursor:"pointer", fontFamily:"inherit", background:"transparent", color:"#55677a" }}>{label}</button>
                         ))}
                       </div>
+                      <input type="date" value={recurEndDate} onChange={e=>setRecurEndDate(e.target.value)} />
                     </div>
-                    {nLesson.date && (
-                      <div style={{ gridColumn:"1/-1", background:"rgba(99,102,241,0.08)", borderRadius:8, padding:"8px 12px", fontSize:11, color:"#1da0d4" }}>
-                        📅 Будет создано {recurCount} занятий каждые {recurInterval} дн. начиная с {nLesson.date}
-                      </div>
-                    )}
+                    {nLesson.date && recurEndDate && recurWeekdays.length>0 && (()=>{
+                      const start = new Date(nLesson.date), end = new Date(recurEndDate);
+                      let cnt = 0;
+                      for (let d=new Date(start); d<=end; d.setDate(d.getDate()+1)) {
+                        const wd = (d.getDay()+6)%7; // Monday-first
+                        if (recurWeekdays.includes(wd)) cnt++;
+                      }
+                      return (
+                        <div style={{ background:"rgba(29,160,212,0.08)", borderRadius:8, padding:"8px 12px", fontSize:11, color:"#1da0d4" }}>
+                          📅 Будет создано занятий: {cnt} — с {nLesson.date} по {recurEndDate}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -3255,6 +3293,18 @@ export default function App() {
                   const tu = tutors.find(t=>t.id===Number(nLesson.tutorId));
                   const baseLesson = { subject:nLesson.subject, tutorId:Number(nLesson.tutorId), tutorShort:tu?.short||"", date:nLesson.date, time:nLesson.time, duration:Number(nLesson.duration), status:"scheduled" };
 
+                  // Generate all matching dates between nLesson.date and recurEndDate for the chosen weekdays
+                  const getRecurDates = () => {
+                    if (!recurEndDate || recurWeekdays.length===0) return [nLesson.date];
+                    const dates = [];
+                    const start = new Date(nLesson.date), end = new Date(recurEndDate);
+                    for (let d=new Date(start); d<=end; d.setDate(d.getDate()+1)) {
+                      const wd = (d.getDay()+6)%7; // Monday-first
+                      if (recurWeekdays.includes(wd)) dates.push(new Date(d).toISOString().split("T")[0]);
+                    }
+                    return dates.length ? dates : [nLesson.date];
+                  };
+
                   if (lessonType==="group") {
                     if (groupStudents.length===0) return;
                     const groupId = Date.now();
@@ -3264,15 +3314,14 @@ export default function App() {
                       return { ...baseLesson, id:groupId+i, studentId:Number(gs.studentId), studentName:st?.name||"", price:Number(gs.price||0), isGroup:true, groupId, groupName:name };
                     });
                     if (recurModal) {
+                      const recurDates = getRecurDates();
                       const all = [];
-                      Array.from({length:recurCount}).forEach((_,ri)=>{
-                        const d = new Date(nLesson.date); d.setDate(d.getDate()+ri*recurInterval);
-                        const dateStr = d.toISOString().split("T")[0];
+                      recurDates.forEach((dateStr,ri)=>{
                         const gid = groupId + ri*1000;
                         newLessons.forEach((l,li)=>{ all.push({...l, id:gid+li, date:dateStr}); });
                       });
                       setLessons(prev=>[...prev,...all]);
-                      notify(`Создано ${recurCount} занятий × ${groupStudents.length} учеников`);
+                      notify(`Создано ${recurDates.length} занятий × ${groupStudents.length} учеников`);
                     } else {
                       setLessons(prev=>[...prev,...newLessons]);
                       notify(`Группа "${name}" добавлена (${groupStudents.length} чел.)`);
@@ -3282,9 +3331,10 @@ export default function App() {
                     const st = students.find(s=>s.id===Number(nLesson.studentId));
                     const lesson = { ...baseLesson, id:Date.now(), studentId:Number(nLesson.studentId), studentName:st?.name||"", price:Number(nLesson.price), isGroup:false };
                     if (recurModal) {
-                      const all = Array.from({length:recurCount},(_,i)=>{ const d=new Date(nLesson.date); d.setDate(d.getDate()+i*recurInterval); return {...lesson, id:Date.now()+i, date:d.toISOString().split("T")[0]}; });
+                      const recurDates = getRecurDates();
+                      const all = recurDates.map((dateStr,i)=>({ ...lesson, id:Date.now()+i, date:dateStr }));
                       setLessons(prev=>[...prev,...all]);
-                      notify(`Создано ${recurCount} занятий`);
+                      notify(`Создано ${recurDates.length} занятий`);
                     } else {
                       setLessons(prev=>[...prev,lesson]);
                       notify("Занятие добавлено");
@@ -3292,11 +3342,12 @@ export default function App() {
                   }
                   setNLesson({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
                   setGroupStudents([]); setGroupName(""); setRecurModal(false); setLessonType("individual");
+                  setRecurWeekdays([]); setRecurEndDate("");
                   setModal(null);
                 }}>
                   {lessonType==="group"
                     ? (recurModal ? `🔁 Создать серию для группы (${groupStudents.length} уч.)` : `👥 Создать групповое (${groupStudents.length} уч.)`)
-                    : (recurModal ? `🔁 Создать ${recurCount} занятий` : "👤 Добавить занятие")}
+                    : (recurModal ? "🔁 Создать серию занятий" : "👤 Добавить занятие")}
                 </button>
                 <button className="bg" onClick={()=>{ setModal(null); setRecurModal(false); setLessonType("individual"); setGroupStudents([]); setGroupName(""); }}>Отмена</button>
               </div>
