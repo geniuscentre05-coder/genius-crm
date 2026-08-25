@@ -185,6 +185,20 @@ const initialPricing = [
   { id:25,category:"🎨 Творчество и клубы",       course:"Онлайн занятия",                  price45:500,  price60:700,  price90:1000, price120:1300, groupPrice:400,  note:"-10% к очной цене" },
 ];
 
+// Editable course catalog — one row per course, combining category info with a base price (60 min, from pricing where available)
+const initialCourseCatalog = courseCategories.flatMap(cat =>
+  cat.courses.map((course, i) => {
+    const p = initialPricing.find(pr => pr.course === course);
+    return {
+      id: `${cat.id}_${i}`,
+      category: cat.label,
+      name: course,
+      price: p?.price60 ?? "",
+      description: "",
+    };
+  })
+);
+
 const initialRules = [
   { id:1, section:"📋 Запись и пробное занятие", text:"Первое пробное занятие — бесплатно для новых учеников центра." },
   { id:2, section:"📋 Запись и пробное занятие", text:"Запись на занятия осуществляется по телефону, WhatsApp или лично в центре." },
@@ -291,6 +305,7 @@ export default function App() {
   const [requests,  setRequests]  = useState(saved?.requests  || initialRequests);
   const [nRequest,  setNRequest]  = useState({ parentName:"", phone:"", studentName:"", age:"", course:"", comment:"", status:"new" });
   const [pricing,    setPricing]    = useState(saved?.pricing   || initialPricing);
+  const [courseCatalog, setCourseCatalog] = useState(saved?.courseCatalog || initialCourseCatalog);
   const [rules,      setRules]      = useState(saved?.rules     || initialRules);
   const [editPricing,setEditPricing]= useState(null);
   const [editRule,   setEditRule]   = useState(null);
@@ -337,6 +352,7 @@ export default function App() {
     if (data.requests) setRequests(data.requests);
     if (data.pricing) setPricing(data.pricing);
     if (data.rules) setRules(data.rules);
+    if (data.courseCatalog) setCourseCatalog(data.courseCatalog);
     saveToLS(data);
   }
 
@@ -359,7 +375,7 @@ export default function App() {
           // No cloud record yet — push current (local/demo) data as the first snapshot
           await supabase.from("crm_state").upsert({
             id: CLOUD_ID,
-            data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules },
+            data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog },
             updated_at: new Date().toISOString(),
           });
         }
@@ -390,7 +406,7 @@ export default function App() {
 
   // ── Auto-save to localStorage + Supabase (debounced) ──
   useEffect(() => {
-    saveToLS({ tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules });
+    saveToLS({ tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog });
     setSaveIndicator(true);
     const t = setTimeout(() => setSaveIndicator(false), 1500);
 
@@ -407,7 +423,7 @@ export default function App() {
       try {
         const { error } = await supabase.from("crm_state").upsert({
           id: CLOUD_ID,
-          data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules },
+          data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog },
           updated_at: new Date().toISOString(),
         });
         if (error) console.error("Supabase save error:", error);
@@ -422,7 +438,7 @@ export default function App() {
       clearTimeout(cloudSaveTimeout.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules]);
+  }, [tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog]);
 
   function emptyChild() { return { name:"", birthDate:"", school:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }], status:"trial", tuitionNote:"" }; }
   const [familyForm, setFamilyForm] = useState({ parentName:"", phone:"", extraPhones:[], address:"", notes:"", children:[emptyChild()] });
@@ -467,6 +483,7 @@ export default function App() {
   }
   const [nTutor,    setNTutor]    = useState({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
   const [editingTutorId, setEditingTutorId] = useState(null);
+  const [editingCatalogId, setEditingCatalogId] = useState(null);
   const [nLesson,   setNLesson]   = useState({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
   const [lessonType,  setLessonType]  = useState("individual"); // individual | group
   const [groupStudents, setGroupStudents] = useState([]); // [{studentId, price}]
@@ -1359,6 +1376,13 @@ export default function App() {
             setEditLesson(null);
             notify("Занятие удалено");
           };
+          const deleteGroup = groupId => {
+            const count = lessons.filter(l=>l.groupId===groupId).length;
+            if (!window.confirm(`Удалить всю группу целиком (${count} записей)?`)) return;
+            setLessons(lessons.filter(l=>l.groupId!==groupId));
+            setEditLesson(null);
+            notify("Группа удалена");
+          };
 
           return (
             <div>
@@ -1411,6 +1435,9 @@ export default function App() {
                     <div style={{ display:"flex", gap:8 }}>
                       <button className="bp" style={{ padding:"6px 16px", fontSize:13 }} onClick={saveEdit}>Сохранить</button>
                       <button style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", color:"#e2574c", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit" }} onClick={()=>deleteLesson(editLesson.id)}>🗑 Удалить</button>
+                      {editLesson.isGroup && editLesson.groupId && (
+                        <button style={{ background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.4)", color:"#e2574c", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", fontWeight:700 }} onClick={()=>deleteGroup(editLesson.groupId)}>🗑 Удалить всю группу</button>
+                      )}
                       <button className="bg" style={{ padding:"6px 14px", fontSize:13 }} onClick={()=>setEditLesson(null)}>Отмена</button>
                     </div>
                   </div>
@@ -2216,45 +2243,87 @@ export default function App() {
 
 
         {/* ── COURSES CATALOG ── */}
-        {view==="courses" && (
+        {view==="courses" && (()=>{
+          const catalogCategories = [...new Set(courseCatalog.map(c=>c.category))];
+          const printCatalog = () => {
+            const w = window.open("","_blank");
+            const rows = catalogCategories.map(cat=>{
+              const items = courseCatalog.filter(c=>c.category===cat);
+              return `<tr><td colspan="3" style="background:#f3f4f6;font-weight:700;padding:8px 10px">${cat}</td></tr>` +
+                items.map(c=>`<tr><td>${c.name}</td><td>${c.price?c.price+" ₽":"—"}</td><td>${c.description||""}</td></tr>`).join("");
+            }).join("");
+            w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Каталог курсов</title><style>
+              body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#111}
+              h1{font-size:20px}
+              table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px}
+              th{background:#1da0d4;color:white;padding:8px 10px;text-align:left}
+              td{padding:7px 10px;border-bottom:1px solid #e5e7eb}
+              @media print{button{display:none}}
+            </style></head><body>
+              <h1>Образовательный центр ГЕНИЙ — Каталог курсов</h1>
+              <button onclick="window.print()" style="margin-bottom:16px;padding:8px 20px;background:#1da0d4;color:white;border:none;border-radius:8px;cursor:pointer">🖨️ Распечатать</button>
+              <table><thead><tr><th>Курс</th><th>Цена</th><th>Описание</th></tr></thead><tbody>${rows}</tbody></table>
+            </body></html>`);
+            w.document.close();
+          };
+          return (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
               <div>
                 <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Каталог курсов</h1>
-                <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Все направления центра · {allSubjects.length} курсов</div>
+                <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Все направления центра · {courseCatalog.length} курсов · редактируемый</div>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <button className="bg" onClick={printCatalog}>🖨️ Распечатать каталог</button>
+                <button className="bp" onClick={()=>{
+                  const newCourse = { id:"custom_"+Date.now(), category: catalogCategories[0]||"📌 Другое", name:"Новый курс", price:"", description:"" };
+                  setCourseCatalog([...courseCatalog, newCourse]);
+                  setEditingCatalogId(newCourse.id);
+                }}>+ Добавить курс</button>
               </div>
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
-              {courseCategories.map(cat=>(
-                <div key={cat.id} style={{ background:"#ffffff", border:`1px solid ${cat.color}33`, borderRadius:16, padding:20 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
-                    <div style={{ width:10, height:10, borderRadius:"50%", background:cat.color, flexShrink:0 }} />
-                    <div style={{ fontSize:14, fontWeight:700, color:cat.color }}>{cat.label}</div>
-                    <div style={{ marginLeft:"auto", background:`${cat.color}20`, color:cat.color, fontSize:11, fontWeight:600, padding:"2px 9px", borderRadius:20 }}>{cat.courses.length}</div>
-                  </div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                    {cat.courses.map(course=>{
-                      const cnt = lessons.filter(l=>l.subject===course&&l.status==="completed").length;
-                      const tutorCount = [...new Set(lessons.filter(l=>l.subject===course).map(l=>l.tutorId))].length;
-                      return (
-                        <div key={course} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 10px", background:"#f2f6fa", borderRadius:9, borderLeft:`3px solid ${cat.color}` }}>
-                          <span style={{ fontSize:12, fontWeight:500, color:"#cbd5e1" }}>{course}</span>
-                          <div style={{ display:"flex", gap:6 }}>
-                            {cnt>0 && <span style={{ fontSize:10, color:"#7a8a9c" }}>{cnt} занят.</span>}
-                            {tutorCount>0 && <span style={{ fontSize:10, color:cat.color, fontWeight:600 }}>{tutorCount} пед.</span>}
+
+            {catalogCategories.map(cat=>(
+              <div key={cat} style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:16, padding:20, marginBottom:16 }}>
+                <div style={{ fontSize:15, fontWeight:700, color:"#1da0d4", marginBottom:14 }}>{cat}</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {courseCatalog.filter(c=>c.category===cat).map(c=>(
+                    <div key={c.id} style={{ background:"#f2f6fa", borderRadius:10, padding:"10px 14px" }}>
+                      {editingCatalogId===c.id ? (
+                        <div style={{ display:"grid", gap:8 }}>
+                          <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr", gap:8 }}>
+                            <input value={c.name} onChange={e=>setCourseCatalog(courseCatalog.map(x=>x.id===c.id?{...x,name:e.target.value}:x))} placeholder="Название курса" style={{ fontSize:13 }} />
+                            <input value={c.category} onChange={e=>setCourseCatalog(courseCatalog.map(x=>x.id===c.id?{...x,category:e.target.value}:x))} placeholder="Категория" style={{ fontSize:13 }} />
+                            <input type="number" value={c.price} onChange={e=>setCourseCatalog(courseCatalog.map(x=>x.id===c.id?{...x,price:e.target.value}:x))} placeholder="Цена ₽" style={{ fontSize:13 }} />
+                          </div>
+                          <textarea value={c.description} onChange={e=>setCourseCatalog(courseCatalog.map(x=>x.id===c.id?{...x,description:e.target.value}:x))} placeholder="Описание курса" rows={2} style={{ fontSize:13 }} />
+                          <div style={{ display:"flex", gap:8 }}>
+                            <button className="bp" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setEditingCatalogId(null)}>✓ Сохранить</button>
+                            <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"5px 12px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }}
+                              onClick={()=>{ if(window.confirm(`Удалить курс "${c.name}"?`)) setCourseCatalog(courseCatalog.filter(x=>x.id!==c.id)); setEditingCatalogId(null); }}>🗑 Удалить</button>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      ) : (
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:"#12283d" }}>{c.name}</div>
+                            {c.description && <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>{c.description}</div>}
+                          </div>
+                          <div style={{ fontSize:14, fontWeight:700, color:c.price?"#5cb85c":"#a9b8c6", marginRight:12 }}>{c.price?`${c.price} ₽`:"—"}</div>
+                          <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>setEditingCatalogId(c.id)}>✏️</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
+
             {/* stats row */}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginTop:20 }}>
               {[
-                { l:"Всего курсов",       v:allSubjects.length,                                     c:"#1da0d4", icon:"📋" },
-                { l:"Категорий",          v:courseCategories.length,                                 c:"#f5a623", icon:"🗂️" },
+                { l:"Всего курсов",       v:courseCatalog.length,                                     c:"#1da0d4", icon:"📋" },
+                { l:"Категорий",          v:catalogCategories.length,                                 c:"#f5a623", icon:"🗂️" },
                 { l:"Популярный курс",    v:(()=>{ const m={}; lessons.forEach(l=>{ if(l.status==="completed") m[l.subject]=(m[l.subject]||0)+1; }); return Object.entries(m).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—"; })(), c:"#5cb85c", icon:"🏆" },
                 { l:"Курсов с занятиями", v:[...new Set(lessons.filter(l=>l.status==="completed").map(l=>l.subject))].length, c:"#d6539a", icon:"✅" },
               ].map((s,i)=>(
@@ -2270,7 +2339,9 @@ export default function App() {
               ))}
             </div>
           </div>
-        )}
+          );
+        })()}
+
 
         {/* ── REQUESTS ── */}
         {view==="requests" && (()=>{
