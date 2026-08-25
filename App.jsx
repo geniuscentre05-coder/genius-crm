@@ -1489,7 +1489,7 @@ export default function App() {
         {/* ── SCHEDULE ── */}
         {view==="schedule" && (()=>{
           const DAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
-          const HOURS = Array.from({length:13},(_,i)=>i+8);
+          const SLOTS = Array.from({length:26},(_,i)=>{ const h=8+Math.floor(i/2); const m=i%2===0?"00":"30"; return `${String(h).padStart(2,"0")}:${m}`; });
 
           const today = new Date();
           const todayDay = today.getDay() === 0 ? 6 : today.getDay()-1;
@@ -1652,17 +1652,17 @@ export default function App() {
                     })}
                   </div>
                   <div style={{ overflowY:"auto", maxHeight:"58vh" }}>
-                    {HOURS.map(hour=>(
-                      <div key={hour} style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom:"1px solid #f2f6fa", minHeight:52 }}>
-                        <div style={{ padding:"4px 6px", fontSize:11, color:"#a9b8c6", textAlign:"right", paddingTop:8, borderRight:"1px solid #dbe6f0", background:"#1b6f8c" }}>{hour}:00</div>
+                    {SLOTS.map(slot=>(
+                      <div key={slot} style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom: slot.endsWith(":30") ? "1px dashed #f2f6fa" : "1px solid #dbe6f0", minHeight:32 }}>
+                        <div style={{ padding:"3px 6px", fontSize:10, color:"#a9b8c6", textAlign:"right", borderRight:"1px solid #dbe6f0", background:"#1b6f8c" }}>{slot.endsWith(":00") ? slot : ""}</div>
                         {weekDates.map((d,di)=>{
                           const dateStr = fmt(d);
-                          const dayLessons = weekLessons.filter(l=>l.date===dateStr && l.time && parseInt(l.time.split(":")[0])===hour);
+                          const dayLessons = weekLessons.filter(l=>l.date===dateStr && l.time===slot);
                           const isToday = dateStr===fmt(today);
                           return (
                             <div key={di}
                               style={{ borderLeft:"1px solid #f2f6fa", padding:"3px 4px", background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer" }}
-                              onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:`${String(hour).padStart(2,"0")}:00`})); setModal("addLesson"); }}>
+                              onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:slot})); setModal("addLesson"); }}>
                               {dayLessons.map(l=>{
                                 const tu=tutors.find(x=>x.id===l.tutorId);
                                 const isActive = editLesson?.id===l.id;
@@ -1733,19 +1733,19 @@ export default function App() {
               {schedView==="tutors" && (()=>{
                 const DAYS_FULL = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"];
                 const DAYS_SHORT = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
-                const HOURS = Array.from({length:14},(_,i)=>i+8);
+                const SLOTS = Array.from({length:26},(_,i)=>{ const h=8+Math.floor(i/2); const m=i%2===0?"00":"30"; return `${String(h).padStart(2,"0")}:${m}`; });
                 const activeTutors = schedTutorFilter==="all" ? tutors : tutors.filter(t=>t.id===Number(schedTutorFilter));
 
                 const printTutorSchedule = () => {
                   const w = window.open("","_blank");
                   const dateRange = `${fmtLabel(weekDates[0])} — ${fmtLabel(weekDates[6])} 2026`;
                   let tableRows = "";
-                  HOURS.forEach(hour => {
-                    let row = `<tr><td class="time">${hour}:00</td>`;
+                  SLOTS.forEach(slot => {
+                    let row = `<tr><td class="time">${slot.endsWith(":00")?slot:""}</td>`;
                     activeTutors.forEach(t => {
                       weekDates.forEach((d,di) => {
                         const dateStr = fmt(d);
-                        const cell = lessons.filter(l=>l.tutorId===t.id && l.date===dateStr && l.time && parseInt(l.time.split(":")[0])===hour);
+                        const cell = lessons.filter(l=>l.tutorId===t.id && l.date===dateStr && l.time===slot);
                         row += `<td class="${cell.length?'has-lesson':''}">` + cell.map(l=>`<div class="lesson-cell"><b>${l.studentName}</b><br/>${l.subject}<br/>${l.time} · ${l.duration}мин</div>`).join("") + `</td>`;
                       });
                     });
@@ -1819,18 +1819,18 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {HOURS.map(hour=>(
-                            <tr key={hour} style={{ borderBottom:"1px solid #f2f6fa" }}>
-                              <td style={{ padding:"4px 6px", fontSize:11, color:"#a9b8c6", textAlign:"right", background:"#1b6f8c", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", fontWeight:600, whiteSpace:"nowrap", position:"sticky", left:0, zIndex:1 }}>{hour}:00</td>
+                          {SLOTS.map(slot=>(
+                            <tr key={slot} style={{ borderBottom: slot.endsWith(":30") ? "1px dashed #f2f6fa" : "1px solid #dbe6f0" }}>
+                              <td style={{ padding:"3px 6px", fontSize:10, color:"#a9b8c6", textAlign:"right", background:"#1b6f8c", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", fontWeight:600, whiteSpace:"nowrap", position:"sticky", left:0, zIndex:1 }}>{slot.endsWith(":00") ? slot : ""}</td>
                               {activeTutors.map(t=>
                                 weekDates.map((d,di)=>{
                                   const dateStr = fmt(d);
                                   const isToday = dateStr===fmt(today);
-                                  const cellLessons = lessons.filter(l=>l.tutorId===t.id&&l.date===dateStr&&l.time&&parseInt(l.time.split(":")[0])===hour);
+                                  const cellLessons = lessons.filter(l=>l.tutorId===t.id&&l.date===dateStr&&l.time===slot);
                                   return (
                                     <td key={`${t.id}-${di}`}
-                                      style={{ padding:"2px 3px", border:"1px solid #f2f6fa", verticalAlign:"top", minHeight:40, background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer", minWidth:80 }}
-                                      onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:`${String(hour).padStart(2,"0")}:00`,tutorId:String(t.id)})); setModal("addLesson"); }}>
+                                      style={{ padding:"2px 3px", border:"1px solid #f2f6fa", verticalAlign:"top", minHeight:26, background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer", minWidth:80 }}
+                                      onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:slot,tutorId:String(t.id)})); setModal("addLesson"); }}>
                                       {cellLessons.map(l=>{
                                         const isActive = editLesson?.id===l.id;
                                         return (
