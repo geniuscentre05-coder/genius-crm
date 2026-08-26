@@ -490,20 +490,37 @@ export default function App() {
   }
   function saveEditStudent() {
     if (!nStudentEdit.name) return;
-    setStudents(students.map(s => s.id===editingStudentId ? {
-      ...s,
-      name: nStudentEdit.name, birthDate: nStudentEdit.birthDate,
-      age: calcAge(nStudentEdit.birthDate) ?? s.age,
-      school: nStudentEdit.school, grade: nStudentEdit.grade,
-      phone: nStudentEdit.phone, extraPhones: nStudentEdit.extraPhones.filter(Boolean),
-      parentName: nStudentEdit.parentName, parentPhone: nStudentEdit.parentPhone,
-      address: nStudentEdit.address, notes: nStudentEdit.notes, tuitionNote: nStudentEdit.tuitionNote,
-      status: nStudentEdit.status,
-      subjectTeachers: nStudentEdit.subjectTeachers.filter(st=>st.subject),
-      subjects: nStudentEdit.subjectTeachers.filter(st=>st.subject).map(st=>st.subject),
-    } : s));
+    const editedStudent = students.find(s => s.id === editingStudentId);
+    const sharedFamilyFields = {
+      parentName: nStudentEdit.parentName,
+      parentPhone: nStudentEdit.parentPhone,
+      phone: nStudentEdit.phone,
+      extraPhones: nStudentEdit.extraPhones.filter(Boolean),
+      address: nStudentEdit.address,
+    };
+    const siblingCount = editedStudent?.familyId ? students.filter(s => s.familyId===editedStudent.familyId && s.id!==editingStudentId).length : 0;
+    setStudents(students.map(s => {
+      if (s.id===editingStudentId) {
+        return {
+          ...s,
+          name: nStudentEdit.name, birthDate: nStudentEdit.birthDate,
+          age: calcAge(nStudentEdit.birthDate) ?? s.age,
+          school: nStudentEdit.school, grade: nStudentEdit.grade,
+          ...sharedFamilyFields,
+          notes: nStudentEdit.notes, tuitionNote: nStudentEdit.tuitionNote,
+          status: nStudentEdit.status,
+          subjectTeachers: nStudentEdit.subjectTeachers.filter(st=>st.subject),
+          subjects: nStudentEdit.subjectTeachers.filter(st=>st.subject).map(st=>st.subject),
+        };
+      }
+      // Keep siblings' contact info (parent name/phone/address) in sync — they share the same family
+      if (editedStudent?.familyId && s.familyId===editedStudent.familyId) {
+        return { ...s, ...sharedFamilyFields };
+      }
+      return s;
+    }));
     setModal(null); setEditingStudentId(null); setNStudentEdit(null);
-    notify("Данные ученика обновлены");
+    notify(siblingCount>0 ? `Данные ученика обновлены, контакты семьи синхронизированы у ${siblingCount} братьев/сестёр` : "Данные ученика обновлены");
   }
   const [nTutor,    setNTutor]    = useState({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
   const [editingTutorId, setEditingTutorId] = useState(null);
@@ -669,8 +686,9 @@ export default function App() {
 
   const tLessons   = id => lessons.filter(l => l.tutorId === id);
   const tCompleted = id => lessons.filter(l => l.tutorId === id && l.status === "completed");
+  const tBillable  = id => lessons.filter(l => l.tutorId === id && (l.status === "completed" || l.status === "noshow_burned"));
   const tStudents  = id => { const ids = [...new Set(tLessons(id).map(l=>l.studentId))]; return students.filter(s=>ids.includes(s.id)); };
-  const tEarned    = id => { const t=tutors.find(x=>x.id===id); return tCompleted(id).reduce((s,l)=>s+calcEarning(l,t),0); };
+  const tEarned    = id => { const t=tutors.find(x=>x.id===id); return tBillable(id).reduce((s,l)=>s+calcEarning(l,t),0); };
   const tPaid      = id => salaries.filter(p=>p.tutorId===id).reduce((s,p)=>s+p.amount,0);
   const tDebt      = id => tEarned(id) - tPaid(id);
 
@@ -803,6 +821,19 @@ export default function App() {
   const goView = v => { setView(v); setSelTutor(null); setSelStudent(null); };
 
   const totalRevenue = payments.reduce((s,p)=>s+p.amount,0);
+  // Derived from the editable course catalog — so adding/removing a course in "Каталог курсов"
+  // immediately makes it available in every subject picker across the app (lessons, students,
+  // tutors, candidates, requests) instead of only showing in the catalog page itself.
+  const catalogGrouped = (() => {
+    const map = {};
+    courseCatalog.forEach(c => { if (!map[c.category]) map[c.category] = []; if (!map[c.category].includes(c.name)) map[c.category].push(c.name); });
+    return Object.entries(map).map(([label, courses]) => ({
+      id: label,
+      label,
+      color: courseCategories.find(cc=>cc.label===label)?.color || "#1da0d4",
+      courses,
+    }));
+  })();
   const selStudentLive = selStudent ? (students.find(x=>x.id===selStudent.id) || selStudent) : null;
   const totalSalPaid = salaries.reduce((s,p)=>s+p.amount,0);
 
@@ -1107,7 +1138,7 @@ export default function App() {
         {/* ── TUTOR PROFILE ── */}
         {view==="tutors" && selTutor && (()=>{
           const t = tutors.find(x=>x.id===selTutor.id)||selTutor;
-          const myL=tLessons(t.id), myC=tCompleted(t.id), mySt=tStudents(t.id), myPay=salaries.filter(p=>p.tutorId===t.id);
+          const myL=tLessons(t.id), myC=tCompleted(t.id), myBillable=tBillable(t.id), mySt=tStudents(t.id), myPay=salaries.filter(p=>p.tutorId===t.id);
           const earned=tEarned(t.id), paid=tPaid(t.id), debt=earned-paid;
           return (
             <div>
@@ -1329,10 +1360,10 @@ export default function App() {
                     </div>
                     <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:14, padding:20 }}>
                       <h4 style={{ margin:"0 0 12px", fontSize:14, color:"#6d7f92", fontWeight:600 }}>Детализация по занятиям</h4>
-                      {myC.map(l=>(
+                      {myBillable.map(l=>(
                         <div key={l.id} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid #f2f6fa", fontSize:12 }}>
                           <div>
-                            <div style={{ fontWeight:600, color:"#22344a" }}>{l.studentName} · {l.subject}</div>
+                            <div style={{ fontWeight:600, color:"#22344a" }}>{l.studentName} · {l.subject}{l.status==="noshow_burned" && <span style={{ color:"#e2574c", fontWeight:600 }}> · сгорело</span>}</div>
                             <div style={{ color:"#7a8a9c" }}>{l.date}</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
@@ -1341,7 +1372,7 @@ export default function App() {
                           </div>
                         </div>
                       ))}
-                      {myC.length===0 && <div style={{ color:"#7a8a9c", fontSize:13 }}>Нет проведённых занятий</div>}
+                      {myBillable.length===0 && <div style={{ color:"#7a8a9c", fontSize:13 }}>Нет оплачиваемых занятий</div>}
                     </div>
                   </div>
                   <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:14, padding:20 }}>
@@ -1688,7 +1719,7 @@ export default function App() {
                       </div>
                       <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Предмет</div>
                         <select value={editLesson.subject} onChange={e=>setEditLesson({...editLesson,subject:e.target.value})}>
-                          {courseCategories.map(cat=>(
+                          {catalogGrouped.map(cat=>(
                             <optgroup key={cat.id} label={cat.label}>
                               {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
                             </optgroup>
@@ -3026,7 +3057,7 @@ export default function App() {
               <div>
                 <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы</div>
                 <div style={{ maxHeight:200, overflowY:"auto", display:"flex", flexDirection:"column", gap:10 }}>
-                  {courseCategories.map(cat=>(
+                  {catalogGrouped.map(cat=>(
                     <div key={cat.id}>
                       <div style={{ fontSize:10, color:cat.color, fontWeight:700, textTransform:"uppercase", marginBottom:5 }}>{cat.label}</div>
                       <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
@@ -3131,7 +3162,7 @@ export default function App() {
                       <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
                         <select value={st.subject} onChange={e=>{ const arr=[...familyForm.children]; const sts=[...arr[ci].subjectTeachers]; sts[si]={...sts[si],subject:e.target.value}; arr[ci]={...arr[ci],subjectTeachers:sts}; setFamilyForm({...familyForm,children:arr}); }}>
                           <option value="">Предмет...</option>
-                          {courseCategories.map(cat=>(
+                          {catalogGrouped.map(cat=>(
                             <optgroup key={cat.id} label={cat.label}>
                               {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
                             </optgroup>
@@ -3207,7 +3238,7 @@ export default function App() {
                   <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
                     <select value={st.subject} onChange={e=>{ const arr=[...nStudentEdit.subjectTeachers]; arr[si]={...arr[si],subject:e.target.value}; setNStudentEdit({...nStudentEdit,subjectTeachers:arr}); }}>
                       <option value="">Предмет...</option>
-                      {courseCategories.map(cat=>(
+                      {catalogGrouped.map(cat=>(
                         <optgroup key={cat.id} label={cat.label}>
                           {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
                         </optgroup>
@@ -3289,7 +3320,7 @@ export default function App() {
                 <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предмет / курс *</div>
                   <select value={nLesson.subject} onChange={e=>setNLesson({...nLesson,subject:e.target.value})}>
                     <option value="">Выберите курс</option>
-                    {courseCategories.map(cat=>(
+                    {catalogGrouped.map(cat=>(
                       <optgroup key={cat.id} label={cat.label}>
                         {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
                       </optgroup>
@@ -3726,7 +3757,7 @@ export default function App() {
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Интересующий курс</div>
                 <select value={nRequest.course} onChange={e=>setNRequest({...nRequest,course:e.target.value})}>
                   <option value="">Выберите курс</option>
-                  {courseCategories.map(cat=>(
+                  {catalogGrouped.map(cat=>(
                     <optgroup key={cat.id} label={cat.label}>
                       {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
                     </optgroup>
@@ -3768,7 +3799,7 @@ export default function App() {
               <div>
                 <div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Может преподавать</div>
                 <div style={{ maxHeight:160, overflowY:"auto", display:"flex", flexDirection:"column", gap:8, background:"#f8fafc", border:"1px solid #e7eef5", borderRadius:10, padding:10 }}>
-                  {courseCategories.map(cat=>(
+                  {catalogGrouped.map(cat=>(
                     <div key={cat.id}>
                       <div style={{ fontSize:10, color:cat.color, fontWeight:700, textTransform:"uppercase", marginBottom:5 }}>{cat.label}</div>
                       <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
