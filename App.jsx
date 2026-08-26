@@ -1702,6 +1702,17 @@ export default function App() {
                             <select value={editLesson.studentId} onChange={e=>{ const s=students.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,studentId:Number(e.target.value),studentName:s?.name||""}); }}>
                               {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
+                            {(()=>{
+                              const st = students.find(s=>s.id===Number(editLesson.studentId));
+                              if (!st || (!st.parentPhone && !st.phone)) return null;
+                              return (
+                                <div style={{ marginTop:6, fontSize:12, color:"#55677a", display:"flex", alignItems:"center", gap:6 }}>
+                                  <Phone size={12} color="#1da0d4" />
+                                  {st.parentName ? `${st.parentName}: ` : "Родитель: "}
+                                  <a href={`tel:${st.parentPhone||st.phone}`} style={{ color:"#1da0d4", fontWeight:600, textDecoration:"none" }}>{st.parentPhone||st.phone}</a>
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Стоимость (₽)</div>
                             <input type="number" value={editLesson.price} onChange={e=>setEditLesson({...editLesson,price:Number(e.target.value)})} />
@@ -1715,13 +1726,22 @@ export default function App() {
                           {editGroupRoster.map((gs,i)=>{
                             const st = students.find(s=>s.id===Number(gs.studentId));
                             return (
-                              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:"#f2f6fa", borderRadius:9, marginBottom:6, border:"1px solid #d7e2ee" }}>
-                                <select value={gs.studentId} onChange={e=>{ const arr=[...editGroupRoster]; arr[i]={...arr[i],studentId:e.target.value}; setEditGroupRoster(arr); }} style={{ flex:1 }}>
-                                  <option value="">Выберите ученика...</option>
-                                  {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
-                                <input type="number" value={gs.price} placeholder="Цена" onChange={e=>{ const arr=[...editGroupRoster]; arr[i]={...arr[i],price:e.target.value}; setEditGroupRoster(arr); }} style={{ width:90, fontSize:12, padding:"4px 8px" }} />
-                                <button onClick={()=>setEditGroupRoster(editGroupRoster.filter((_,j)=>j!==i))} style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}><X size={13} /></button>
+                              <div key={i} style={{ background:"#f2f6fa", borderRadius:9, marginBottom:6, border:"1px solid #d7e2ee", padding:"7px 10px" }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                  <select value={gs.studentId} onChange={e=>{ const arr=[...editGroupRoster]; arr[i]={...arr[i],studentId:e.target.value}; setEditGroupRoster(arr); }} style={{ flex:1 }}>
+                                    <option value="">Выберите ученика...</option>
+                                    {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                                  </select>
+                                  <input type="number" value={gs.price} placeholder="Цена" onChange={e=>{ const arr=[...editGroupRoster]; arr[i]={...arr[i],price:e.target.value}; setEditGroupRoster(arr); }} style={{ width:90, fontSize:12, padding:"4px 8px" }} />
+                                  <button onClick={()=>setEditGroupRoster(editGroupRoster.filter((_,j)=>j!==i))} style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}><X size={13} /></button>
+                                </div>
+                                {st && (st.parentPhone || st.phone) && (
+                                  <div style={{ marginTop:6, fontSize:11, color:"#55677a", display:"flex", alignItems:"center", gap:5 }}>
+                                    <Phone size={11} color="#1da0d4" />
+                                    {st.parentName ? `${st.parentName}: ` : "Родитель: "}
+                                    <a href={`tel:${st.parentPhone||st.phone}`} style={{ color:"#1da0d4", fontWeight:600, textDecoration:"none" }}>{st.parentPhone||st.phone}</a>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
