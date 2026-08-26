@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "./supabaseClient";
 import {
   LayoutGrid, GraduationCap, Users, BookOpen, Calendar, Wallet, CreditCard,
@@ -821,6 +821,33 @@ export default function App() {
   const goView = v => { setView(v); setSelTutor(null); setSelStudent(null); };
 
   const totalRevenue = payments.reduce((s,p)=>s+p.amount,0);
+  // ── Performance: pre-index all lessons by tutor+date+time so the schedule grid
+  // can look up a cell's lessons in O(1) instead of re-scanning the whole lessons
+  // array for every one of the ~200 grid cells on every render — this is what was
+  // causing the browser to freeze once recurring series pushed lesson counts into
+  // the hundreds/thousands. Must be a top-level hook call (not inside a conditional
+  // view block) — React requires hooks to run in the same order on every render.
+  const lessonsByTutorDateTime = useMemo(() => {
+    const idx = {};
+    lessons.forEach(l => {
+      const key = `${l.tutorId}|${l.date}|${l.time}`;
+      (idx[key] ||= []).push(l);
+    });
+    return idx;
+  }, [lessons]);
+  const lessonsByDateTime = useMemo(() => {
+    const idx = {};
+    lessons.forEach(l => {
+      const key = `${l.date}|${l.time}`;
+      (idx[key] ||= []).push(l);
+    });
+    return idx;
+  }, [lessons]);
+  const lessonCountByDate = useMemo(() => {
+    const idx = {};
+    lessons.forEach(l => { if (l.status!=="cancelled") idx[l.date] = (idx[l.date]||0)+1; });
+    return idx;
+  }, [lessons]);
   // Derived from the editable course catalog — so adding/removing a course in "Каталог курсов"
   // immediately makes it available in every subject picker across the app (lessons, students,
   // tutors, candidates, requests) instead of only showing in the catalog page itself.
@@ -1885,7 +1912,8 @@ export default function App() {
                         <div style={{ padding:"3px 6px", fontSize:10, color:"#a9b8c6", textAlign:"right", borderRight:"1px solid #dbe6f0", background:"#1b6f8c" }}>{slot.endsWith(":00") ? slot : ""}</div>
                         {weekDates.map((d,di)=>{
                           const dateStr = fmt(d);
-                          const dayLessons = weekLessons.filter(l=>l.date===dateStr && l.time===slot);
+                          const cellAll = lessonsByDateTime[`${dateStr}|${slot}`] || [];
+                          const dayLessons = schedTutorFilter==="all" ? cellAll : cellAll.filter(l=>l.tutorId===Number(schedTutorFilter));
                           const isToday = dateStr===fmt(today);
                           return (
                             <div key={di}
@@ -2052,7 +2080,7 @@ export default function App() {
                                 weekDates.map((d,di)=>{
                                   const dateStr = fmt(d);
                                   const isToday = dateStr===fmt(today);
-                                  const cellLessons = lessons.filter(l=>l.tutorId===t.id&&l.date===dateStr&&l.time===slot);
+                                  const cellLessons = lessonsByTutorDateTime[`${t.id}|${dateStr}|${slot}`] || [];
                                   return (
                                     <td key={`${t.id}-${di}`}
                                       style={{ padding:"2px 3px", border:"1px solid #f2f6fa", verticalAlign:"top", minHeight:26, background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer", minWidth:80 }}
