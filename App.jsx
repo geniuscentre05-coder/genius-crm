@@ -300,6 +300,7 @@ export default function App() {
   // ── Load from localStorage or use defaults (instant local cache) ──
   const saved = loadFromLS();
   const [view, setView]         = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tutors, setTutors]     = useState(saved?.tutors     || initialTutors);
   const [students, setStudents] = useState(saved?.students   || initialStudents);
   const [lessons, setLessons]   = useState(saved?.lessons    || initialLessons);
@@ -818,7 +819,7 @@ export default function App() {
     { id:"ai",        icon:Sparkles,      label:"ИИ-Помощник"    },
   ];
 
-  const goView = v => { setView(v); setSelTutor(null); setSelStudent(null); };
+  const goView = v => { setView(v); setSelTutor(null); setSelStudent(null); setSidebarOpen(false); };
 
   const totalRevenue = payments.reduce((s,p)=>s+p.amount,0);
   // ── Performance: pre-index all lessons by tutor+date+time so the schedule grid
@@ -941,10 +942,22 @@ export default function App() {
         .notif{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:500;z-index:999;animation:si .3s ease}
         @keyframes si{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
         .stab{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all .2s}
+        .hamburger-btn{display:none}
+        .sidebar-overlay{display:none}
+        @media (max-width:860px){
+          .app-sidebar{position:fixed!important;top:0;left:0;z-index:200;transform:translateX(-100%);transition:transform .25s ease;box-shadow:0 0 40px rgba(0,0,0,.3)}
+          .app-sidebar.open{transform:translateX(0)}
+          .hamburger-btn{display:flex!important}
+          .sidebar-overlay.open{display:block;position:fixed;inset:0;background:rgba(18,40,61,.5);z-index:150}
+          .app-main{padding:16px!important}
+        }
       `}</style>
 
       {/* SIDEBAR */}
-      <div style={{ width:300, background:"linear-gradient(180deg, #1da0d4 0%, #17a6c9 45%, #5cb85c 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
+      {/* Mobile overlay — tap outside sidebar to close it */}
+      <div className={`sidebar-overlay ${sidebarOpen ? "open" : ""}`} onClick={()=>setSidebarOpen(false)} />
+
+      <div className={`app-sidebar ${sidebarOpen ? "open" : ""}`} style={{ width:300, background:"linear-gradient(180deg, #1da0d4 0%, #17a6c9 45%, #5cb85c 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
         <div style={{ padding:"0 16px 30px", display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:12 }}>
           <div style={{ position:"relative", width:140, height:140, display:"flex", alignItems:"center", justifyContent:"center" }}>
             {/* Decorative geometric accents around the logo, echoing the brand's diamond/circle motif */}
@@ -988,7 +1001,11 @@ export default function App() {
       </div>
 
       {/* MAIN */}
-      <div style={{ flex:1, padding:32, overflowY:"auto", maxHeight:"100vh" }}>
+      <div className="app-main" style={{ flex:1, padding:32, overflowY:"auto", maxHeight:"100vh" }}>
+        <button className="hamburger-btn" onClick={()=>setSidebarOpen(o=>!o)}
+          style={{ alignItems:"center", justifyContent:"center", gap:8, marginBottom:16, background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:10, padding:"10px 16px", cursor:"pointer", fontFamily:"inherit", fontSize:14, fontWeight:600, color:"#1da0d4" }}>
+          <LayoutGrid size={16} /> Меню
+        </button>
 
         {/* ── DASHBOARD ── */}
         {view==="dashboard" && (
