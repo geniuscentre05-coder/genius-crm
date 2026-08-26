@@ -1850,7 +1850,7 @@ export default function App() {
                   </div>
                   <div style={{ overflowY:"auto", maxHeight:"58vh" }}>
                     {SLOTS.map(slot=>(
-                      <div key={slot} style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom: slot.endsWith(":30") ? "1px dashed #f2f6fa" : "1px solid #dbe6f0", minHeight:32 }}>
+                      <div key={slot} style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom: slot.endsWith(":30") ? "1px dashed #f2f6fa" : "1px solid #dbe6f0", minHeight:26 }}>
                         <div style={{ padding:"3px 6px", fontSize:10, color:"#a9b8c6", textAlign:"right", borderRight:"1px solid #dbe6f0", background:"#1b6f8c" }}>{slot.endsWith(":00") ? slot : ""}</div>
                         {weekDates.map((d,di)=>{
                           const dateStr = fmt(d);
@@ -1865,15 +1865,12 @@ export default function App() {
                                 const isActive = editLesson?.id===l.id;
                                 return (
                                   <div key={l.id} onClick={e=>{ e.stopPropagation(); openEditLesson(isActive?null:l); }}
-                                    style={{ background: isActive?`${tu?.color||"#1da0d4"}33`:`${tu?.color||"#1da0d4"}18`, border:`1px solid ${isActive?tu?.color||"#1da0d4":(tu?.color||"#1da0d4")+"33"}`, borderLeft:`3px solid ${tu?.color||"#1da0d4"}`, borderRadius:6, padding:"4px 6px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
-                                    <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                                      {l.isGroup && <span style={{ fontSize:8, background:"#f5a623", color:"black", borderRadius:3, padding:"1px 4px", fontWeight:700 }}>ГР</span>}
-                                      <div style={{ fontSize:11, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{l.isGroup?l.groupName:l.studentName}</div>
-                                    </div>
-                                    <div style={{ fontSize:10, color:"#6d7f92" }}>{l.subject} · {l.time}</div>
-                                    {l.isGroup && <div style={{ fontSize:9, color:"#f5a623" }}>{l.studentName}</div>}
+                                    title={`${l.subject} · ${l.isGroup?l.groupName:l.studentName} · ${l.time}`}
+                                    style={{ display:"flex", alignItems:"center", gap:4, background: isActive?`${tu?.color||"#1da0d4"}33`:`${tu?.color||"#1da0d4"}18`, border:`1px solid ${isActive?tu?.color||"#1da0d4":(tu?.color||"#1da0d4")+"33"}`, borderLeft:`3px solid ${tu?.color||"#1da0d4"}`, borderRadius:5, padding:"3px 5px", marginBottom:2, cursor:"pointer", transition:"all .15s", minHeight:20 }}>
+                                    {l.isGroup && <Users size={9} color="#22344a" style={{ flexShrink:0 }} />}
+                                    <span style={{ fontSize:10, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, lineHeight:1.2 }}>{l.subject}</span>
                                     {l.status!=="scheduled" && (
-                                      <div style={{ fontSize:8, color:lsnCfg[l.status]?.color, fontWeight:700, marginTop:1 }}>{lsnCfg[l.status]?.label}</div>
+                                      <span style={{ width:6, height:6, borderRadius:"50%", background:lsnCfg[l.status]?.color, flexShrink:0 }} />
                                     )}
                                   </div>
                                 );
@@ -2034,11 +2031,11 @@ export default function App() {
                                         return (
                                           <div key={l.id}
                                             onClick={e=>{ e.stopPropagation(); openEditLesson(isActive?null:l); }}
-                                            style={{ background:isActive?`${t.color}44`:`${t.color}20`, border:`1px solid ${isActive?t.color:t.color+"44"}`, borderLeft:`3px solid ${t.color}`, borderRadius:4, padding:"3px 5px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
-                                            <div style={{ fontSize:10, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:74 }}>{l.studentName}</div>
-                                            <div style={{ fontSize:9, color:"#6d7f92" }}>{l.subject}</div>
-                                            <div style={{ fontSize:9, color:"#55677a" }}>{l.time}</div>
-                                            {l.status!=="scheduled" && <div style={{ fontSize:8, color:lsnCfg[l.status]?.color, fontWeight:700 }}>{lsnCfg[l.status]?.label}</div>}
+                                            title={`${l.subject} · ${l.isGroup?l.groupName:l.studentName} · ${l.time}`}
+                                            style={{ display:"flex", alignItems:"center", gap:3, background:isActive?`${t.color}44`:`${t.color}20`, border:`1px solid ${isActive?t.color:t.color+"44"}`, borderLeft:`3px solid ${t.color}`, borderRadius:4, padding:"3px 5px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
+                                            {l.isGroup && <Users size={8} color="#22344a" style={{ flexShrink:0 }} />}
+                                            <span style={{ fontSize:10, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{l.subject}</span>
+                                            {l.status!=="scheduled" && <span style={{ width:6, height:6, borderRadius:"50%", background:lsnCfg[l.status]?.color, flexShrink:0 }} />}
                                           </div>
                                         );
                                       })}
