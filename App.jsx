@@ -1176,8 +1176,8 @@ export default function App() {
                   <Av name={t.name} color={t.color} size={64} />
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:22, fontWeight:700, color:"#12283d" }}>{t.name}</div>
-                    <div style={{ fontSize:13, color:"#7a8a9c", marginTop:4 }}>{t.phone}</div>
-                    {t.address && <div style={{ fontSize:12, color:"#7a8a9c", marginTop:2 }}>📍 {t.address}</div>}
+                    <div style={{ fontSize:16, fontWeight:600, color:"#22344a", marginTop:6, display:"flex", alignItems:"center", gap:6 }}><Phone size={14} color="#1da0d4" /> {t.phone}</div>
+                    {t.address && <div style={{ fontSize:14, color:"#55677a", marginTop:4, display:"flex", alignItems:"center", gap:6 }}><MapPin size={14} color="#1da0d4" /> {t.address}</div>}
                     <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8 }}>
                       {t.subjects.map(s=><Tag key={s} c="#1da0d4" bg="rgba(99,102,241,0.15)">{s}</Tag>)}
                       <Tag c={statusCfg[t.status]?.color} bg={statusCfg[t.status]?.bg}>{statusCfg[t.status]?.label}</Tag>
@@ -3569,7 +3569,7 @@ export default function App() {
                       const all = [];
                       recurDates.forEach((dateStr,ri)=>{
                         const gid = groupId + ri*1000;
-                        newLessons.forEach((l,li)=>{ all.push({...l, id:gid+li, date:dateStr}); });
+                        newLessons.forEach((l,li)=>{ all.push({...l, id:gid+li, date:dateStr, groupId:gid}); });
                       });
                       setLessons(prev=>[...prev,...all]);
                       notify(`Создано ${recurDates.length} занятий × ${groupStudents.length} учеников`);
