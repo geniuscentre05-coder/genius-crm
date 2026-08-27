@@ -1340,7 +1340,7 @@ export default function App() {
                     <table style={{ width:"100%", borderCollapse:"collapse" }}>
                       <thead>
                         <tr style={{ borderBottom:"1px solid #dbe6f0" }}>
-                          {["Ученик","Предметы","Статус","Баланс","Занятий с преп."].map(h=>(
+                          {["Ученик","Телефон родителя","Предметы","Статус","Баланс","Занятий с преп."].map(h=>(
                             <th key={h} style={{ padding:"13px 16px", textAlign:"left", fontSize:11, color:"#7a8a9c", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
                           ))}
                         </tr>
@@ -1358,6 +1358,13 @@ export default function App() {
                                     <div style={{ fontSize:11, color:"#7a8a9c" }}>{s.age} лет</div>
                                   </div>
                                 </div>
+                              </td>
+                              <td style={{ padding:"12px 16px" }}>
+                                {(s.parentPhone||s.phone) ? (
+                                  <a href={`tel:${s.parentPhone||s.phone}`} onClick={e=>e.stopPropagation()} style={{ fontSize:13, color:"#1da0d4", fontWeight:600, textDecoration:"none", display:"flex", alignItems:"center", gap:5 }}>
+                                    <Phone size={12} /> {s.parentPhone||s.phone}
+                                  </a>
+                                ) : <span style={{ fontSize:12, color:"#a9b8c6" }}>—</span>}
                               </td>
                               <td style={{ padding:"12px 16px" }}>{s.subjects.map(sub=><Tag key={sub} c="#1da0d4" bg="rgba(29,160,212,0.12)">{sub}</Tag>)}</td>
                               <td style={{ padding:"12px 16px" }}><Tag c={statusCfg[s.status]?.color} bg={statusCfg[s.status]?.bg}>{statusCfg[s.status]?.label}</Tag></td>
