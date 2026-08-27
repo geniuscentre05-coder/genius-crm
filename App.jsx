@@ -373,6 +373,7 @@ export default function App() {
   const [editRecurWeekdays, setEditRecurWeekdays] = useState([]);
   const [editRecurEndDate,  setEditRecurEndDate]  = useState("");
   const [schedTutorFilter, setSchedTutorFilter] = useState("all");
+  const [schedSelectedDate, setSchedSelectedDate] = useState(null); // for "По педагогам" view — null = today
   const [recurModal,    setRecurModal]    = useState(false);
   const [recurCount,    setRecurCount]    = useState(4);
   const [recurInterval, setRecurInterval] = useState(7);
@@ -2048,43 +2049,41 @@ export default function App() {
                 const DAYS_SHORT = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
                 const SLOTS = Array.from({length:29},(_,i)=>{ const h=8+Math.floor(i/2); const m=i%2===0?"00":"30"; return `${String(h).padStart(2,"0")}:${m}`; });
                 const activeTutors = schedTutorFilter==="all" ? tutors : tutors.filter(t=>t.id===Number(schedTutorFilter));
+                const todayStr = fmt(today);
+                const weekDateStrs = weekDates.map(d=>fmt(d));
+                const selectedDate = (schedSelectedDate && weekDateStrs.includes(schedSelectedDate)) ? schedSelectedDate : (weekDateStrs.includes(todayStr) ? todayStr : weekDateStrs[0]);
+                const selectedDateObj = weekDates.find(d=>fmt(d)===selectedDate) || weekDates[0];
+                const selectedDayIdx = weekDateStrs.indexOf(selectedDate);
 
                 const printTutorSchedule = () => {
                   const w = window.open("","_blank");
-                  const dateRange = `${fmtLabel(weekDates[0])} — ${fmtLabel(weekDates[6])} 2026`;
+                  const dateLabel = `${DAYS_FULL[selectedDayIdx]}, ${fmtLabel(selectedDateObj)} 2026`;
                   let tableRows = "";
                   SLOTS.forEach(slot => {
                     let row = `<tr><td class="time">${slot.endsWith(":00")?slot:""}</td>`;
                     activeTutors.forEach(t => {
-                      weekDates.forEach((d,di) => {
-                        const dateStr = fmt(d);
-                        const cell = lessons.filter(l=>l.tutorId===t.id && l.date===dateStr && l.time===slot);
-                        row += `<td class="${cell.length?'has-lesson':''}">` + cell.map(l=>`<div class="lesson-cell"><b>${l.studentName}</b><br/>${l.subject}<br/>${l.time} · ${l.duration}мин</div>`).join("") + `</td>`;
-                      });
+                      const cell = lessons.filter(l=>l.tutorId===t.id && l.date===selectedDate && l.time===slot);
+                      row += `<td class="${cell.length?'has-lesson':''}">` + cell.map(l=>`<div class="lesson-cell"><b>${l.studentName}</b><br/>${l.subject}<br/>${l.time} · ${l.duration}мин</div>`).join("") + `</td>`;
                     });
                     row += "</tr>";
                     tableRows += row;
                   });
                   let headerCells = '<th class="time-h">Время</th>';
-                  activeTutors.forEach(t => {
-                    weekDates.forEach((d,di) => {
-                      headerCells += `<th>${t.short}<br/><span style="font-weight:400;font-size:11px">${DAYS_SHORT[di]} ${d.getDate()}</span></th>`;
-                    });
-                  });
-                  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Расписание ${dateRange}</title>
+                  activeTutors.forEach(t => { headerCells += `<th>${t.short}<br/><span style="font-weight:400;font-size:11px">${t.subjects.join(", ")}</span></th>`; });
+                  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Расписание ${dateLabel}</title>
                   <style>
-                    body{font-family:Arial,sans-serif;padding:12px;font-size:11px}
-                    h2{font-size:14px;margin-bottom:4px}p{color:#666;margin:0 0 10px;font-size:11px}
+                    body{font-family:Arial,sans-serif;padding:16px;font-size:11px}
+                    h2{font-size:15px;margin-bottom:4px}p{color:#666;margin:0 0 12px;font-size:12px}
                     table{border-collapse:collapse;width:100%}
-                    th{background:#f0f0f0;padding:5px 4px;text-align:center;border:1px solid #ddd;font-size:10px;white-space:nowrap}
-                    td{padding:3px 4px;border:1px solid #eee;vertical-align:top;min-width:70px;font-size:10px}
+                    th{background:#f0f0f0;padding:6px 5px;text-align:center;border:1px solid #ddd;font-size:11px;white-space:nowrap}
+                    td{padding:3px 4px;border:1px solid #eee;vertical-align:top;min-width:90px;font-size:10px}
                     td.time{background:#f9f9f9;font-weight:600;text-align:center;color:#666;white-space:nowrap}
                     th.time-h{background:#e8e8e8}
                     td.has-lesson{background:#f0f4ff}
                     .lesson-cell{background:#1da0d4;color:white;border-radius:3px;padding:3px 4px;margin-bottom:2px;font-size:9px}
                     @media print{button{display:none}}
                   </style></head><body>
-                  <h2>📅 Расписание — ${dateRange}</h2>
+                  <h2>📅 Расписание — ${dateLabel}</h2>
                   <p>Образовательный центр ГЕНИЙ</p>
                   <button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#1da0d4;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ Распечатать</button>
                   <table><thead><tr>${headerCells}</tr></thead><tbody>${tableRows}</tbody></table>
@@ -2094,80 +2093,82 @@ export default function App() {
 
                 return (
                   <div>
-                    <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
-                      <button className="bg" onClick={printTutorSchedule}>🖨️ Распечатать расписание</button>
+                    {/* Day picker — one day at a time, since columns are now per-teacher */}
+                    <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+                      {weekDates.map((d,i)=>{
+                        const dStr = fmt(d);
+                        const isSel = dStr===selectedDate;
+                        const isToday = dStr===todayStr;
+                        const dCount = lessons.filter(l=>l.date===dStr && l.status!=="cancelled" && (schedTutorFilter==="all"||l.tutorId===Number(schedTutorFilter))).length;
+                        return (
+                          <button key={i} onClick={()=>setSchedSelectedDate(dStr)}
+                            style={{ padding:"8px 14px", borderRadius:10, border:"1px solid", cursor:"pointer", fontFamily:"inherit", transition:"all .15s", textAlign:"center", minWidth:64,
+                              background:isSel?"linear-gradient(135deg,#1da0d4,#5cb85c)":"#ffffff",
+                              borderColor:isSel?"#1da0d4":"#dbe6f0",
+                              color:isSel?"#ffffff":"#22344a" }}>
+                            <div style={{ fontSize:11, opacity:.85 }}>{DAYS_SHORT[i]}</div>
+                            <div style={{ fontSize:16, fontWeight:700 }}>{d.getDate()}</div>
+                            {dCount>0 && <div style={{ fontSize:9, marginTop:2, color:isSel?"#ffffff":"#1da0d4", fontWeight:600 }}>{dCount} зан.</div>}
+                            {isToday && <div style={{ fontSize:8, marginTop:1, color:isSel?"rgba(255,255,255,0.85)":"#5cb85c", fontWeight:700 }}>СЕГОДНЯ</div>}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div style={{ overflowX:"auto" }}>
+
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                      <div style={{ fontSize:14, fontWeight:700, color:"#12283d" }}>{DAYS_FULL[selectedDayIdx]}, {fmtLabel(selectedDateObj)}</div>
+                      <button className="bg" onClick={printTutorSchedule}><Printer size={14} /> Распечатать расписание</button>
+                    </div>
+
+                    <div style={{ overflowX:"auto", background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16 }}>
                       <table style={{ borderCollapse:"collapse", minWidth:"100%", fontSize:11 }}>
                         <thead>
-                          {/* Tutor row */}
-                          <tr style={{ background:"#1b6f8c" }}>
-                            <th style={{ width:52, padding:"8px 4px", border:"1px solid #d7e2ee", background:"#1b6f8c", position:"sticky", left:0, zIndex:2 }}></th>
+                          <tr>
+                            <th style={{ width:56, padding:"10px 4px", border:"1px solid #dbe6f0", background:"#1b6f8c", position:"sticky", left:0, zIndex:2 }}></th>
                             {activeTutors.map(t=>(
-                              <th key={t.id} colSpan={7} style={{ padding:"10px 8px", textAlign:"center", border:"1px solid #d7e2ee", background:"#1b6f8c", minWidth:560 }}>
-                                <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                                  <div style={{ width:10,height:10,borderRadius:"50%",background:t.color }} />
+                              <th key={t.id} style={{ padding:"10px 8px", textAlign:"center", border:"1px solid #dbe6f0", background:`${t.color}18`, borderTop:`3px solid ${t.color}`, minWidth:130 }}>
+                                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+                                  <Av name={t.name} color={t.color} size={26} />
                                   <span style={{ color:t.color, fontWeight:700, fontSize:12 }}>{t.short}</span>
-                                  <span style={{ color:"#a9b8c6", fontWeight:400, fontSize:10 }}>{t.subjects.join(", ")}</span>
+                                  <span style={{ color:"#7a8a9c", fontWeight:400, fontSize:9, textAlign:"center" }}>{t.subjects.slice(0,2).join(", ")}</span>
                                 </div>
                               </th>
                             ))}
-                          </tr>
-                          {/* Day row */}
-                          <tr style={{ background:"#ffffff" }}>
-                            <th style={{ padding:"6px 4px", border:"1px solid #d7e2ee", background:"#ffffff", position:"sticky", left:0, zIndex:2, fontSize:10, color:"#a9b8c6" }}>Время</th>
-                            {activeTutors.map(t=>
-                              weekDates.map((d,di)=>{
-                                const isToday = fmt(d)===fmt(today);
-                                const dayCount = lessons.filter(l=>l.tutorId===t.id&&l.date===fmt(d)).length;
-                                return (
-                                  <th key={`${t.id}-${di}`} style={{ padding:"6px 5px", border:"1px solid #d7e2ee", textAlign:"center", background:isToday?"rgba(99,102,241,0.12)":"#ffffff", minWidth:80 }}>
-                                    <div style={{ fontSize:10, color:isToday?"#1da0d4":"#7a8a9c" }}>{DAYS_SHORT[di]}</div>
-                                    <div style={{ fontSize:13, fontWeight:700, color:isToday?"#1da0d4":"#cbd5e1" }}>{d.getDate()}</div>
-                                    {dayCount>0&&<div style={{ fontSize:9, color:t.color }}>{dayCount}з</div>}
-                                  </th>
-                                );
-                              })
-                            )}
                           </tr>
                         </thead>
                         <tbody>
                           {SLOTS.map(slot=>(
                             <tr key={slot} style={{ borderBottom: slot.endsWith(":30") ? "1px dashed #f2f6fa" : "1px solid #dbe6f0" }}>
-                              <td style={{ padding:"3px 6px", fontSize:10, color:"#a9b8c6", textAlign:"right", background:"#1b6f8c", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", fontWeight:600, whiteSpace:"nowrap", position:"sticky", left:0, zIndex:1 }}>{slot.endsWith(":00") ? slot : ""}</td>
-                              {activeTutors.map(t=>
-                                weekDates.map((d,di)=>{
-                                  const dateStr = fmt(d);
-                                  const isToday = dateStr===fmt(today);
-                                  const cellLessons = lessonsByTutorDateTime[`${t.id}|${dateStr}|${slot}`] || [];
-                                  return (
-                                    <td key={`${t.id}-${di}`}
-                                      style={{ padding:"2px 3px", border:"1px solid #f2f6fa", verticalAlign:"top", minHeight:26, background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer", minWidth:80 }}
-                                      onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:slot,tutorId:String(t.id)})); setModal("addLesson"); }}>
-                                      {cellLessons.map(l=>{
-                                        const isActive = editLesson?.id===l.id;
-                                        return (
-                                          <div key={l.id}
-                                            onClick={e=>{ e.stopPropagation(); openEditLesson(isActive?null:l); }}
-                                            title={`${l.subject} · ${l.isGroup?l.groupName:l.studentName} · ${l.time}`}
-                                            style={{ display:"flex", alignItems:"center", gap:3, background:isActive?`${t.color}44`:`${t.color}20`, border:`1px solid ${isActive?t.color:t.color+"44"}`, borderLeft:`3px solid ${t.color}`, borderRadius:4, padding:"3px 5px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
-                                            {l.isGroup && <Users size={8} color="#22344a" style={{ flexShrink:0 }} />}
-                                            <span style={{ fontSize:10, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{l.subject}</span>
-                                            {l.status!=="scheduled" && <span style={{ width:6, height:6, borderRadius:"50%", background:lsnCfg[l.status]?.color, flexShrink:0 }} />}
-                                          </div>
-                                        );
-                                      })}
-                                    </td>
-                                  );
-                                })
-                              )}
+                              <td style={{ padding:"3px 6px", fontSize:10, color:"#a9b8c6", textAlign:"right", background:"#1b6f8c", border:"1px solid #dbe6f0", fontWeight:600, whiteSpace:"nowrap", position:"sticky", left:0, zIndex:1 }}>{slot.endsWith(":00") ? slot : ""}</td>
+                              {activeTutors.map(t=>{
+                                const cellLessons = lessonsByTutorDateTime[`${t.id}|${selectedDate}|${slot}`] || [];
+                                return (
+                                  <td key={t.id}
+                                    style={{ padding:"2px 4px", border:"1px solid #f2f6fa", verticalAlign:"top", background:`${t.color}06`, cursor:"pointer", minWidth:130 }}
+                                    onClick={()=>{ setNLesson(prev=>({...prev,date:selectedDate,time:slot,tutorId:String(t.id)})); setModal("addLesson"); }}>
+                                    {cellLessons.map(l=>{
+                                      const isActive = editLesson?.id===l.id;
+                                      return (
+                                        <div key={l.id}
+                                          onClick={e=>{ e.stopPropagation(); openEditLesson(isActive?null:l); }}
+                                          title={`${l.subject} · ${l.isGroup?l.groupName:l.studentName} · ${l.time}`}
+                                          style={{ display:"flex", alignItems:"center", gap:3, background:isActive?`${t.color}44`:`${t.color}22`, border:`1px solid ${isActive?t.color:t.color+"44"}`, borderLeft:`3px solid ${t.color}`, borderRadius:4, padding:"3px 5px", marginBottom:2, cursor:"pointer", transition:"all .15s" }}>
+                                          {l.isGroup && <Users size={9} color="#22344a" style={{ flexShrink:0 }} />}
+                                          <span style={{ fontSize:10, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{l.subject}</span>
+                                          {l.status!=="scheduled" && <span style={{ width:6, height:6, borderRadius:"50%", background:lsnCfg[l.status]?.color, flexShrink:0 }} />}
+                                        </div>
+                                      );
+                                    })}
+                                  </td>
+                                );
+                              })}
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
                     <div style={{ padding:"10px 0", fontSize:12, color:"#7a8a9c", marginTop:8 }}>
-                      Нажмите на ячейку — создать занятие · Нажмите на занятие — редактировать
+                      Выберите день выше · Нажмите на ячейку — создать занятие · Нажмите на занятие — редактировать
                     </div>
                   </div>
                 );
