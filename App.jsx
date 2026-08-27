@@ -267,6 +267,33 @@ function Tag({ c, bg, children }) {
   return <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, margin:2, color:c, background:bg }}>{children}</span>;
 }
 
+const MONTH_NAMES = ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
+function BirthDatePicker({ value, onChange }) {
+  const [y, m, d] = value ? value.split("-").map(Number) : ["", "", ""];
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 30 }, (_, i) => currentYear - i); // last 30 years, most recent first
+  const daysInMonth = (yy, mm) => (yy && mm) ? new Date(yy, mm, 0).getDate() : 31;
+  const days = Array.from({ length: daysInMonth(y, m) }, (_, i) => i + 1);
+  const update = (newD, newM, newY) => {
+    if (newD && newM && newY) onChange(`${newY}-${String(newM).padStart(2,"0")}-${String(newD).padStart(2,"0")}`);
+  };
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1.4fr 1fr", gap:6 }}>
+      <select value={d||""} onChange={e=>update(Number(e.target.value), m, y)}>
+        <option value="">День</option>
+        {days.map(dd=><option key={dd} value={dd}>{dd}</option>)}
+      </select>
+      <select value={m||""} onChange={e=>update(d, Number(e.target.value), y)}>
+        <option value="">Месяц</option>
+        {MONTH_NAMES.map((mn,i)=><option key={i} value={i+1}>{mn}</option>)}
+      </select>
+      <select value={y||""} onChange={e=>update(d, m, Number(e.target.value))}>
+        <option value="">Год</option>
+        {years.map(yy=><option key={yy} value={yy}>{yy}</option>)}
+      </select>
+    </div>
+  );
+}
 function AttachmentsBlock({ title = "Документы", files = [], onUpload, onDelete, uploading }) {
   const inputRef = useRef(null);
   return (
@@ -688,7 +715,12 @@ export default function App() {
   const tLessons   = id => lessons.filter(l => l.tutorId === id);
   const tCompleted = id => lessons.filter(l => l.tutorId === id && l.status === "completed");
   const tBillable  = id => lessons.filter(l => l.tutorId === id && (l.status === "completed" || l.status === "noshow_burned"));
-  const tStudents  = id => { const ids = [...new Set(tLessons(id).map(l=>l.studentId))]; return students.filter(s=>ids.includes(s.id)); };
+  const tStudents  = id => {
+    const lessonIds = [...new Set(tLessons(id).map(l=>l.studentId))];
+    const assignedIds = students.filter(s => (s.subjectTeachers||[]).some(st=>Number(st.tutorId)===id)).map(s=>s.id);
+    const allIds = [...new Set([...lessonIds, ...assignedIds])];
+    return students.filter(s=>allIds.includes(s.id));
+  };
   const tEarned    = id => { const t=tutors.find(x=>x.id===id); return tBillable(id).reduce((s,l)=>s+calcEarning(l,t),0); };
   const tPaid      = id => salaries.filter(p=>p.tutorId===id).reduce((s,p)=>s+p.amount,0);
   const tDebt      = id => tEarned(id) - tPaid(id);
@@ -801,7 +833,9 @@ export default function App() {
 
   const filteredStudents = students.filter(s => {
     const q = search.toLowerCase();
-    return (s.name.toLowerCase().includes(q)||s.subjects.some(x=>x.toLowerCase().includes(q))) && (fStatus==="all"||s.status===fStatus);
+    const qDigits = search.replace(/\D/g, "");
+    const phoneMatch = qDigits.length>0 && [s.phone, s.parentPhone, ...(s.extraPhones||[])].some(p => p && p.replace(/\D/g,"").includes(qDigits));
+    return (s.name.toLowerCase().includes(q) || s.subjects.some(x=>x.toLowerCase().includes(q)) || phoneMatch) && (fStatus==="all"||s.status===fStatus);
   });
 
   const nav = [
@@ -1016,12 +1050,12 @@ export default function App() {
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:28 }}>
               {[
-                { label:"Активных учеников", value:students.filter(s=>s.status==="active").length, icon:Users, color:"#1da0d4" },
-                { label:"Преподавателей",    value:tutors.filter(t=>t.status==="active").length,   icon:GraduationCap, color:"#5cb85c" },
-                { label:"Занятий впереди",   value:lessons.filter(l=>l.status==="scheduled").length,icon:Calendar,color:"#f5a623" },
-                { label:`Выручка в ${new Date().toLocaleDateString("ru-RU",{month:"long"})}`, value:`${(payments.filter(p=>p.date.slice(0,7)===new Date().toISOString().slice(0,7)).reduce((s,p)=>s+p.amount,0)/1000).toFixed(1)}к`, icon:Wallet, color:"#d6539a" },
+                { label:"Активных учеников", value:students.filter(s=>s.status==="active").length, icon:Users, color:"#1da0d4", goTo:"students" },
+                { label:"Преподавателей",    value:tutors.filter(t=>t.status==="active").length,   icon:GraduationCap, color:"#5cb85c", goTo:"tutors" },
+                { label:"Занятий впереди",   value:lessons.filter(l=>l.status==="scheduled").length,icon:Calendar,color:"#f5a623", goTo:"schedule" },
+                { label:`Выручка в ${new Date().toLocaleDateString("ru-RU",{month:"long"})}`, value:`${(payments.filter(p=>p.date.slice(0,7)===new Date().toISOString().slice(0,7)).reduce((s,p)=>s+p.amount,0)/1000).toFixed(1)}к`, icon:Wallet, color:"#d6539a", goTo:"payments" },
               ].map((s,i)=>(
-                <div key={i} className="card" style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, padding:20 }}>
+                <div key={i} className="card" onClick={()=>goView(s.goTo)} style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, padding:20, cursor:"pointer" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                     <div>
                       <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:8 }}>{s.label}</div>
@@ -1452,7 +1486,7 @@ export default function App() {
               <button className="bp" onClick={()=>setModal("addStudent")}>+ Добавить ученика</button>
             </div>
             <div style={{ display:"flex", gap:12, marginBottom:20 }}>
-              <input placeholder="🔍  Поиск..." value={search} onChange={e=>setSearch(e.target.value)} style={{ maxWidth:300 }} />
+              <input placeholder="🔍  Имя, предмет или телефон (даже частично)..." value={search} onChange={e=>setSearch(e.target.value)} style={{ maxWidth:340 }} />
               <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{ maxWidth:160 }}>
                 <option value="all">Все статусы</option>
                 {Object.entries(statusCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
@@ -1482,6 +1516,7 @@ export default function App() {
                     </div>
                     <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"flex-end" }}>
                       <Tag c={statusCfg[selStudentLive.status]?.color} bg={statusCfg[selStudentLive.status]?.bg}>{statusCfg[selStudentLive.status]?.label}</Tag>
+                      <button className="bp" onClick={()=>{ setNLesson({ studentId:String(selStudentLive.id), subject:selStudentLive.subjects?.[0]||"", tutorId:selStudentLive.subjectTeachers?.[0]?.tutorId||"", date:"", time:"", duration:60, price:1200 }); setLessonType("individual"); setModal("addLesson"); }}><Calendar size={14} /> Запланировать занятие</button>
                       <button className="bg" onClick={()=>printSchedule(lessons.filter(l=>l.studentId===selStudentLive.id), tutors, students, `Ученик: ${selStudentLive.name}`)}>🖨️ Расписание ученика</button>
                       <button className="bg" onClick={()=>startEditStudent(selStudentLive)}>✏️ Редактировать</button>
                       <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
@@ -3193,7 +3228,7 @@ export default function App() {
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <input placeholder="ФИО ребёнка *" value={child.name} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],name:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
                     <div>
-                      <input type="date" value={child.birthDate} onChange={e=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],birthDate:e.target.value}; setFamilyForm({...familyForm,children:arr}); }} />
+                      <BirthDatePicker value={child.birthDate} onChange={val=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],birthDate:val}; setFamilyForm({...familyForm,children:arr}); }} />
                       {child.birthDate && <div style={{ fontSize:11, color:"#7a8a9c", marginTop:4 }}>Возраст: {calcAge(child.birthDate)} лет</div>}
                     </div>
                   </div>
@@ -3257,10 +3292,11 @@ export default function App() {
             <div style={{ display:"grid", gap:12 }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 <input placeholder="ФИО *" value={nStudentEdit.name} onChange={e=>setNStudentEdit({...nStudentEdit,name:e.target.value})} />
-                <div>
-                  <input type="date" value={nStudentEdit.birthDate} onChange={e=>setNStudentEdit({...nStudentEdit,birthDate:e.target.value})} />
-                  {nStudentEdit.birthDate && <div style={{ fontSize:11, color:"#7a8a9c", marginTop:4 }}>Возраст: {calcAge(nStudentEdit.birthDate)} лет</div>}
-                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Дата рождения</div>
+                <BirthDatePicker value={nStudentEdit.birthDate} onChange={val=>setNStudentEdit({...nStudentEdit,birthDate:val})} />
+                {nStudentEdit.birthDate && <div style={{ fontSize:11, color:"#7a8a9c", marginTop:4 }}>Возраст: {calcAge(nStudentEdit.birthDate)} лет</div>}
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 <input placeholder="🏫 Школа" value={nStudentEdit.school} onChange={e=>setNStudentEdit({...nStudentEdit,school:e.target.value})} />
