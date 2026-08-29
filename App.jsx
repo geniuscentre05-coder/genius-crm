@@ -259,11 +259,20 @@ function calcEarning(lesson, tutor) {
   return tutor.rateType === "percent" ? Math.round(lesson.price * tutor.rateValue / 100) : tutor.rateValue;
 }
 
-// Requests used to store a single "course" string; now they can have several via "courses".
-// This keeps old data working without a migration step.
+// Requests used to store a plain "course" string, then a "courses" array; now they
+// can have subject+teacher pairs via "subjectTeachers", same shape as the student form.
+// These helpers keep all older data working without any migration step.
+function getReqSubjectTeachers(req) {
+  if (req.subjectTeachers && req.subjectTeachers.length) return req.subjectTeachers;
+  if (req.courses && req.courses.length) return req.courses.map(c=>({ subject:c, tutorId:"" }));
+  return req.course ? [{ subject:req.course, tutorId:"" }] : [];
+}
 function getReqCourses(req) {
-  if (req.courses && req.courses.length) return req.courses;
-  return req.course ? [req.course] : [];
+  return getReqSubjectTeachers(req).map(st=>st.subject);
+}
+function getReqGrade(req) {
+  if (req.grade) return req.grade;
+  return req.age ? `${req.age} лет` : "";
 }
 
 function Av({ name, color, size = 36 }) {
@@ -360,9 +369,22 @@ const RequestTableRow = memo(function RequestTableRow({ req, reqCfg, assignedTut
       </td>
       <td style={{ padding:"11px 14px" }}>
         <div style={{ fontSize:13 }}>{req.studentName}</div>
-        {req.age ? <div style={{ fontSize:11, color:"#7a8a9c" }}>{req.age} лет</div> : null}
+        {getReqGrade(req) ? <div style={{ fontSize:11, color:"#7a8a9c" }}>{getReqGrade(req)}</div> : null}
       </td>
-      <td style={{ padding:"11px 14px" }}>{getReqCourses(req).map(c=>{ const cc=subjectCategory(c); return <Tag key={c} c={cc.color||"#1da0d4"} bg={`${cc.color||"#1da0d4"}18`}>{c}</Tag>; })}</td>
+      <td style={{ padding:"11px 14px" }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+          {getReqSubjectTeachers(req).map((st,i)=>{
+            const cc = subjectCategory(st.subject);
+            const tu = tutors.find(t=>t.id===Number(st.tutorId));
+            return (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                <Tag c={cc.color||"#1da0d4"} bg={`${cc.color||"#1da0d4"}18`}>{st.subject}</Tag>
+                {tu && <span style={{ fontSize:10, color:"#7a8a9c" }}>— {tu.short}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </td>
       <td style={{ padding:"11px 14px" }}>
         <select value={req.status} onChange={e=>onStatusChange(req.id, e.target.value)} style={{ fontSize:12, padding:"5px 8px", color: reqCfg[req.status]?.color, fontWeight:600 }}>
           {Object.entries(reqCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
@@ -386,7 +408,7 @@ const RequestTableRow = memo(function RequestTableRow({ req, reqCfg, assignedTut
   );
 });
 
-const RequestKanbanCard = memo(function RequestKanbanCard({ req, assignedTutor, onDragStart, onOpen, onDelete }) {
+const RequestKanbanCard = memo(function RequestKanbanCard({ req, tutors, assignedTutor, onDragStart, onOpen, onDelete }) {
   return (
     <div
       draggable
@@ -399,8 +421,21 @@ const RequestKanbanCard = memo(function RequestKanbanCard({ req, assignedTutor, 
         </div>
         <button onClick={()=>onDelete(req.id)} style={{ background:"transparent", border:"none", color:"#a9b8c6", cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
       </div>
-      <div style={{ fontSize:12, color:"#55677a", marginTop:6 }}>{req.studentName}{req.age ? `, ${req.age} лет` : ""}</div>
-      {getReqCourses(req).length>0 && <div style={{ marginTop:6, display:"flex", flexWrap:"wrap", gap:4 }}>{getReqCourses(req).map(c=>{ const cc=subjectCategory(c); return <Tag key={c} c={cc.color||"#1da0d4"} bg={`${cc.color||"#1da0d4"}18`}>{c}</Tag>; })}</div>}
+      <div style={{ fontSize:12, color:"#55677a", marginTop:6 }}>{req.studentName}{getReqGrade(req) ? `, ${getReqGrade(req)}` : ""}</div>
+      {getReqSubjectTeachers(req).length>0 && (
+        <div style={{ marginTop:6, display:"flex", flexDirection:"column", gap:3 }}>
+          {getReqSubjectTeachers(req).map((st,i)=>{
+            const cc = subjectCategory(st.subject);
+            const tu = tutors.find(t=>t.id===Number(st.tutorId));
+            return (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
+                <Tag c={cc.color||"#1da0d4"} bg={`${cc.color||"#1da0d4"}18`}>{st.subject}</Tag>
+                {tu && <span style={{ fontSize:10, color:"#7a8a9c" }}>— {tu.short}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
       {assignedTutor && <div style={{ marginTop:4 }}><Tag c={assignedTutor.color} bg={`${assignedTutor.color}18`}>{assignedTutor.short}</Tag></div>}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:8 }}>
         <div style={{ fontSize:10, color:"#a9b8c6" }}>{req.date}</div>
@@ -433,7 +468,7 @@ export default function App() {
     { id:2, title:"Поздравление 8 марта",  channel:"sms",      audience:"all",     status:"sent", sentAt:"2026-03-08", sentCount:5, text:"Дорогой {{studentName}} и {{parentName}}! Поздравляем с праздником! 🌸" },
   ]);
   const [requests,  setRequests]  = useState(saved?.requests  || initialRequests);
-  const [nRequest,  setNRequest]  = useState({ parentName:"", phone:"", studentName:"", age:"", courses:[], comment:"", status:"new" });
+  const [nRequest,  setNRequest]  = useState({ parentName:"", phone:"", studentName:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }], comment:"", status:"new" });
   const [pricing,    setPricing]    = useState(saved?.pricing   || initialPricing);
   const [courseCatalog, setCourseCatalog] = useState(saved?.courseCatalog || initialCourseCatalog);
   const [candidates, setCandidates] = useState(saved?.candidates || []);
@@ -500,7 +535,7 @@ export default function App() {
   }, []);
   const handleReqEnroll = useCallback((id) => { setRequests(prev=>prev.map(r=>r.id===id?{...r,status:"enrolled"}:r)); notify("Ученик переведён в базу!"); }, []);
   const handleReqDelete = useCallback((id) => { if (window.confirm("Удалить запрос?")) { setRequests(prev=>prev.filter(r=>r.id!==id)); notify("Запрос удалён"); } }, []);
-  const handleReqOpen = useCallback((req) => setEditingRequest({...req, courses: getReqCourses(req)}), []);
+  const handleReqOpen = useCallback((req) => setEditingRequest({...req, subjectTeachers: getReqSubjectTeachers(req).length ? getReqSubjectTeachers(req) : [{subject:"",tutorId:""}], grade: getReqGrade(req) }), []);
   const handleReqDragStart = useCallback((e, id) => { e.dataTransfer.setData("text/requestId", String(id)); }, []);
   const handleReqDropOnColumn = useCallback((e, status) => {
     e.preventDefault();
@@ -3247,7 +3282,7 @@ ${contextSummary}`;
           const addRequest = () => {
             if (!nRequest.parentName || !nRequest.phone) return;
             setRequests([{ ...nRequest, id:Date.now(), date:new Date().toISOString().split("T")[0], assignedTutorId:null }, ...requests]);
-            setNRequest({ parentName:"", phone:"", studentName:"", age:"", courses:[], comment:"", status:"new" });
+            setNRequest({ parentName:"", phone:"", studentName:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }], comment:"", status:"new" });
             setModal(null); notify("Запрос добавлен");
           };
 
@@ -3345,7 +3380,7 @@ ${contextSummary}`;
                         {colItems.map(req=>{
                           const assignedTutor = tutors.find(t=>t.id===req.assignedTutorId);
                           return (
-                            <RequestKanbanCard key={req.id} req={req} assignedTutor={assignedTutor}
+                            <RequestKanbanCard key={req.id} req={req} tutors={tutors} assignedTutor={assignedTutor}
                               onDragStart={handleReqDragStart} onOpen={handleReqOpen} onDelete={handleReqDelete} />
                           );
                         })}
@@ -4284,25 +4319,31 @@ ${contextSummary}`;
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                 <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Имя ребёнка</div><input placeholder="Иванов Артём" value={nRequest.studentName} onChange={e=>setNRequest({...nRequest,studentName:e.target.value})} /></div>
-                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Возраст</div><input type="number" placeholder="10" value={nRequest.age} onChange={e=>setNRequest({...nRequest,age:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Класс</div><input placeholder="4 класс" value={nRequest.grade} onChange={e=>setNRequest({...nRequest,grade:e.target.value})} /></div>
               </div>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Интересующие курсы (можно несколько)</div>
-                <div style={{ maxHeight:160, overflowY:"auto", display:"flex", flexDirection:"column", gap:8, background:"#f8fafc", border:"1px solid #e7eef5", borderRadius:10, padding:10 }}>
-                  {catalogGrouped.map(cat=>(
-                    <div key={cat.id}>
-                      <div style={{ fontSize:10, color:cat.color, fontWeight:700, textTransform:"uppercase", marginBottom:5 }}>{cat.label}</div>
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                        {cat.courses.map(c=>(
-                          <button key={c} onClick={()=>setNRequest(prev=>({...prev,courses:prev.courses.includes(c)?prev.courses.filter(x=>x!==c):[...prev.courses,c]}))}
-                            style={{ padding:"4px 10px", borderRadius:20, fontSize:11, border:"1px solid", cursor:"pointer",
-                              background:nRequest.courses.includes(c)?`${cat.color}28`:"transparent",
-                              borderColor:nRequest.courses.includes(c)?cat.color:"#d7e2ee",
-                              color:nRequest.courses.includes(c)?cat.color:"#55677a" }}>{c}</button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы и педагоги</div>
+                {nRequest.subjectTeachers.map((st,si)=>(
+                  <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
+                    <select value={st.subject} onChange={e=>{ const arr=[...nRequest.subjectTeachers]; arr[si]={...arr[si],subject:e.target.value}; setNRequest({...nRequest,subjectTeachers:arr}); }}>
+                      <option value="">Предмет...</option>
+                      {catalogGrouped.map(cat=>(
+                        <optgroup key={cat.id} label={cat.label}>
+                          {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <select value={st.tutorId} onChange={e=>{ const arr=[...nRequest.subjectTeachers]; arr[si]={...arr[si],tutorId:e.target.value}; setNRequest({...nRequest,subjectTeachers:arr}); }}>
+                      <option value="">Педагог...</option>
+                      {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                    </select>
+                    {nRequest.subjectTeachers.length>1 && (
+                      <button onClick={()=>setNRequest({...nRequest,subjectTeachers:nRequest.subjectTeachers.filter((_,j)=>j!==si)})}
+                        style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", borderRadius:6, padding:"4px 8px", cursor:"pointer", flexShrink:0 }}><X size={13} /></button>
+                    )}
+                  </div>
+                ))}
+                <button className="bg" style={{ fontSize:11 }} onClick={()=>setNRequest({...nRequest,subjectTeachers:[...nRequest.subjectTeachers,{subject:"",tutorId:""}]})}><Plus size={12} /> Ещё предмет</button>
               </div>
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Комментарий / пожелания</div>
                 <textarea rows={3} placeholder="Опишите запрос родителя..." value={nRequest.comment} onChange={e=>setNRequest({...nRequest,comment:e.target.value})} />
@@ -4317,7 +4358,7 @@ ${contextSummary}`;
                 </select>
               </div>
               <div style={{ display:"flex", gap:10, marginTop:4 }}>
-                <button className="bp" style={{ flex:1 }} onClick={()=>{ if(!nRequest.parentName||!nRequest.phone)return; setRequests([{...nRequest,id:Date.now(),date:new Date().toISOString().split("T")[0],assignedTutorId:null},...requests]); setNRequest({parentName:"",phone:"",studentName:"",age:"",courses:[],comment:"",status:"new"}); setModal(null); notify("Запрос добавлен"); }}>Добавить запрос</button>
+                <button className="bp" style={{ flex:1 }} onClick={()=>{ if(!nRequest.parentName||!nRequest.phone)return; setRequests([{...nRequest,subjectTeachers:nRequest.subjectTeachers.filter(st=>st.subject),id:Date.now(),date:new Date().toISOString().split("T")[0],assignedTutorId:null},...requests]); setNRequest({parentName:"",phone:"",studentName:"",grade:"",subjectTeachers:[{ subject:"", tutorId:"" }],comment:"",status:"new"}); setModal(null); notify("Запрос добавлен"); }}>Добавить запрос</button>
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
               </div>
             </div>
@@ -4345,25 +4386,31 @@ ${contextSummary}`;
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Имя ребёнка</div><input value={editingRequest.studentName} onChange={e=>setEditingRequest({...editingRequest,studentName:e.target.value})} /></div>
-                  <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Возраст</div><input type="number" value={editingRequest.age} onChange={e=>setEditingRequest({...editingRequest,age:e.target.value})} /></div>
+                  <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Класс</div><input placeholder="4 класс" value={editingRequest.grade} onChange={e=>setEditingRequest({...editingRequest,grade:e.target.value})} /></div>
                 </div>
-                <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Курсы (можно несколько)</div>
-                  <div style={{ maxHeight:150, overflowY:"auto", display:"flex", flexDirection:"column", gap:8, background:"#f8fafc", border:"1px solid #e7eef5", borderRadius:10, padding:10 }}>
-                    {catalogGrouped.map(cat=>(
-                      <div key={cat.id}>
-                        <div style={{ fontSize:10, color:cat.color, fontWeight:700, textTransform:"uppercase", marginBottom:5 }}>{cat.label}</div>
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                          {cat.courses.map(c=>(
-                            <button key={c} onClick={()=>setEditingRequest(prev=>({...prev,courses:(prev.courses||[]).includes(c)?prev.courses.filter(x=>x!==c):[...(prev.courses||[]),c]}))}
-                              style={{ padding:"4px 10px", borderRadius:20, fontSize:11, border:"1px solid", cursor:"pointer",
-                                background:(editingRequest.courses||[]).includes(c)?`${cat.color}28`:"transparent",
-                                borderColor:(editingRequest.courses||[]).includes(c)?cat.color:"#d7e2ee",
-                                color:(editingRequest.courses||[]).includes(c)?cat.color:"#55677a" }}>{c}</button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Предметы и педагоги</div>
+                  {editingRequest.subjectTeachers.map((st,si)=>(
+                    <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
+                      <select value={st.subject} onChange={e=>{ const arr=[...editingRequest.subjectTeachers]; arr[si]={...arr[si],subject:e.target.value}; setEditingRequest({...editingRequest,subjectTeachers:arr}); }}>
+                        <option value="">Предмет...</option>
+                        {catalogGrouped.map(cat=>(
+                          <optgroup key={cat.id} label={cat.label}>
+                            {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <select value={st.tutorId} onChange={e=>{ const arr=[...editingRequest.subjectTeachers]; arr[si]={...arr[si],tutorId:e.target.value}; setEditingRequest({...editingRequest,subjectTeachers:arr}); }}>
+                        <option value="">Педагог...</option>
+                        {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                      </select>
+                      {editingRequest.subjectTeachers.length>1 && (
+                        <button onClick={()=>setEditingRequest({...editingRequest,subjectTeachers:editingRequest.subjectTeachers.filter((_,j)=>j!==si)})}
+                          style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", borderRadius:6, padding:"4px 8px", cursor:"pointer", flexShrink:0 }}><X size={13} /></button>
+                      )}
+                    </div>
+                  ))}
+                  <button className="bg" style={{ fontSize:11 }} onClick={()=>setEditingRequest({...editingRequest,subjectTeachers:[...editingRequest.subjectTeachers,{subject:"",tutorId:""}]})}><Plus size={12} /> Ещё предмет</button>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Статус</div>
@@ -4383,7 +4430,7 @@ ${contextSummary}`;
                 </div>
                 <div style={{ display:"flex", gap:10, marginTop:6 }}>
                   <button className="bp" style={{ flex:1 }} onClick={()=>{
-                    setRequests(prev=>prev.map(r=>r.id===editingRequest.id?editingRequest:r));
+                    setRequests(prev=>prev.map(r=>r.id===editingRequest.id?{...editingRequest, subjectTeachers:editingRequest.subjectTeachers.filter(st=>st.subject)}:r));
                     setEditingRequest(null);
                     notify("Заявка обновлена");
                   }}>Сохранить</button>
