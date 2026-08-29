@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, memo, useCallback } from "react";
 import { supabase } from "./supabaseClient";
 import {
   LayoutGrid, GraduationCap, Users, BookOpen, Calendar, Wallet, CreditCard,
@@ -335,6 +335,71 @@ function AttachmentsBlock({ title = "Документы", files = [], onUpload, 
   );
 }
 
+// ── Requests page: memoized row/card components ─────────────────────────────
+// Wrapped in memo() so that typing in the search box, sorting, or paginating
+// doesn't force every single row to re-render — only rows whose own props changed do.
+const RequestTableRow = memo(function RequestTableRow({ req, reqCfg, cat, assignedTutor, tutors, onStatusChange, onAssignTutor, onScheduleTrial, onEnroll, onDelete, onOpen }) {
+  return (
+    <tr className="rh" style={{ borderBottom:"1px solid #f2f6fa" }} onClick={()=>onOpen(req)}>
+      <td style={{ padding:"11px 14px", fontSize:12, color:"#7a8a9c", whiteSpace:"nowrap" }}>{req.date}</td>
+      <td style={{ padding:"11px 14px" }}>
+        <div style={{ fontSize:13, fontWeight:700 }}>{req.parentName}</div>
+        <a href={`tel:${req.phone}`} onClick={e=>e.stopPropagation()} style={{ fontSize:12, color:"#1da0d4", textDecoration:"none" }}>{req.phone}</a>
+      </td>
+      <td style={{ padding:"11px 14px" }}>
+        <div style={{ fontSize:13 }}>{req.studentName}</div>
+        {req.age ? <div style={{ fontSize:11, color:"#7a8a9c" }}>{req.age} лет</div> : null}
+      </td>
+      <td style={{ padding:"11px 14px" }}>{req.course && <Tag c={cat.color||"#1da0d4"} bg={`${cat.color||"#1da0d4"}18`}>{req.course}</Tag>}</td>
+      <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
+        <select value={req.status} onChange={e=>onStatusChange(req.id, e.target.value)} style={{ fontSize:12, padding:"5px 8px", color: reqCfg[req.status]?.color, fontWeight:600 }}>
+          {Object.entries(reqCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+        </select>
+      </td>
+      <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
+        <select value={req.assignedTutorId||""} onChange={e=>onAssignTutor(req.id, e.target.value)} style={{ fontSize:12, padding:"5px 8px" }}>
+          <option value="">—</option>
+          {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+        </select>
+      </td>
+      <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          {req.status==="contacted" && <button className="bp" style={{ fontSize:11, padding:"5px 8px" }} onClick={()=>onScheduleTrial(req)}>Пробное</button>}
+          {req.status==="trial" && <button className="bp" style={{ fontSize:11, padding:"5px 8px", background:"linear-gradient(135deg,#5cb85c,#16a34a)" }} onClick={()=>onEnroll(req.id)}>Записать</button>}
+          <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"5px 8px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>onDelete(req.id)}>🗑</button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+const RequestKanbanCard = memo(function RequestKanbanCard({ req, cat, assignedTutor, onDragStart, onOpen, onDelete }) {
+  return (
+    <div
+      draggable
+      onDragStart={e=>onDragStart(e, req.id)}
+      onClick={()=>onOpen(req)}
+      style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:12, padding:"12px 14px", marginBottom:8, cursor:"grab", boxShadow:"0 1px 3px rgba(18,40,61,.05)" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:"#12283d" }}>{req.parentName}</div>
+        <button onClick={e=>{ e.stopPropagation(); onDelete(req.id); }} style={{ background:"transparent", border:"none", color:"#a9b8c6", cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
+      </div>
+      <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>{req.studentName}{req.age ? `, ${req.age} лет` : ""}</div>
+      {req.course && <div style={{ marginTop:6 }}><Tag c={cat.color||"#1da0d4"} bg={`${cat.color||"#1da0d4"}18`}>{req.course}</Tag></div>}
+      {assignedTutor && <div style={{ marginTop:4 }}><Tag c={assignedTutor.color} bg={`${assignedTutor.color}18`}>{assignedTutor.short}</Tag></div>}
+      <div style={{ fontSize:10, color:"#a9b8c6", marginTop:6 }}>{req.date}</div>
+    </div>
+  );
+});
+
+const ReqSkeletonRow = () => (
+  <tr>
+    {Array.from({length:7}).map((_,i)=>(
+      <td key={i} style={{ padding:"14px" }}><div style={{ height:14, borderRadius:6, background:"linear-gradient(90deg,#f2f6fa,#e9eef3,#f2f6fa)", backgroundSize:"200% 100%", animation:"reqShimmer 1.3s ease-in-out infinite" }} /></td>
+    ))}
+  </tr>
+);
+
 export default function App() {
   // ── Load from localStorage or use defaults (instant local cache) ──
   const saved = loadFromLS();
@@ -362,6 +427,66 @@ export default function App() {
   const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
   const [reportTab, setReportTab] = useState("finance");
   const [reqSearch, setReqSearch] = useState("");
+  const [reqSearchInput, setReqSearchInput] = useState(""); // raw typed value, debounced into reqSearch
+  const [reqSearching, setReqSearching] = useState(false);  // true during the debounce window (drives skeleton rows)
+  const [reqViewMode, setReqViewMode] = useState("table");  // "table" | "kanban"
+  const [reqSortKey, setReqSortKey] = useState("date");
+  const [reqSortDir, setReqSortDir] = useState("desc");
+  const [reqPage, setReqPage] = useState(1);
+  const REQ_PAGE_SIZE = 10;
+
+  // ── Requests page: filtering/sorting/pagination/handlers ──
+  // Kept at the top level (not inside the conditional {view==="requests" && ...} block)
+  // because hooks must run in the same order on every render — putting them inside a
+  // conditionally-rendered block crashes React the moment the view changes.
+  const reqCfg = {
+    new:       { label:"Новый",        color:"#1da0d4", bg:"rgba(99,102,241,0.12)"  },
+    contacted: { label:"Связались",    color:"#f5a623", bg:"rgba(245,158,11,0.12)"  },
+    trial:     { label:"Пробное",      color:"#5cb85c", bg:"rgba(34,197,94,0.12)"   },
+    enrolled:  { label:"Записан",      color:"#17a6c9", bg:"rgba(6,182,212,0.12)"   },
+    rejected:  { label:"Отказался",    color:"#e2574c", bg:"rgba(239,68,68,0.12)"   },
+  };
+  const reqFiltered = useMemo(() => {
+    const q = reqSearch.toLowerCase();
+    const qDigits = reqSearch.replace(/\D/g,"");
+    let list = requests.filter(r=>{
+      const matchQ = !q || r.parentName.toLowerCase().includes(q) || r.studentName.toLowerCase().includes(q) || r.course.toLowerCase().includes(q) || (qDigits && r.phone.replace(/\D/g,"").includes(qDigits));
+      const matchF = reqFilter==="all" || r.status===reqFilter;
+      return matchQ && matchF;
+    });
+    list = [...list].sort((a,b)=>{
+      let av = a[reqSortKey], bv = b[reqSortKey];
+      if (reqSortKey==="assignedTutorId") { av = tutors.find(t=>t.id===a.assignedTutorId)?.short||""; bv = tutors.find(t=>t.id===b.assignedTutorId)?.short||""; }
+      if (av==null) av=""; if (bv==null) bv="";
+      const cmp = String(av).localeCompare(String(bv), "ru", { numeric:true });
+      return reqSortDir==="asc" ? cmp : -cmp;
+    });
+    return list;
+  }, [requests, reqSearch, reqFilter, reqSortKey, reqSortDir, tutors]);
+  const reqTotalPages = Math.max(1, Math.ceil(reqFiltered.length / REQ_PAGE_SIZE));
+  const reqPageSafe = Math.min(reqPage, reqTotalPages);
+  const reqPageItems = useMemo(() => reqFiltered.slice((reqPageSafe-1)*REQ_PAGE_SIZE, reqPageSafe*REQ_PAGE_SIZE), [reqFiltered, reqPageSafe]);
+
+  const toggleReqSort = useCallback((key) => {
+    setReqSortDir(d => reqSortKey===key ? (d==="asc"?"desc":"asc") : "desc");
+    setReqSortKey(key);
+  }, [reqSortKey]);
+  const handleReqStatusChange = useCallback((id, status) => setRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r)), []);
+  const handleReqAssignTutor = useCallback((id, tutorId) => setRequests(prev=>prev.map(r=>r.id===id?{...r,assignedTutorId:tutorId?Number(tutorId):null}:r)), []);
+  const handleReqScheduleTrial = useCallback((req) => {
+    setNLesson({ studentId:"", subject:req.course, tutorId:req.assignedTutorId||"", date:"", time:"", duration:60, price:1200 });
+    setModal("addLesson");
+    setRequests(prev=>prev.map(r=>r.id===req.id?{...r,status:"trial"}:r));
+  }, []);
+  const handleReqEnroll = useCallback((id) => { setRequests(prev=>prev.map(r=>r.id===id?{...r,status:"enrolled"}:r)); notify("Ученик переведён в базу!"); }, []);
+  const handleReqDelete = useCallback((id) => { if (window.confirm("Удалить запрос?")) { setRequests(prev=>prev.filter(r=>r.id!==id)); notify("Запрос удалён"); } }, []);
+  const handleReqOpen = useCallback((req) => { /* reserved for a future detail view */ }, []);
+  const handleReqDragStart = useCallback((e, id) => { e.dataTransfer.setData("text/requestId", String(id)); }, []);
+  const handleReqDropOnColumn = useCallback((e, status) => {
+    e.preventDefault();
+    const id = Number(e.dataTransfer.getData("text/requestId"));
+    if (id) setRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r));
+  }, []);
   const [candSearch, setCandSearch] = useState("");
   const [candFilter, setCandFilter] = useState("all");
   const [selCandidate, setSelCandidate] = useState(null);
@@ -587,6 +712,18 @@ export default function App() {
   useEffect(() => {
     if (view === "ai") aiMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [aiMessages, view]);
+
+  // Debounced search for "Запросы от родителей" — waits 350ms after typing stops
+  // before actually filtering, so we don't re-filter on every keystroke.
+  useEffect(() => {
+    setReqSearching(true);
+    const t = setTimeout(() => {
+      setReqSearch(reqSearchInput);
+      setReqSearching(false);
+      setReqPage(1); // reset to first page whenever the search changes
+    }, 350);
+    return () => clearTimeout(t);
+  }, [reqSearchInput]);
 
   // ── Claude agent: tool definitions ──────────────────────────────────────
   // Только безопасные действия — добавление и изменение статуса, без удаления,
@@ -1228,6 +1365,7 @@ ${contextSummary}`;
         .rh{transition:background .15s;cursor:pointer}.rh:hover{background:rgba(29,160,212,.05)!important}
         .notif{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:500;z-index:999;animation:si .3s ease}
         @keyframes si{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes reqShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         .stab{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all .2s}
         .hamburger-btn{display:none}
         .sidebar-overlay{display:none}
@@ -3063,33 +3201,31 @@ ${contextSummary}`;
 
         {/* ── REQUESTS ── */}
         {view==="requests" && (()=>{
-          const reqCfg = {
-            new:       { label:"Новый",        color:"#1da0d4", bg:"rgba(99,102,241,0.12)"  },
-            contacted: { label:"Связались",    color:"#f5a623", bg:"rgba(245,158,11,0.12)"  },
-            trial:     { label:"Пробное",      color:"#5cb85c", bg:"rgba(34,197,94,0.12)"   },
-            enrolled:  { label:"Записан",      color:"#17a6c9", bg:"rgba(6,182,212,0.12)"   },
-            rejected:  { label:"Отказался",    color:"#e2574c", bg:"rgba(239,68,68,0.12)"   },
-          };
-          const filtered = requests.filter(r=>{
-            const q = reqSearch.toLowerCase();
-            const matchQ = !q || r.parentName.toLowerCase().includes(q) || r.studentName.toLowerCase().includes(q) || r.course.toLowerCase().includes(q) || r.phone.includes(q);
-            const matchF = reqFilter==="all" || r.status===reqFilter;
-            return matchQ && matchF;
-          });
           const addRequest = () => {
             if (!nRequest.parentName || !nRequest.phone) return;
             setRequests([{ ...nRequest, id:Date.now(), date:new Date().toISOString().split("T")[0], assignedTutorId:null }, ...requests]);
             setNRequest({ parentName:"", phone:"", studentName:"", age:"", course:"", comment:"", status:"new" });
             setModal(null); notify("Запрос добавлен");
           };
+
+          const sortArrow = (key) => reqSortKey!==key ? "" : (reqSortDir==="asc" ? " ▲" : " ▼");
+
           return (
             <div>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20, flexWrap:"wrap", gap:12 }}>
                 <div>
                   <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:26, fontWeight:800, color:"#12283d", margin:0 }}>Запросы от родителей</h1>
                   <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Входящие обращения · {requests.filter(r=>r.status==="new").length} новых</div>
                 </div>
-                <button className="bp" onClick={()=>setModal("addRequest")}>+ Новый запрос</button>
+                <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+                  <div style={{ display:"flex", gap:4, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:10, padding:4 }}>
+                    {[["table","Таблица"],["kanban","Канбан"]].map(([k,l])=>(
+                      <button key={k} className="stab" onClick={()=>setReqViewMode(k)}
+                        style={{ background:reqViewMode===k?"rgba(29,160,212,0.15)":"transparent", color:reqViewMode===k?"#1da0d4":"#55677a" }}>{l}</button>
+                    ))}
+                  </div>
+                  <button className="bp" onClick={()=>setModal("addRequest")}>+ Новый запрос</button>
+                </div>
               </div>
 
               {/* status summary */}
@@ -3097,7 +3233,7 @@ ${contextSummary}`;
                 {Object.entries(reqCfg).map(([k,v])=>{
                   const cnt = requests.filter(r=>r.status===k).length;
                   return (
-                    <div key={k} onClick={()=>setReqFilter(reqFilter===k?"all":k)} style={{ background:"#ffffff", border:`1px solid ${reqFilter===k?v.color:"#dbe6f0"}`, borderRadius:12, padding:"12px 16px", cursor:"pointer", textAlign:"center", transition:"all .2s" }}>
+                    <div key={k} onClick={()=>{ setReqFilter(reqFilter===k?"all":k); setReqPage(1); }} style={{ background:"#ffffff", border:`1px solid ${reqFilter===k?v.color:"#dbe6f0"}`, borderRadius:12, padding:"12px 16px", cursor:"pointer", textAlign:"center", transition:"all .2s" }}>
                       <div style={{ fontSize:22, fontWeight:700, color:v.color }}>{cnt}</div>
                       <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>{v.label}</div>
                     </div>
@@ -3105,68 +3241,78 @@ ${contextSummary}`;
                 })}
               </div>
 
-              {/* search */}
-              <div style={{ marginBottom:16 }}>
-                <input placeholder="🔍 Поиск по имени, телефону, курсу..." value={reqSearch} onChange={e=>setReqSearch(e.target.value)} />
+              {/* search — debounced 350ms, shows a subtle skeleton while waiting */}
+              <div style={{ marginBottom:16, position:"relative" }}>
+                <input placeholder="🔍 Поиск по имени, телефону, курсу..." value={reqSearchInput} onChange={e=>setReqSearchInput(e.target.value)} />
               </div>
 
-              {/* cards */}
-              <div style={{ display:"grid", gap:12 }}>
-                {filtered.length===0 && <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, padding:"50px", textAlign:"center", color:"#7a8a9c" }}>Запросов не найдено</div>}
-                {filtered.sort((a,b)=>a.date<b.date?1:-1).map(req=>{
-                  const cat = subjectCategory(req.course);
-                  const assignedTutor = tutors.find(t=>t.id===req.assignedTutorId);
-                  return (
-                    <div key={req.id} style={{ background:"#ffffff", border:`1px solid ${req.status==="new"?"rgba(99,102,241,0.4)":"#dbe6f0"}`, borderRadius:16, padding:"18px 22px" }}>
-                      <div style={{ display:"flex", alignItems:"flex-start", gap:16 }}>
-                        {/* left */}
-                        <div style={{ flex:1 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8, flexWrap:"wrap" }}>
-                            <div style={{ fontSize:15, fontWeight:700 }}>👤 {req.parentName}</div>
-                            <div style={{ fontSize:13, color:"#7a8a9c" }}>→ {req.studentName}{req.age ? `, ${req.age} лет` : ""}</div>
-                            <Tag c={reqCfg[req.status]?.color} bg={reqCfg[req.status]?.bg}>{reqCfg[req.status]?.label}</Tag>
-                            <div style={{ fontSize:11, color:"#a9b8c6", marginLeft:"auto" }}>{req.date}</div>
-                          </div>
-                          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:req.comment?8:0, flexWrap:"wrap" }}>
-                            <a href={`tel:${req.phone}`} style={{ fontSize:13, color:"#1da0d4", textDecoration:"none", fontWeight:500 }}>📞 {req.phone}</a>
-                            {req.course && <Tag c={cat.color||"#1da0d4"} bg={`${cat.color||"#1da0d4"}18`}>{req.course}</Tag>}
-                            {assignedTutor && <Tag c={assignedTutor.color} bg={`${assignedTutor.color}18`}>🎓 {assignedTutor.short}</Tag>}
-                          </div>
-                          {req.comment && <div style={{ fontSize:13, color:"#6d7f92", background:"#f2f6fa", borderRadius:8, padding:"9px 12px", lineHeight:1.5 }}>💬 {req.comment}</div>}
-                        </div>
-                        {/* actions */}
-                        <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0, minWidth:130 }}>
-                          <select value={req.status} onChange={e=>setRequests(requests.map(r=>r.id===req.id?{...r,status:e.target.value}:r))}
-                            style={{ fontSize:12, padding:"5px 8px" }}>
-                            {Object.entries(reqCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
-                          </select>
-                          <select value={req.assignedTutorId||""} onChange={e=>setRequests(requests.map(r=>r.id===req.id?{...r,assignedTutorId:e.target.value?Number(e.target.value):null}:r))}
-                            style={{ fontSize:12, padding:"5px 8px" }}>
-                            <option value="">Назначить педагога</option>
-                            {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
-                          </select>
-                          {req.status==="contacted" && (
-                            <button className="bp" style={{ fontSize:11, padding:"5px 8px" }}
-                              onClick={()=>{ setNLesson({studentId:"", subject:req.course, tutorId:req.assignedTutorId||"", date:"", time:"", duration:60, price:1200}); setModal("addLesson"); setRequests(requests.map(r=>r.id===req.id?{...r,status:"trial"}:r)); }}>
-                              📅 Назначить пробное
-                            </button>
-                          )}
-                          {req.status==="trial" && (
-                            <button className="bp" style={{ fontSize:11, padding:"5px 8px", background:"linear-gradient(135deg,#5cb85c,#16a34a)" }}
-                              onClick={()=>{ setRequests(requests.map(r=>r.id===req.id?{...r,status:"enrolled"}:r)); notify("Ученик переведён в базу!"); }}>
-                              ✅ Записать
-                            </button>
-                          )}
-                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"4px 8px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }}
-                            onClick={()=>{ if(window.confirm("Удалить запрос?")) { setRequests(requests.filter(r=>r.id!==req.id)); notify("Запрос удалён"); } }}>
-                            🗑 Удалить
-                          </button>
-                        </div>
-                      </div>
+              {reqViewMode==="table" ? (
+                <>
+                  <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, overflow:"hidden", overflowX:"auto" }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse", minWidth:760 }}>
+                      <thead>
+                        <tr style={{ borderBottom:"1px solid #dbe6f0" }}>
+                          {[["date","Дата"],["parentName","Родитель"],["studentName","Ученик"],["course","Курс"],["status","Статус"],["assignedTutorId","Педагог"],[null,"Действия"]].map(([key,label])=>(
+                            <th key={label} onClick={key?()=>toggleReqSort(key):undefined}
+                              style={{ padding:"12px 14px", textAlign:"left", fontSize:11, color:"#7a8a9c", fontWeight:600, textTransform:"uppercase", cursor:key?"pointer":"default", userSelect:"none", whiteSpace:"nowrap" }}>
+                              {label}{key && sortArrow(key)}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reqSearching && Array.from({length:4}).map((_,i)=><ReqSkeletonRow key={i} />)}
+                        {!reqSearching && reqPageItems.length===0 && (
+                          <tr><td colSpan={7} style={{ padding:"50px", textAlign:"center", color:"#7a8a9c" }}>Запросов не найдено</td></tr>
+                        )}
+                        {!reqSearching && reqPageItems.map(req=>{
+                          const cat = subjectCategory(req.course);
+                          const assignedTutor = tutors.find(t=>t.id===req.assignedTutorId);
+                          return (
+                            <RequestTableRow key={req.id} req={req} reqCfg={reqCfg} cat={cat} assignedTutor={assignedTutor} tutors={tutors}
+                              onStatusChange={handleReqStatusChange} onAssignTutor={handleReqAssignTutor} onScheduleTrial={handleReqScheduleTrial}
+                              onEnroll={handleReqEnroll} onDelete={handleReqDelete} onOpen={handleReqOpen} />
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* pagination */}
+                  {reqTotalPages>1 && (
+                    <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:10, marginTop:16 }}>
+                      <button className="bg" disabled={reqPageSafe<=1} onClick={()=>setReqPage(p=>Math.max(1,p-1))}>‹ Назад</button>
+                      <span style={{ fontSize:12, color:"#7a8a9c" }}>Стр. {reqPageSafe} из {reqTotalPages} · {reqFiltered.length} всего</span>
+                      <button className="bg" disabled={reqPageSafe>=reqTotalPages} onClick={()=>setReqPage(p=>Math.min(reqTotalPages,p+1))}>Вперёд ›</button>
                     </div>
-                  );
-                })}
-              </div>
+                  )}
+                </>
+              ) : (
+                // ── KANBAN VIEW — drag a card between columns to change its status ──
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:14, alignItems:"start", overflowX:"auto" }}>
+                  {Object.entries(reqCfg).map(([statusKey,cfg])=>{
+                    const colItems = reqFiltered.filter(r=>r.status===statusKey);
+                    return (
+                      <div key={statusKey}
+                        onDragOver={e=>e.preventDefault()}
+                        onDrop={e=>handleReqDropOnColumn(e, statusKey)}
+                        style={{ background:"#f2f6fa", borderRadius:14, padding:12, minHeight:200, minWidth:200 }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                          <span style={{ fontSize:12, fontWeight:700, color:cfg.color }}>{cfg.label}</span>
+                          <span style={{ fontSize:11, color:"#a9b8c6" }}>{colItems.length}</span>
+                        </div>
+                        {colItems.map(req=>{
+                          const cat = subjectCategory(req.course);
+                          const assignedTutor = tutors.find(t=>t.id===req.assignedTutorId);
+                          return (
+                            <RequestKanbanCard key={req.id} req={req} cat={cat} assignedTutor={assignedTutor}
+                              onDragStart={handleReqDragStart} onOpen={handleReqOpen} onDelete={handleReqDelete} />
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })()}
@@ -4240,4 +4386,3 @@ ${contextSummary}`;
     </div>
   );
 }
-
