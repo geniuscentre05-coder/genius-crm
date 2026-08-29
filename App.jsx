@@ -434,6 +434,7 @@ export default function App() {
   const [reqSortKey, setReqSortKey] = useState("date");
   const [reqSortDir, setReqSortDir] = useState("desc");
   const [reqPage, setReqPage] = useState(1);
+  const [editingRequest, setEditingRequest] = useState(null);
   const REQ_PAGE_SIZE = 10;
 
   // ── Requests page: filtering/sorting/pagination/handlers ──
@@ -481,7 +482,7 @@ export default function App() {
   }, []);
   const handleReqEnroll = useCallback((id) => { setRequests(prev=>prev.map(r=>r.id===id?{...r,status:"enrolled"}:r)); notify("Ученик переведён в базу!"); }, []);
   const handleReqDelete = useCallback((id) => { if (window.confirm("Удалить запрос?")) { setRequests(prev=>prev.filter(r=>r.id!==id)); notify("Запрос удалён"); } }, []);
-  const handleReqOpen = useCallback((req) => { /* reserved for a future detail view */ }, []);
+  const handleReqOpen = useCallback((req) => setEditingRequest({...req}), []);
   const handleReqDragStart = useCallback((e, id) => { e.dataTransfer.setData("text/requestId", String(id)); }, []);
   const handleReqDropOnColumn = useCallback((e, status) => {
     e.preventDefault();
@@ -4300,6 +4301,70 @@ ${contextSummary}`;
         </div>
       )}
 
+      {/* ── REQUEST DETAIL / EDIT MODAL ── */}
+      {editingRequest && (()=>{
+        const reqCfgLocal = {
+          new:       { label:"Новый",        color:"#1da0d4" },
+          contacted: { label:"Связались",    color:"#f5a623" },
+          trial:     { label:"Пробное",      color:"#5cb85c" },
+          enrolled:  { label:"Записан",      color:"#17a6c9" },
+          rejected:  { label:"Отказался",    color:"#e2574c" },
+        };
+        return (
+          <div className="ov" onClick={()=>setEditingRequest(null)}>
+            <div className="mo" style={{ width:520 }} onClick={e=>e.stopPropagation()}>
+              <h2 style={{ margin:"0 0 20px", fontSize:19, fontWeight:700, color:"#12283d" }}>Заявка от {editingRequest.parentName}</h2>
+              <div style={{ display:"grid", gap:12 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>ФИО родителя</div><input value={editingRequest.parentName} onChange={e=>setEditingRequest({...editingRequest,parentName:e.target.value})} /></div>
+                  <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Телефон</div><input value={editingRequest.phone} onChange={e=>setEditingRequest({...editingRequest,phone:e.target.value})} /></div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Имя ребёнка</div><input value={editingRequest.studentName} onChange={e=>setEditingRequest({...editingRequest,studentName:e.target.value})} /></div>
+                  <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Возраст</div><input type="number" value={editingRequest.age} onChange={e=>setEditingRequest({...editingRequest,age:e.target.value})} /></div>
+                </div>
+                <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Курс</div>
+                  <select value={editingRequest.course} onChange={e=>setEditingRequest({...editingRequest,course:e.target.value})}>
+                    <option value="">Не выбран</option>
+                    {catalogGrouped.map(cat=>(
+                      <optgroup key={cat.id} label={cat.label}>
+                        {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Статус</div>
+                    <select value={editingRequest.status} onChange={e=>setEditingRequest({...editingRequest,status:e.target.value})}>
+                      {Object.entries(reqCfgLocal).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </div>
+                  <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Педагог</div>
+                    <select value={editingRequest.assignedTutorId||""} onChange={e=>setEditingRequest({...editingRequest,assignedTutorId:e.target.value?Number(e.target.value):null})}>
+                      <option value="">Не назначен</option>
+                      {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Комментарий</div>
+                  <textarea rows={3} value={editingRequest.comment} onChange={e=>setEditingRequest({...editingRequest,comment:e.target.value})} />
+                </div>
+                <div style={{ display:"flex", gap:10, marginTop:6 }}>
+                  <button className="bp" style={{ flex:1 }} onClick={()=>{
+                    setRequests(prev=>prev.map(r=>r.id===editingRequest.id?editingRequest:r));
+                    setEditingRequest(null);
+                    notify("Заявка обновлена");
+                  }}>Сохранить</button>
+                  <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"9px 16px", borderRadius:10, cursor:"pointer", fontSize:14, fontFamily:"inherit" }}
+                    onClick={()=>{ if(window.confirm("Удалить заявку?")){ setRequests(prev=>prev.filter(r=>r.id!==editingRequest.id)); setEditingRequest(null); notify("Заявка удалена"); } }}>Удалить</button>
+                  <button className="bg" onClick={()=>setEditingRequest(null)}>Отмена</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── ADD CANDIDATE MODAL ── */}
       {modal==="addCandidate" && (
         <div className="ov" onClick={()=>{ setModal(null); setNCandidate({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" }); }}>
@@ -4410,4 +4475,3 @@ ${contextSummary}`;
     </div>
   );
 }
-
