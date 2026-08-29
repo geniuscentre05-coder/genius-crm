@@ -259,6 +259,13 @@ function calcEarning(lesson, tutor) {
   return tutor.rateType === "percent" ? Math.round(lesson.price * tutor.rateValue / 100) : tutor.rateValue;
 }
 
+// Requests used to store a single "course" string; now they can have several via "courses".
+// This keeps old data working without a migration step.
+function getReqCourses(req) {
+  if (req.courses && req.courses.length) return req.courses;
+  return req.course ? [req.course] : [];
+}
+
 function Av({ name, color, size = 36 }) {
   const i = name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
   return <div style={{ width:size, height:size, borderRadius:size*0.28, background:`linear-gradient(135deg, ${color||"#1da0d4"}, ${color||"#1da0d4"}dd)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*0.35, fontWeight:700, color:"white", flexShrink:0, boxShadow:`0 2px 6px ${color||"#1da0d4"}40`, letterSpacing:"0.02em" }}>{i}</div>;
@@ -338,7 +345,7 @@ function AttachmentsBlock({ title = "Документы", files = [], onUpload, 
 // ── Requests page: memoized row/card components ─────────────────────────────
 // Wrapped in memo() so that typing in the search box, sorting, or paginating
 // doesn't force every single row to re-render — only rows whose own props changed do.
-const RequestTableRow = memo(function RequestTableRow({ req, reqCfg, cat, assignedTutor, tutors, onStatusChange, onAssignTutor, onScheduleTrial, onEnroll, onDelete, onOpen }) {
+const RequestTableRow = memo(function RequestTableRow({ req, reqCfg, assignedTutor, tutors, onStatusChange, onAssignTutor, onScheduleTrial, onEnroll, onDelete, onOpen }) {
   return (
     <tr className="rh" style={{ borderBottom:"1px solid #f2f6fa" }}>
       <td style={{ padding:"11px 14px", fontSize:12, color:"#7a8a9c", whiteSpace:"nowrap" }}>{req.date}</td>
@@ -355,7 +362,7 @@ const RequestTableRow = memo(function RequestTableRow({ req, reqCfg, cat, assign
         <div style={{ fontSize:13 }}>{req.studentName}</div>
         {req.age ? <div style={{ fontSize:11, color:"#7a8a9c" }}>{req.age} лет</div> : null}
       </td>
-      <td style={{ padding:"11px 14px" }}>{req.course && <Tag c={cat.color||"#1da0d4"} bg={`${cat.color||"#1da0d4"}18`}>{req.course}</Tag>}</td>
+      <td style={{ padding:"11px 14px" }}>{getReqCourses(req).map(c=>{ const cc=subjectCategory(c); return <Tag key={c} c={cc.color||"#1da0d4"} bg={`${cc.color||"#1da0d4"}18`}>{c}</Tag>; })}</td>
       <td style={{ padding:"11px 14px" }}>
         <select value={req.status} onChange={e=>onStatusChange(req.id, e.target.value)} style={{ fontSize:12, padding:"5px 8px", color: reqCfg[req.status]?.color, fontWeight:600 }}>
           {Object.entries(reqCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
@@ -379,7 +386,7 @@ const RequestTableRow = memo(function RequestTableRow({ req, reqCfg, cat, assign
   );
 });
 
-const RequestKanbanCard = memo(function RequestKanbanCard({ req, cat, assignedTutor, onDragStart, onOpen, onDelete }) {
+const RequestKanbanCard = memo(function RequestKanbanCard({ req, assignedTutor, onDragStart, onOpen, onDelete }) {
   return (
     <div
       draggable
@@ -393,7 +400,7 @@ const RequestKanbanCard = memo(function RequestKanbanCard({ req, cat, assignedTu
         <button onClick={()=>onDelete(req.id)} style={{ background:"transparent", border:"none", color:"#a9b8c6", cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
       </div>
       <div style={{ fontSize:12, color:"#55677a", marginTop:6 }}>{req.studentName}{req.age ? `, ${req.age} лет` : ""}</div>
-      {req.course && <div style={{ marginTop:6 }}><Tag c={cat.color||"#1da0d4"} bg={`${cat.color||"#1da0d4"}18`}>{req.course}</Tag></div>}
+      {getReqCourses(req).length>0 && <div style={{ marginTop:6, display:"flex", flexWrap:"wrap", gap:4 }}>{getReqCourses(req).map(c=>{ const cc=subjectCategory(c); return <Tag key={c} c={cc.color||"#1da0d4"} bg={`${cc.color||"#1da0d4"}18`}>{c}</Tag>; })}</div>}
       {assignedTutor && <div style={{ marginTop:4 }}><Tag c={assignedTutor.color} bg={`${assignedTutor.color}18`}>{assignedTutor.short}</Tag></div>}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:8 }}>
         <div style={{ fontSize:10, color:"#a9b8c6" }}>{req.date}</div>
@@ -426,7 +433,7 @@ export default function App() {
     { id:2, title:"Поздравление 8 марта",  channel:"sms",      audience:"all",     status:"sent", sentAt:"2026-03-08", sentCount:5, text:"Дорогой {{studentName}} и {{parentName}}! Поздравляем с праздником! 🌸" },
   ]);
   const [requests,  setRequests]  = useState(saved?.requests  || initialRequests);
-  const [nRequest,  setNRequest]  = useState({ parentName:"", phone:"", studentName:"", age:"", course:"", comment:"", status:"new" });
+  const [nRequest,  setNRequest]  = useState({ parentName:"", phone:"", studentName:"", age:"", courses:[], comment:"", status:"new" });
   const [pricing,    setPricing]    = useState(saved?.pricing   || initialPricing);
   const [courseCatalog, setCourseCatalog] = useState(saved?.courseCatalog || initialCourseCatalog);
   const [candidates, setCandidates] = useState(saved?.candidates || []);
@@ -463,7 +470,7 @@ export default function App() {
     const q = reqSearch.toLowerCase();
     const qDigits = reqSearch.replace(/\D/g,"");
     let list = requests.filter(r=>{
-      const matchQ = !q || r.parentName.toLowerCase().includes(q) || r.studentName.toLowerCase().includes(q) || r.course.toLowerCase().includes(q) || (qDigits && r.phone.replace(/\D/g,"").includes(qDigits));
+      const matchQ = !q || r.parentName.toLowerCase().includes(q) || r.studentName.toLowerCase().includes(q) || getReqCourses(r).some(c=>c.toLowerCase().includes(q)) || (qDigits && r.phone.replace(/\D/g,"").includes(qDigits));
       const matchF = reqFilter==="all" || r.status===reqFilter;
       return matchQ && matchF;
     });
@@ -487,13 +494,13 @@ export default function App() {
   const handleReqStatusChange = useCallback((id, status) => setRequests(prev=>prev.map(r=>r.id===id?{...r,status}:r)), []);
   const handleReqAssignTutor = useCallback((id, tutorId) => setRequests(prev=>prev.map(r=>r.id===id?{...r,assignedTutorId:tutorId?Number(tutorId):null}:r)), []);
   const handleReqScheduleTrial = useCallback((req) => {
-    setNLesson({ studentId:"", subject:req.course, tutorId:req.assignedTutorId||"", date:"", time:"", duration:60, price:1200 });
+    setNLesson({ studentId:"", subject:getReqCourses(req)[0]||"", tutorId:req.assignedTutorId||"", date:"", time:"", duration:60, price:1200 });
     setModal("addLesson");
     setRequests(prev=>prev.map(r=>r.id===req.id?{...r,status:"trial"}:r));
   }, []);
   const handleReqEnroll = useCallback((id) => { setRequests(prev=>prev.map(r=>r.id===id?{...r,status:"enrolled"}:r)); notify("Ученик переведён в базу!"); }, []);
   const handleReqDelete = useCallback((id) => { if (window.confirm("Удалить запрос?")) { setRequests(prev=>prev.filter(r=>r.id!==id)); notify("Запрос удалён"); } }, []);
-  const handleReqOpen = useCallback((req) => setEditingRequest({...req}), []);
+  const handleReqOpen = useCallback((req) => setEditingRequest({...req, courses: getReqCourses(req)}), []);
   const handleReqDragStart = useCallback((e, id) => { e.dataTransfer.setData("text/requestId", String(id)); }, []);
   const handleReqDropOnColumn = useCallback((e, status) => {
     e.preventDefault();
@@ -3240,7 +3247,7 @@ ${contextSummary}`;
           const addRequest = () => {
             if (!nRequest.parentName || !nRequest.phone) return;
             setRequests([{ ...nRequest, id:Date.now(), date:new Date().toISOString().split("T")[0], assignedTutorId:null }, ...requests]);
-            setNRequest({ parentName:"", phone:"", studentName:"", age:"", course:"", comment:"", status:"new" });
+            setNRequest({ parentName:"", phone:"", studentName:"", age:"", courses:[], comment:"", status:"new" });
             setModal(null); notify("Запрос добавлен");
           };
 
@@ -3302,10 +3309,9 @@ ${contextSummary}`;
                           <tr><td colSpan={7} style={{ padding:"50px", textAlign:"center", color:"#7a8a9c" }}>Запросов не найдено</td></tr>
                         )}
                         {!reqSearching && reqPageItems.map(req=>{
-                          const cat = subjectCategory(req.course);
                           const assignedTutor = tutors.find(t=>t.id===req.assignedTutorId);
                           return (
-                            <RequestTableRow key={req.id} req={req} reqCfg={reqCfg} cat={cat} assignedTutor={assignedTutor} tutors={tutors}
+                            <RequestTableRow key={req.id} req={req} reqCfg={reqCfg} assignedTutor={assignedTutor} tutors={tutors}
                               onStatusChange={handleReqStatusChange} onAssignTutor={handleReqAssignTutor} onScheduleTrial={handleReqScheduleTrial}
                               onEnroll={handleReqEnroll} onDelete={handleReqDelete} onOpen={handleReqOpen} />
                           );
@@ -3337,10 +3343,9 @@ ${contextSummary}`;
                           <span style={{ fontSize:11, color:"#a9b8c6" }}>{colItems.length}</span>
                         </div>
                         {colItems.map(req=>{
-                          const cat = subjectCategory(req.course);
                           const assignedTutor = tutors.find(t=>t.id===req.assignedTutorId);
                           return (
-                            <RequestKanbanCard key={req.id} req={req} cat={cat} assignedTutor={assignedTutor}
+                            <RequestKanbanCard key={req.id} req={req} assignedTutor={assignedTutor}
                               onDragStart={handleReqDragStart} onOpen={handleReqOpen} onDelete={handleReqDelete} />
                           );
                         })}
@@ -4281,15 +4286,23 @@ ${contextSummary}`;
                 <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Имя ребёнка</div><input placeholder="Иванов Артём" value={nRequest.studentName} onChange={e=>setNRequest({...nRequest,studentName:e.target.value})} /></div>
                 <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Возраст</div><input type="number" placeholder="10" value={nRequest.age} onChange={e=>setNRequest({...nRequest,age:e.target.value})} /></div>
               </div>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Интересующий курс</div>
-                <select value={nRequest.course} onChange={e=>setNRequest({...nRequest,course:e.target.value})}>
-                  <option value="">Выберите курс</option>
+              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Интересующие курсы (можно несколько)</div>
+                <div style={{ maxHeight:160, overflowY:"auto", display:"flex", flexDirection:"column", gap:8, background:"#f8fafc", border:"1px solid #e7eef5", borderRadius:10, padding:10 }}>
                   {catalogGrouped.map(cat=>(
-                    <optgroup key={cat.id} label={cat.label}>
-                      {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
-                    </optgroup>
+                    <div key={cat.id}>
+                      <div style={{ fontSize:10, color:cat.color, fontWeight:700, textTransform:"uppercase", marginBottom:5 }}>{cat.label}</div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                        {cat.courses.map(c=>(
+                          <button key={c} onClick={()=>setNRequest(prev=>({...prev,courses:prev.courses.includes(c)?prev.courses.filter(x=>x!==c):[...prev.courses,c]}))}
+                            style={{ padding:"4px 10px", borderRadius:20, fontSize:11, border:"1px solid", cursor:"pointer",
+                              background:nRequest.courses.includes(c)?`${cat.color}28`:"transparent",
+                              borderColor:nRequest.courses.includes(c)?cat.color:"#d7e2ee",
+                              color:nRequest.courses.includes(c)?cat.color:"#55677a" }}>{c}</button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
-                </select>
+                </div>
               </div>
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Комментарий / пожелания</div>
                 <textarea rows={3} placeholder="Опишите запрос родителя..." value={nRequest.comment} onChange={e=>setNRequest({...nRequest,comment:e.target.value})} />
@@ -4304,7 +4317,7 @@ ${contextSummary}`;
                 </select>
               </div>
               <div style={{ display:"flex", gap:10, marginTop:4 }}>
-                <button className="bp" style={{ flex:1 }} onClick={()=>{ if(!nRequest.parentName||!nRequest.phone)return; setRequests([{...nRequest,id:Date.now(),date:new Date().toISOString().split("T")[0],assignedTutorId:null},...requests]); setNRequest({parentName:"",phone:"",studentName:"",age:"",course:"",comment:"",status:"new"}); setModal(null); notify("Запрос добавлен"); }}>Добавить запрос</button>
+                <button className="bp" style={{ flex:1 }} onClick={()=>{ if(!nRequest.parentName||!nRequest.phone)return; setRequests([{...nRequest,id:Date.now(),date:new Date().toISOString().split("T")[0],assignedTutorId:null},...requests]); setNRequest({parentName:"",phone:"",studentName:"",age:"",courses:[],comment:"",status:"new"}); setModal(null); notify("Запрос добавлен"); }}>Добавить запрос</button>
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
               </div>
             </div>
@@ -4334,15 +4347,23 @@ ${contextSummary}`;
                   <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Имя ребёнка</div><input value={editingRequest.studentName} onChange={e=>setEditingRequest({...editingRequest,studentName:e.target.value})} /></div>
                   <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Возраст</div><input type="number" value={editingRequest.age} onChange={e=>setEditingRequest({...editingRequest,age:e.target.value})} /></div>
                 </div>
-                <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Курс</div>
-                  <select value={editingRequest.course} onChange={e=>setEditingRequest({...editingRequest,course:e.target.value})}>
-                    <option value="">Не выбран</option>
+                <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Курсы (можно несколько)</div>
+                  <div style={{ maxHeight:150, overflowY:"auto", display:"flex", flexDirection:"column", gap:8, background:"#f8fafc", border:"1px solid #e7eef5", borderRadius:10, padding:10 }}>
                     {catalogGrouped.map(cat=>(
-                      <optgroup key={cat.id} label={cat.label}>
-                        {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
-                      </optgroup>
+                      <div key={cat.id}>
+                        <div style={{ fontSize:10, color:cat.color, fontWeight:700, textTransform:"uppercase", marginBottom:5 }}>{cat.label}</div>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                          {cat.courses.map(c=>(
+                            <button key={c} onClick={()=>setEditingRequest(prev=>({...prev,courses:(prev.courses||[]).includes(c)?prev.courses.filter(x=>x!==c):[...(prev.courses||[]),c]}))}
+                              style={{ padding:"4px 10px", borderRadius:20, fontSize:11, border:"1px solid", cursor:"pointer",
+                                background:(editingRequest.courses||[]).includes(c)?`${cat.color}28`:"transparent",
+                                borderColor:(editingRequest.courses||[]).includes(c)?cat.color:"#d7e2ee",
+                                color:(editingRequest.courses||[]).includes(c)?cat.color:"#55677a" }}>{c}</button>
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                  </select>
+                  </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Статус</div>
