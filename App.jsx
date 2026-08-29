@@ -269,25 +269,37 @@ function Tag({ c, bg, children }) {
 
 const MONTH_NAMES = ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
 function BirthDatePicker({ value, onChange }) {
-  const [y, m, d] = value ? value.split("-").map(Number) : ["", "", ""];
+  const parseVal = v => v ? v.split("-").map(Number) : [null, null, null]; // [year, month, day]
+  const [localY, setLocalY] = useState(() => parseVal(value)[0]);
+  const [localM, setLocalM] = useState(() => parseVal(value)[1]);
+  const [localD, setLocalD] = useState(() => parseVal(value)[2]);
+
+  // Re-sync if the parent's value changes from outside (e.g. switching to edit a different student)
+  useEffect(() => {
+    const [yy, mm, dd] = parseVal(value);
+    setLocalY(yy); setLocalM(mm); setLocalD(dd);
+  }, [value]);
+
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 30 }, (_, i) => currentYear - i); // last 30 years, most recent first
   const daysInMonth = (yy, mm) => (yy && mm) ? new Date(yy, mm, 0).getDate() : 31;
-  const days = Array.from({ length: daysInMonth(y, m) }, (_, i) => i + 1);
-  const update = (newD, newM, newY) => {
+  const days = Array.from({ length: daysInMonth(localY, localM) }, (_, i) => i + 1);
+
+  const commit = (newD, newM, newY) => {
+    setLocalD(newD); setLocalM(newM); setLocalY(newY);
     if (newD && newM && newY) onChange(`${newY}-${String(newM).padStart(2,"0")}-${String(newD).padStart(2,"0")}`);
   };
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1.4fr 1fr", gap:6 }}>
-      <select value={d||""} onChange={e=>update(Number(e.target.value), m, y)}>
+      <select value={localD||""} onChange={e=>commit(Number(e.target.value), localM, localY)}>
         <option value="">День</option>
         {days.map(dd=><option key={dd} value={dd}>{dd}</option>)}
       </select>
-      <select value={m||""} onChange={e=>update(d, Number(e.target.value), y)}>
+      <select value={localM||""} onChange={e=>commit(localD, Number(e.target.value), localY)}>
         <option value="">Месяц</option>
         {MONTH_NAMES.map((mn,i)=><option key={i} value={i+1}>{mn}</option>)}
       </select>
-      <select value={y||""} onChange={e=>update(d, m, Number(e.target.value))}>
+      <select value={localY||""} onChange={e=>commit(localD, localM, Number(e.target.value))}>
         <option value="">Год</option>
         {years.map(yy=><option key={yy} value={yy}>{yy}</option>)}
       </select>
