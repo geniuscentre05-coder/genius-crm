@@ -576,6 +576,242 @@ export default function App() {
     if (view === "ai") aiMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [aiMessages, view]);
 
+  // ── Claude agent: tool definitions ──────────────────────────────────────
+  // Только безопасные действия — добавление и изменение статуса, без удаления,
+  // чтобы чат-агент не мог случайно (или по ошибке модели) стереть данные.
+  const AGENT_TOOLS = [
+    {
+      name: "find_student",
+      description: "Найти ученика по имени или телефону (частичное совпадение). Возвращает список найденных с их id, именем, телефоном, предметами и балансом.",
+      input_schema: { type: "object", properties: { query: { type: "string", description: "Имя, часть имени или телефон" } }, required: ["query"] },
+    },
+    {
+      name: "find_tutor",
+      description: "Найти преподавателя по имени или предмету. Возвращает список найденных с id, именем и предметами.",
+      input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+    },
+    {
+      name: "add_student",
+      description: "Добавить нового ученика в CRM.",
+      input_schema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "ФИО ученика" },
+          phone: { type: "string", description: "Телефон родителя" },
+          parentName: { type: "string" },
+          birthDate: { type: "string", description: "Дата рождения в формате YYYY-MM-DD, если известна" },
+          subjects: { type: "array", items: { type: "string" }, description: "Список предметов" },
+          address: { type: "string" },
+        },
+        required: ["name", "phone"],
+      },
+    },
+    {
+      name: "add_lesson",
+      description: "Запланировать индивидуальное занятие для существующего ученика у существующего преподавателя.",
+      input_schema: {
+        type: "object",
+        properties: {
+          studentQuery: { type: "string", description: "Имя ученика (или часть имени) — уже существующего в базе" },
+          tutorQuery: { type: "string", description: "Имя преподавателя (или часть имени) — уже существующего в базе" },
+          subject: { type: "string" },
+          date: { type: "string", description: "Дата в формате YYYY-MM-DD" },
+          time: { type: "string", description: "Время в формате HH:MM" },
+          duration: { type: "number", description: "Длительность в минутах, по умолчанию 60" },
+          price: { type: "number", description: "Стоимость занятия в рублях" },
+        },
+        required: ["studentQuery", "tutorQuery", "subject", "date", "time"],
+      },
+    },
+    {
+      name: "record_payment",
+      description: "Записать оплату от ученика/родителя.",
+      input_schema: {
+        type: "object",
+        properties: {
+          studentQuery: { type: "string" },
+          amount: { type: "number" },
+          method: { type: "string", enum: ["card", "cash", "transfer"] },
+          comment: { type: "string" },
+        },
+        required: ["studentQuery", "amount"],
+      },
+    },
+    {
+      name: "update_student_status",
+      description: "Изменить статус ученика (активен/пробный/пауза/неактивен).",
+      input_schema: {
+        type: "object",
+        properties: {
+          studentQuery: { type: "string" },
+          status: { type: "string", enum: ["active", "trial", "paused", "inactive"] },
+        },
+        required: ["studentQuery", "status"],
+      },
+    },
+    {
+      name: "get_debtors",
+      description: "Получить список учеников с отрицательным балансом (должников).",
+      input_schema: { type: "object", properties: {} },
+    },
+    {
+      name: "get_schedule_for_date",
+      description: "Получить список занятий на конкретную дату.",
+      input_schema: { type: "object", properties: { date: { type: "string", description: "YYYY-MM-DD" } }, required: ["date"] },
+    },
+  ];
+
+  function describeAgentTool(name, input) {
+    switch (name) {
+      case "find_student": return `Ищу ученика: «${input.query}»`;
+      case "find_tutor": return `Ищу преподавателя: «${input.query}»`;
+      case "add_student": return `Добавляю ученика: ${input.name}`;
+      case "add_lesson": return `Создаю занятие: ${input.subject} для «${input.studentQuery}» у «${input.tutorQuery}», ${input.date} ${input.time}`;
+      case "record_payment": return `Записываю оплату: ${input.amount}₽ от «${input.studentQuery}»`;
+      case "update_student_status": return `Меняю статус «${input.studentQuery}» на «${statusCfg[input.status]?.label||input.status}»`;
+      case "get_debtors": return "Смотрю список должников";
+      case "get_schedule_for_date": return `Смотрю расписание на ${input.date}`;
+      default: return `Выполняю: ${name}`;
+    }
+  }
+
+  // Executes one tool call against LIVE local copies of the CRM arrays (so a sequence
+  // of tool calls within the same agent turn — e.g. add_student then add_lesson for
+  // that same new student — sees each other's effects immediately, before React state
+  // has actually re-rendered).
+  function executeAgentTool(name, input, localState) {
+    const fmtStudent = s => `id=${s.id}, ${s.name}, тел: ${s.phone||"—"}, предметы: ${(s.subjects||[]).join(", ")||"—"}, статус: ${statusCfg[s.status]?.label||s.status}, баланс: ${s.balance}₽`;
+    try {
+      switch (name) {
+        case "find_student": {
+          const q = String(input.query||"").toLowerCase();
+          const qDigits = String(input.query||"").replace(/\D/g,"");
+          const matches = localState.students.filter(s =>
+            s.name.toLowerCase().includes(q) ||
+            (qDigits && (s.phone||"").replace(/\D/g,"").includes(qDigits)) ||
+            (qDigits && (s.parentPhone||"").replace(/\D/g,"").includes(qDigits))
+          );
+          if (matches.length===0) return "Ученики не найдены.";
+          return matches.slice(0,10).map(fmtStudent).join("\n");
+        }
+        case "find_tutor": {
+          const q = String(input.query||"").toLowerCase();
+          const matches = localState.tutors.filter(t => t.name.toLowerCase().includes(q) || (t.subjects||[]).some(s=>s.toLowerCase().includes(q)));
+          if (matches.length===0) return "Преподаватели не найдены.";
+          return matches.map(t=>`id=${t.id}, ${t.short}, предметы: ${(t.subjects||[]).join(", ")}`).join("\n");
+        }
+        case "add_student": {
+          const newStudent = {
+            id: Date.now(), name: input.name, phone: input.phone, parentName: input.parentName||"",
+            parentPhone: input.phone, birthDate: input.birthDate||"", age: input.birthDate ? (calcAge(input.birthDate)??0) : 0,
+            subjects: input.subjects||[], subjectTeachers: (input.subjects||[]).map(s=>({subject:s,tutorId:""})),
+            status:"trial", balance:0, totalLessons:0, address: input.address||"", school:"", files:[],
+          };
+          localState.students = [...localState.students, newStudent];
+          setStudents(localState.students);
+          return `Ученик добавлен: id=${newStudent.id}, ${newStudent.name}`;
+        }
+        case "add_lesson": {
+          const st = localState.students.find(s=>s.name.toLowerCase().includes(String(input.studentQuery||"").toLowerCase()));
+          const tu = localState.tutors.find(t=>t.name.toLowerCase().includes(String(input.tutorQuery||"").toLowerCase()));
+          if (!st) return `Ошибка: ученик "${input.studentQuery}" не найден. Сначала найдите или создайте его.`;
+          if (!tu) return `Ошибка: преподаватель "${input.tutorQuery}" не найден.`;
+          const newLesson = {
+            id: Date.now(), studentId: st.id, studentName: st.name, subject: input.subject,
+            tutorId: tu.id, tutorShort: tu.short, date: input.date, time: input.time||"",
+            duration: Number(input.duration)||60, price: Number(input.price)||0, status:"scheduled", isGroup:false,
+          };
+          localState.lessons = [...localState.lessons, newLesson];
+          setLessons(localState.lessons);
+          return `Занятие создано: ${st.name} с ${tu.short}, ${input.subject}, ${input.date} ${input.time}`;
+        }
+        case "record_payment": {
+          const st = localState.students.find(s=>s.name.toLowerCase().includes(String(input.studentQuery||"").toLowerCase()));
+          if (!st) return `Ошибка: ученик "${input.studentQuery}" не найден.`;
+          const newPayment = { id: Date.now(), studentId: st.id, studentName: st.name, amount: Number(input.amount), date: new Date().toISOString().split("T")[0], method: input.method||"cash", comment: input.comment||"" };
+          localState.payments = [...localState.payments, newPayment];
+          localState.students = localState.students.map(s=>s.id===st.id?{...s,balance:s.balance+Number(input.amount)}:s);
+          setPayments(localState.payments);
+          setStudents(localState.students);
+          return `Оплата записана: ${input.amount}₽ от ${st.name}. Новый баланс: ${localState.students.find(s=>s.id===st.id).balance}₽`;
+        }
+        case "update_student_status": {
+          const st = localState.students.find(s=>s.name.toLowerCase().includes(String(input.studentQuery||"").toLowerCase()));
+          if (!st) return `Ошибка: ученик "${input.studentQuery}" не найден.`;
+          localState.students = localState.students.map(s=>s.id===st.id?{...s,status:input.status}:s);
+          setStudents(localState.students);
+          return `Статус ученика ${st.name} изменён на "${statusCfg[input.status]?.label||input.status}"`;
+        }
+        case "get_debtors": {
+          const debtors = localState.students.filter(s=>s.balance<0);
+          if (debtors.length===0) return "Должников нет.";
+          return debtors.map(fmtStudent).join("\n");
+        }
+        case "get_schedule_for_date": {
+          const dayLessons = localState.lessons.filter(l=>l.date===input.date);
+          if (dayLessons.length===0) return `На ${input.date} занятий нет.`;
+          return dayLessons.map(l=>`${l.time||"—"} — ${l.studentName}, ${l.subject}, преп. ${l.tutorShort}, статус: ${lsnCfg[l.status]?.label||l.status}`).join("\n");
+        }
+        default:
+          return `Неизвестный инструмент: ${name}`;
+      }
+    } catch (e) {
+      return `Ошибка при выполнении: ${e.message}`;
+    }
+  }
+
+  async function runClaudeAgent(displayHistory, contextSummary) {
+    const systemPrompt = `Ты — ИИ-агент CRM образовательного центра "ГЕНИЙ". Ты можешь не только отвечать на вопросы, но и выполнять действия в системе через инструменты: искать учеников/преподавателей, добавлять учеников, создавать занятия, записывать оплаты, менять статус ученика, смотреть должников и расписание.
+
+Правила:
+- Прежде чем создать занятие или записать оплату для ученика, сначала найди его через find_student, чтобы убедиться, что он существует и правильно определить его.
+- Если ученика или преподавателя не существует и создание не запрошено явно — сообщи об этом пользователю, а не выдумывай.
+- Всегда кратко и понятно объясняй пользователю, что ты сделал, в конце.
+- Отвечай на русском языке.
+
+${contextSummary}`;
+
+    let claudeMessages = displayHistory.map(m => ({ role: m.role, content: m.content }));
+    const localState = { students:[...students], tutors:[...tutors], lessons:[...lessons], payments:[...payments] };
+    let iterations = 0;
+
+    while (iterations < 6) {
+      iterations++;
+      const response = await fetch("/api/ai-proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "claude",
+          messages: [{ role:"system", content:systemPrompt }, ...claudeMessages],
+          tools: AGENT_TOOLS,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setAiMessages(prev => [...prev, { role:"assistant", content:`⚠️ Ошибка: ${result.error || "не удалось получить ответ от агента"}` }]);
+        return;
+      }
+      const content = result.content || [];
+      const textBlocks = content.filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
+      const toolBlocks = content.filter(b=>b.type==="tool_use");
+
+      if (textBlocks) {
+        setAiMessages(prev => [...prev, { role:"assistant", content:textBlocks }]);
+      }
+      if (toolBlocks.length===0) return; // финальный ответ, без вызова инструментов — закончили
+
+      claudeMessages.push({ role:"assistant", content });
+      const toolResultBlocks = [];
+      for (const tb of toolBlocks) {
+        setAiMessages(prev => [...prev, { role:"assistant", content:`🔧 ${describeAgentTool(tb.name, tb.input)}` }]);
+        const resultText = executeAgentTool(tb.name, tb.input, localState);
+        toolResultBlocks.push({ type:"tool_result", tool_use_id: tb.id, content: resultText });
+      }
+      claudeMessages.push({ role:"user", content: toolResultBlocks });
+    }
+    setAiMessages(prev => [...prev, { role:"assistant", content:"⚠️ Слишком много шагов подряд — остановлено для безопасности. Уточните запрос." }]);
+  }
+
   async function sendAiMessage() {
     const text = aiInput.trim();
     if (!text || aiLoading) return;
@@ -592,23 +828,27 @@ export default function App() {
 - Новых запросов от родителей: ${requests.filter(r=>r.status==="new").length}`;
 
     try {
-      const response = await fetch("/api/ai-proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: aiProvider,
-          messages: [
-            { role: "system", content: `Ты — ИИ-помощник CRM образовательного центра "ГЕНИЙ". Помогай администратору центра: отвечай на вопросы об учениках, преподавателях, расписании, финансах, помогай составлять сообщения родителям, объясняй как пользоваться разделами CRM. Отвечай кратко и по делу, на русском языке.\n\n${contextSummary}` },
-            ...newMessages.map(m => ({ role: m.role, content: m.content })),
-          ],
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        setAiMessages(prev => [...prev, { role: "assistant", content: `⚠️ Ошибка: ${result.error || "не удалось получить ответ от ИИ"}` }]);
+      if (aiProvider === "claude") {
+        await runClaudeAgent(newMessages, contextSummary);
       } else {
-        const reply = result.choices?.[0]?.message?.content || "Не удалось получить ответ.";
-        setAiMessages(prev => [...prev, { role: "assistant", content: reply }]);
+        const response = await fetch("/api/ai-proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: aiProvider,
+            messages: [
+              { role: "system", content: `Ты — ИИ-помощник CRM образовательного центра "ГЕНИЙ". Помогай администратору центра: отвечай на вопросы об учениках, преподавателях, расписании, финансах, помогай составлять сообщения родителям, объясняй как пользоваться разделами CRM. Отвечай кратко и по делу, на русском языке.\n\n${contextSummary}` },
+              ...newMessages.map(m => ({ role: m.role, content: m.content })),
+            ],
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          setAiMessages(prev => [...prev, { role: "assistant", content: `⚠️ Ошибка: ${result.error || "не удалось получить ответ от ИИ"}` }]);
+        } else {
+          const reply = result.choices?.[0]?.message?.content || "Не удалось получить ответ.";
+          setAiMessages(prev => [...prev, { role: "assistant", content: reply }]);
+        }
       }
     } catch (e) {
       setAiMessages(prev => [...prev, { role: "assistant", content: "⚠️ Не удалось связаться с ИИ-помощником. Проверьте подключение к интернету." }]);
@@ -3086,7 +3326,7 @@ export default function App() {
                 <div style={{ color:"#7a8a9c", fontSize:13, marginTop:4 }}>Задайте вопрос об учениках, расписании, финансах — или попросите составить сообщение</div>
               </div>
               <div style={{ display:"flex", gap:4, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:10, padding:4 }}>
-                {[["gemini","Gemini"],["deepseek","DeepSeek"]].map(([k,l])=>(
+                {[["gemini","Gemini"],["deepseek","DeepSeek"],["claude","Claude (агент)"]].map(([k,l])=>(
                   <button key={k} onClick={()=>setAiProvider(k)}
                     style={{ padding:"6px 14px", borderRadius:7, fontSize:12, fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", transition:"all .15s",
                       background:aiProvider===k?"linear-gradient(135deg,#1da0d4,#5cb85c)":"transparent",
@@ -3096,18 +3336,22 @@ export default function App() {
             </div>
             <div style={{ flex:1, background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, display:"flex", flexDirection:"column", overflow:"hidden" }}>
               <div style={{ flex:1, overflowY:"auto", padding:20, display:"flex", flexDirection:"column", gap:12 }}>
-                {aiMessages.map((m,i)=>(
-                  <div key={i} style={{ alignSelf:m.role==="user"?"flex-end":"flex-start", maxWidth:"75%" }}>
-                    <div style={{
-                      background: m.role==="user" ? "linear-gradient(135deg,#1da0d4,#5cb85c)" : "#f2f6fa",
-                      color: m.role==="user" ? "white" : "#22344a",
-                      padding:"10px 16px", borderRadius:14,
-                      borderBottomRightRadius: m.role==="user"?4:14,
-                      borderBottomLeftRadius: m.role==="user"?14:4,
-                      fontSize:14, lineHeight:1.6, whiteSpace:"pre-wrap"
-                    }}>{m.content}</div>
-                  </div>
-                ))}
+                {aiMessages.map((m,i)=>{
+                  const isToolAction = m.role==="assistant" && m.content.startsWith("🔧");
+                  return (
+                    <div key={i} style={{ alignSelf:m.role==="user"?"flex-end":"flex-start", maxWidth:"75%" }}>
+                      <div style={{
+                        background: m.role==="user" ? "linear-gradient(135deg,#1da0d4,#5cb85c)" : (isToolAction ? "rgba(245,166,35,0.12)" : "#f2f6fa"),
+                        color: m.role==="user" ? "white" : (isToolAction ? "#b5721a" : "#22344a"),
+                        border: isToolAction ? "1px dashed rgba(245,166,35,0.4)" : "none",
+                        padding: isToolAction ? "7px 14px" : "10px 16px", borderRadius:14,
+                        borderBottomRightRadius: m.role==="user"?4:14,
+                        borderBottomLeftRadius: m.role==="user"?14:4,
+                        fontSize: isToolAction ? 12 : 14, fontWeight: isToolAction ? 600 : 400, lineHeight:1.6, whiteSpace:"pre-wrap"
+                      }}>{m.content}</div>
+                    </div>
+                  );
+                })}
                 {aiLoading && (
                   <div style={{ alignSelf:"flex-start" }}>
                     <div style={{ background:"#f2f6fa", padding:"10px 16px", borderRadius:14, borderBottomLeftRadius:4, fontSize:14, color:"#55677a" }}>Печатает...</div>
