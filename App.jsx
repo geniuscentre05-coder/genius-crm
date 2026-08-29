@@ -340,30 +340,36 @@ function AttachmentsBlock({ title = "Документы", files = [], onUpload, 
 // doesn't force every single row to re-render — only rows whose own props changed do.
 const RequestTableRow = memo(function RequestTableRow({ req, reqCfg, cat, assignedTutor, tutors, onStatusChange, onAssignTutor, onScheduleTrial, onEnroll, onDelete, onOpen }) {
   return (
-    <tr className="rh" style={{ borderBottom:"1px solid #f2f6fa" }} onClick={()=>onOpen(req)}>
+    <tr className="rh" style={{ borderBottom:"1px solid #f2f6fa" }}>
       <td style={{ padding:"11px 14px", fontSize:12, color:"#7a8a9c", whiteSpace:"nowrap" }}>{req.date}</td>
       <td style={{ padding:"11px 14px" }}>
-        <div style={{ fontSize:13, fontWeight:700 }}>{req.parentName}</div>
-        <a href={`tel:${req.phone}`} onClick={e=>e.stopPropagation()} style={{ fontSize:12, color:"#1da0d4", textDecoration:"none" }}>{req.phone}</a>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <Av name={req.parentName||"?"} color="#1da0d4" size={30} />
+          <div>
+            <div style={{ fontSize:13, fontWeight:700 }}>{req.parentName}</div>
+            <a href={`tel:${req.phone}`} style={{ fontSize:12, color:"#1da0d4", textDecoration:"none" }}>{req.phone}</a>
+          </div>
+        </div>
       </td>
       <td style={{ padding:"11px 14px" }}>
         <div style={{ fontSize:13 }}>{req.studentName}</div>
         {req.age ? <div style={{ fontSize:11, color:"#7a8a9c" }}>{req.age} лет</div> : null}
       </td>
       <td style={{ padding:"11px 14px" }}>{req.course && <Tag c={cat.color||"#1da0d4"} bg={`${cat.color||"#1da0d4"}18`}>{req.course}</Tag>}</td>
-      <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
+      <td style={{ padding:"11px 14px" }}>
         <select value={req.status} onChange={e=>onStatusChange(req.id, e.target.value)} style={{ fontSize:12, padding:"5px 8px", color: reqCfg[req.status]?.color, fontWeight:600 }}>
           {Object.entries(reqCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
         </select>
       </td>
-      <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
+      <td style={{ padding:"11px 14px" }}>
         <select value={req.assignedTutorId||""} onChange={e=>onAssignTutor(req.id, e.target.value)} style={{ fontSize:12, padding:"5px 8px" }}>
           <option value="">—</option>
           {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
         </select>
       </td>
-      <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
+      <td style={{ padding:"11px 14px" }}>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          <button className="bg" style={{ fontSize:11, padding:"5px 10px" }} onClick={()=>onOpen(req)}><Pencil size={11} /> Редактировать</button>
           {req.status==="contacted" && <button className="bp" style={{ fontSize:11, padding:"5px 8px" }} onClick={()=>onScheduleTrial(req)}>Пробное</button>}
           {req.status==="trial" && <button className="bp" style={{ fontSize:11, padding:"5px 8px", background:"linear-gradient(135deg,#5cb85c,#16a34a)" }} onClick={()=>onEnroll(req.id)}>Записать</button>}
           <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"5px 8px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>onDelete(req.id)}>🗑</button>
@@ -378,16 +384,21 @@ const RequestKanbanCard = memo(function RequestKanbanCard({ req, cat, assignedTu
     <div
       draggable
       onDragStart={e=>onDragStart(e, req.id)}
-      onClick={()=>onOpen(req)}
       style={{ background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:12, padding:"12px 14px", marginBottom:8, cursor:"grab", boxShadow:"0 1px 3px rgba(18,40,61,.05)" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
-        <div style={{ fontSize:13, fontWeight:700, color:"#12283d" }}>{req.parentName}</div>
-        <button onClick={e=>{ e.stopPropagation(); onDelete(req.id); }} style={{ background:"transparent", border:"none", color:"#a9b8c6", cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
+        <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
+          <Av name={req.parentName||"?"} color="#1da0d4" size={26} />
+          <div style={{ fontSize:13, fontWeight:700, color:"#12283d", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{req.parentName}</div>
+        </div>
+        <button onClick={()=>onDelete(req.id)} style={{ background:"transparent", border:"none", color:"#a9b8c6", cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
       </div>
-      <div style={{ fontSize:12, color:"#55677a", marginTop:2 }}>{req.studentName}{req.age ? `, ${req.age} лет` : ""}</div>
+      <div style={{ fontSize:12, color:"#55677a", marginTop:6 }}>{req.studentName}{req.age ? `, ${req.age} лет` : ""}</div>
       {req.course && <div style={{ marginTop:6 }}><Tag c={cat.color||"#1da0d4"} bg={`${cat.color||"#1da0d4"}18`}>{req.course}</Tag></div>}
       {assignedTutor && <div style={{ marginTop:4 }}><Tag c={assignedTutor.color} bg={`${assignedTutor.color}18`}>{assignedTutor.short}</Tag></div>}
-      <div style={{ fontSize:10, color:"#a9b8c6", marginTop:6 }}>{req.date}</div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:8 }}>
+        <div style={{ fontSize:10, color:"#a9b8c6" }}>{req.date}</div>
+        <button className="bg" style={{ fontSize:10, padding:"3px 8px" }} onClick={()=>onOpen(req)}><Pencil size={10} /> Изменить</button>
+      </div>
     </div>
   );
 });
