@@ -427,6 +427,7 @@ export default function App() {
   const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
   const [reportTab, setReportTab] = useState("finance");
   const [reqSearch, setReqSearch] = useState("");
+  const [reqFilter, setReqFilter] = useState("all");
   const [reqSearchInput, setReqSearchInput] = useState(""); // raw typed value, debounced into reqSearch
   const [reqSearching, setReqSearching] = useState(false);  // true during the debounce window (drives skeleton rows)
   const [reqViewMode, setReqViewMode] = useState("table");  // "table" | "kanban"
@@ -491,7 +492,6 @@ export default function App() {
   const [candFilter, setCandFilter] = useState("all");
   const [selCandidate, setSelCandidate] = useState(null);
   const [nCandidate, setNCandidate] = useState({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" });
-  const [reqFilter, setReqFilter] = useState("all");
 
   const [selTutor,  setSelTutor]   = useState(null);
   const [selStudent,setSelStudent] = useState(null);
@@ -1093,6 +1093,26 @@ ${contextSummary}`;
     notify("Данные сброшены");
   };
 
+  // Removes exact-duplicate lesson records — leftovers from an earlier bug where
+  // recurring group series accidentally shared one groupId across every date,
+  // which could balloon into hundreds/thousands of duplicate rows and make the
+  // whole app (especially the schedule) freeze on load.
+  const cleanupDuplicateLessons = () => {
+    const seen = new Map();
+    const deduped = [];
+    let removed = 0;
+    for (const l of lessons) {
+      const key = `${l.studentId}|${l.date}|${l.time}|${l.subject}|${l.tutorId}`;
+      if (seen.has(key)) { removed++; continue; }
+      seen.set(key, true);
+      deduped.push(l);
+    }
+    if (removed === 0) { notify("Дубликатов не найдено — данные уже чистые"); return; }
+    if (!window.confirm(`Найдено ${removed} дубликатов занятий (было ${lessons.length}, останется ${deduped.length}). Удалить их?`)) return;
+    setLessons(deduped);
+    notify(`Удалено дубликатов: ${removed}. Занятий осталось: ${deduped.length}`);
+  };
+
   const audMap = {
     all: students, active: students.filter(s=>s.status==="active"),
     debtors: students.filter(s=>s.balance<0), zeroblance: students.filter(s=>s.balance===0),
@@ -1422,6 +1442,10 @@ ${contextSummary}`;
             <div style={{ fontSize:20, fontWeight:700, color:"#e2574c" }}>{students.filter(s=>s.balance<0).length}</div>
             <div style={{ fontSize:10, color:"#7a8a9c" }}>учеников</div>
           </div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.7)", textAlign:"center", marginTop:8 }}>Занятий в базе: {lessons.length}</div>
+          <button onClick={cleanupDuplicateLessons} style={{ width:"100%", marginTop:6, padding:"7px", background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.3)", borderRadius:8, color:"#ffffff", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+            🧹 Убрать дубликаты занятий
+          </button>
         </div>
       </div>
 
@@ -4386,3 +4410,4 @@ ${contextSummary}`;
     </div>
   );
 }
+
