@@ -16,6 +16,76 @@ function loadFromLS() {
   try { const d = localStorage.getItem(LS_KEY); return d ? JSON.parse(d) : null; } catch(e) { return null; }
 }
 
+// ─── NORMALIZED TABLES HELPERS ───────────────────────────────────────────────
+// Preподаватели, ученики, занятия, платежи и зарплаты now live in real Supabase
+// tables (tutors/students/lessons/payments/salaries) instead of one big JSON
+// blob. These helpers translate between JS camelCase (birthDate, tutorId...)
+// and SQL snake_case (birth_date, tutor_id...) automatically, so the rest of
+// the app's code can keep working with the same camelCase objects as before.
+function camelToSnakeObj(obj) {
+  const out = {};
+  for (const k in obj) {
+    if (k === undefined) continue;
+    const snake = k.replace(/[A-Z]/g, m => "_" + m.toLowerCase());
+    out[snake] = obj[k];
+  }
+  return out;
+}
+function snakeToCamelObj(obj) {
+  const out = {};
+  for (const k in obj) {
+    const camel = k.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    out[camel] = obj[k];
+  }
+  return out;
+}
+async function fetchTable(table) {
+  const { data, error } = await supabase.from(table).select("*");
+  if (error) { console.error(`Fetch ${table} error:`, error); return null; }
+  return (data || []).map(snakeToCamelObj);
+}
+async function insertRow(table, obj) {
+  const { error } = await supabase.from(table).insert(camelToSnakeObj(obj));
+  if (error) console.error(`Insert into ${table} failed:`, error);
+  return !error;
+}
+async function insertRows(table, objs) {
+  if (!objs || !objs.length) return true;
+  const { error } = await supabase.from(table).insert(objs.map(camelToSnakeObj));
+  if (error) console.error(`Bulk insert into ${table} failed:`, error);
+  return !error;
+}
+async function updateRow(table, id, patch) {
+  const { error } = await supabase.from(table).update(camelToSnakeObj(patch)).eq("id", id);
+  if (error) console.error(`Update ${table} (id=${id}) failed:`, error);
+  return !error;
+}
+async function upsertRows(table, objs) {
+  if (!objs || !objs.length) return true;
+  const { error } = await supabase.from(table).upsert(objs.map(camelToSnakeObj));
+  if (error) console.error(`Upsert into ${table} failed:`, error);
+  return !error;
+}
+async function deleteRow(table, id) {
+  const { error } = await supabase.from(table).delete().eq("id", id);
+  if (error) console.error(`Delete from ${table} (id=${id}) failed:`, error);
+  return !error;
+}
+async function deleteRows(table, ids) {
+  if (!ids || !ids.length) return true;
+  const { error } = await supabase.from(table).delete().in("id", ids);
+  if (error) console.error(`Bulk delete from ${table} failed:`, error);
+  return !error;
+}
+// Replace the ENTIRE contents of a table with a new array — used where the old
+// code used to just do setLessons(newFullArray) wholesale (e.g. dedup cleanup,
+// demo reset, Excel import "replace all"). Deletes everything, then re-inserts.
+async function replaceTable(table, objs) {
+  const { error: delErr } = await supabase.from(table).delete().neq("id", -1);
+  if (delErr) { console.error(`Clear ${table} failed:`, delErr); return false; }
+  return insertRows(table, objs);
+}
+
 // ─── PRINT HELPERS ───────────────────────────────────────────────────────────
 function printSchedule(lessons, tutors, students, weekLabel) {
   const rows = lessons.sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:a.time>b.time?1:-1).map(l => {
@@ -468,7 +538,7 @@ export default function App() {
     { id:2, title:"Поздравление 8 марта",  channel:"sms",      audience:"all",     status:"sent", sentAt:"2026-03-08", sentCount:5, text:"Дорогой {{studentName}} и {{parentName}}! Поздравляем с праздником! 🌸" },
   ]);
   const [requests,  setRequests]  = useState(saved?.requests  || initialRequests);
-  const [nRequest,  setNRequest]  = useState({ parentName:"", phone:"", studentName:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }], comment:"", status:"new" });
+  const [nRequest,  setNRequest]  = useState({ parentName:"", phone:"", comment:"", status:"new", children:[{ studentName:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }] }] });
   const [pricing,    setPricing]    = useState(saved?.pricing   || initialPricing);
   const [courseCatalog, setCourseCatalog] = useState(saved?.courseCatalog || initialCourseCatalog);
   const [candidates, setCandidates] = useState(saved?.candidates || []);
@@ -582,22 +652,20 @@ export default function App() {
   const isRemoteUpdate = useRef(false);
   const cloudSaveTimeout = useRef(null);
 
-  // ── Helper: apply a full cloud snapshot to all local state pieces ──
+  // ── Helper: apply a snapshot of the REMAINING blob-based data (everything not
+  // yet migrated to its own table: mailings, requests, pricing, rules, catalog,
+  // candidates). Tutors/students/lessons/payments/salaries now live in real
+  // tables and are loaded/synced separately below. ──
   function applyCloudSnapshot(data) {
     if (!data) return;
     isRemoteUpdate.current = true;
-    if (data.tutors) setTutors(data.tutors);
-    if (data.students) setStudents(data.students);
-    if (data.lessons) setLessons(data.lessons);
-    if (data.payments) setPayments(data.payments);
-    if (data.salaries) setSalaries(data.salaries);
     if (data.mailings) setMailings(data.mailings);
     if (data.requests) setRequests(data.requests);
     if (data.pricing) setPricing(data.pricing);
     if (data.rules) setRules(data.rules);
     if (data.courseCatalog) setCourseCatalog(data.courseCatalog);
     if (data.candidates) setCandidates(data.candidates);
-    saveToLS(data);
+    saveToLS({ ...loadFromLS(), ...data });
   }
 
   // ── Initial load from Supabase (runs once on mount) ──
@@ -605,6 +673,22 @@ export default function App() {
     let cancelled = false;
     async function loadInitial() {
       try {
+        // Load the 5 migrated entities from their own real tables
+        const [tData, sData, lData, pData, salData] = await Promise.all([
+          fetchTable("tutors"),
+          fetchTable("students"),
+          fetchTable("lessons"),
+          fetchTable("payments"),
+          fetchTable("salaries"),
+        ]);
+        if (cancelled) return;
+        if (tData) setTutors(tData);
+        if (sData) setStudents(sData);
+        if (lData) setLessons(lData);
+        if (pData) setPayments(pData);
+        if (salData) setSalaries(salData);
+
+        // Load the remaining, not-yet-migrated entities from the old blob
         const { data: row, error } = await supabase
           .from("crm_state")
           .select("data")
@@ -616,10 +700,10 @@ export default function App() {
         } else if (row?.data) {
           applyCloudSnapshot(row.data);
         } else {
-          // No cloud record yet — push current (local/demo) data as the first snapshot
+          // No cloud record yet for the remaining fields — push current (demo) data
           await supabase.from("crm_state").upsert({
             id: CLOUD_ID,
-            data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog, candidates },
+            data: { mailings, requests, pricing, rules, courseCatalog, candidates },
             updated_at: new Date().toISOString(),
           });
         }
@@ -631,6 +715,29 @@ export default function App() {
     loadInitial();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Realtime: pick up changes to the 5 migrated tables from other devices ──
+  useEffect(() => {
+    const channel = supabase
+      .channel("core_tables_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tutors" }, async () => {
+        const d = await fetchTable("tutors"); if (d) setTutors(d);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "students" }, async () => {
+        const d = await fetchTable("students"); if (d) setStudents(d);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "lessons" }, async () => {
+        const d = await fetchTable("lessons"); if (d) setLessons(d);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, async () => {
+        const d = await fetchTable("payments"); if (d) setPayments(d);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "salaries" }, async () => {
+        const d = await fetchTable("salaries"); if (d) setSalaries(d);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   // ── Realtime subscription: pick up changes made from other devices/browsers ──
@@ -648,13 +755,15 @@ export default function App() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // ── Auto-save to localStorage + Supabase (debounced) ──
+  // ── Auto-save the REMAINING (not-yet-migrated) data to localStorage + Supabase (debounced) ──
+  // Tutors/students/lessons/payments/salaries are NOT included here any more —
+  // they save themselves immediately at the point of each change (see addStudent,
+  // addLesson, etc. below), since they now live in their own real tables.
   useEffect(() => {
-    saveToLS({ tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog, candidates });
+    saveToLS({ ...loadFromLS(), mailings, requests, pricing, rules, courseCatalog, candidates });
     setSaveIndicator(true);
     const t = setTimeout(() => setSaveIndicator(false), 1500);
 
-    // Skip pushing to cloud if this render was triggered by an incoming remote update
     if (isRemoteUpdate.current) {
       isRemoteUpdate.current = false;
       return () => clearTimeout(t);
@@ -667,7 +776,7 @@ export default function App() {
       try {
         const { error } = await supabase.from("crm_state").upsert({
           id: CLOUD_ID,
-          data: { tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog, candidates },
+          data: { mailings, requests, pricing, rules, courseCatalog, candidates },
           updated_at: new Date().toISOString(),
         });
         if (error) console.error("Supabase save error:", error);
@@ -682,7 +791,7 @@ export default function App() {
       clearTimeout(cloudSaveTimeout.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tutors, students, lessons, payments, salaries, mailings, requests, pricing, rules, courseCatalog, candidates]);
+  }, [mailings, requests, pricing, rules, courseCatalog, candidates]);
 
   function emptyChild() { return { name:"", birthDate:"", school:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }], status:"trial", tuitionNote:"" }; }
   const [familyForm, setFamilyForm] = useState({ parentName:"", phone:"", extraPhones:[], address:"", notes:"", children:[emptyChild()] });
@@ -719,26 +828,32 @@ export default function App() {
       address: nStudentEdit.address,
     };
     const siblingCount = editedStudent?.familyId ? students.filter(s => s.familyId===editedStudent.familyId && s.id!==editingStudentId).length : 0;
+    const mainPatch = {
+      name: nStudentEdit.name, birthDate: nStudentEdit.birthDate,
+      age: calcAge(nStudentEdit.birthDate) ?? editedStudent?.age,
+      school: nStudentEdit.school, grade: nStudentEdit.grade,
+      ...sharedFamilyFields,
+      notes: nStudentEdit.notes, tuitionNote: nStudentEdit.tuitionNote,
+      status: nStudentEdit.status,
+      subjectTeachers: nStudentEdit.subjectTeachers.filter(st=>st.subject),
+      subjects: nStudentEdit.subjectTeachers.filter(st=>st.subject).map(st=>st.subject),
+    };
     setStudents(students.map(s => {
-      if (s.id===editingStudentId) {
-        return {
-          ...s,
-          name: nStudentEdit.name, birthDate: nStudentEdit.birthDate,
-          age: calcAge(nStudentEdit.birthDate) ?? s.age,
-          school: nStudentEdit.school, grade: nStudentEdit.grade,
-          ...sharedFamilyFields,
-          notes: nStudentEdit.notes, tuitionNote: nStudentEdit.tuitionNote,
-          status: nStudentEdit.status,
-          subjectTeachers: nStudentEdit.subjectTeachers.filter(st=>st.subject),
-          subjects: nStudentEdit.subjectTeachers.filter(st=>st.subject).map(st=>st.subject),
-        };
-      }
+      if (s.id===editingStudentId) return { ...s, ...mainPatch };
       // Keep siblings' contact info (parent name/phone/address) in sync — they share the same family
       if (editedStudent?.familyId && s.familyId===editedStudent.familyId) {
         return { ...s, ...sharedFamilyFields };
       }
       return s;
     }));
+    updateRow("students", editingStudentId, mainPatch);
+    if (editedStudent?.familyId) {
+      students.forEach(s => {
+        if (s.familyId===editedStudent.familyId && s.id!==editingStudentId) {
+          updateRow("students", s.id, sharedFamilyFields);
+        }
+      });
+    }
     setModal(null); setEditingStudentId(null); setNStudentEdit(null);
     notify(siblingCount>0 ? `Данные ученика обновлены, контакты семьи синхронизированы у ${siblingCount} братьев/сестёр` : "Данные ученика обновлены");
   }
@@ -912,6 +1027,7 @@ export default function App() {
           };
           localState.students = [...localState.students, newStudent];
           setStudents(localState.students);
+          insertRow("students", newStudent);
           return `Ученик добавлен: id=${newStudent.id}, ${newStudent.name}`;
         }
         case "add_lesson": {
@@ -926,6 +1042,7 @@ export default function App() {
           };
           localState.lessons = [...localState.lessons, newLesson];
           setLessons(localState.lessons);
+          insertRow("lessons", newLesson);
           return `Занятие создано: ${st.name} с ${tu.short}, ${input.subject}, ${input.date} ${input.time}`;
         }
         case "record_payment": {
@@ -936,6 +1053,8 @@ export default function App() {
           localState.students = localState.students.map(s=>s.id===st.id?{...s,balance:s.balance+Number(input.amount)}:s);
           setPayments(localState.payments);
           setStudents(localState.students);
+          insertRow("payments", newPayment);
+          updateRow("students", st.id, { balance: localState.students.find(s=>s.id===st.id).balance });
           return `Оплата записана: ${input.amount}₽ от ${st.name}. Новый баланс: ${localState.students.find(s=>s.id===st.id).balance}₽`;
         }
         case "update_student_status": {
@@ -943,6 +1062,7 @@ export default function App() {
           if (!st) return `Ошибка: ученик "${input.studentQuery}" не найден.`;
           localState.students = localState.students.map(s=>s.id===st.id?{...s,status:input.status}:s);
           setStudents(localState.students);
+          updateRow("students", st.id, { status: input.status });
           return `Статус ученика ${st.name} изменён на "${statusCfg[input.status]?.label||input.status}"`;
         }
         case "get_debtors": {
@@ -1078,11 +1198,15 @@ ${contextSummary}`;
       const { data: urlData } = supabase.storage.from("attachments").getPublicUrl(path);
       const fileEntry = { name: file.name, url: urlData.publicUrl, path, uploadedAt: new Date().toISOString().split("T")[0] };
       if (kind === "students") {
-        setStudents(prev => prev.map(s => s.id===entityId ? { ...s, files: [...(s.files||[]), fileEntry] } : s));
+        const newFiles = [...(students.find(s=>s.id===entityId)?.files||[]), fileEntry];
+        setStudents(prev => prev.map(s => s.id===entityId ? { ...s, files: newFiles } : s));
+        updateRow("students", entityId, { files: newFiles });
       } else if (kind === "candidates") {
         setCandidates(prev => prev.map(c => c.id===entityId ? { ...c, files: [...(c.files||[]), fileEntry] } : c));
       } else {
-        setTutors(prev => prev.map(t => t.id===entityId ? { ...t, files: [...(t.files||[]), fileEntry] } : t));
+        const newFiles = [...(tutors.find(t=>t.id===entityId)?.files||[]), fileEntry];
+        setTutors(prev => prev.map(t => t.id===entityId ? { ...t, files: newFiles } : t));
+        updateRow("tutors", entityId, { files: newFiles });
       }
       notify("Файл загружен");
     } catch (e) {
@@ -1096,11 +1220,15 @@ ${contextSummary}`;
       if (fileEntry.path) await supabase.storage.from("attachments").remove([fileEntry.path]);
     } catch (e) {}
     if (kind === "students") {
-      setStudents(prev => prev.map(s => s.id===entityId ? { ...s, files:(s.files||[]).filter(f=>f.path!==fileEntry.path) } : s));
+      const newFiles = (students.find(s=>s.id===entityId)?.files||[]).filter(f=>f.path!==fileEntry.path);
+      setStudents(prev => prev.map(s => s.id===entityId ? { ...s, files:newFiles } : s));
+      updateRow("students", entityId, { files: newFiles });
     } else if (kind === "candidates") {
       setCandidates(prev => prev.map(c => c.id===entityId ? { ...c, files:(c.files||[]).filter(f=>f.path!==fileEntry.path) } : c));
     } else {
-      setTutors(prev => prev.map(t => t.id===entityId ? { ...t, files:(t.files||[]).filter(f=>f.path!==fileEntry.path) } : t));
+      const newFiles = (tutors.find(t=>t.id===entityId)?.files||[]).filter(f=>f.path!==fileEntry.path);
+      setTutors(prev => prev.map(t => t.id===entityId ? { ...t, files:newFiles } : t));
+      updateRow("tutors", entityId, { files: newFiles });
     }
     notify("Файл удалён");
   }
@@ -1127,11 +1255,13 @@ ${contextSummary}`;
   const confirmImport = () => {
     if (importMode === "replace") {
       setStudents(importPreview);
+      replaceTable("students", importPreview);
     } else {
       const normalize = n => n.toLowerCase().trim().replace(/\s+/g," ").replace(/[.,]/g,"");
       const existingNames = students.map(s=>normalize(s.name));
       const newOnes = importPreview.filter(s=>!existingNames.includes(normalize(s.name)));
       setStudents([...students, ...newOnes]);
+      insertRows("students", newOnes);
       notify(`Добавлено ${newOnes.length} учеников, пропущено ${importPreview.length-newOnes.length} дублей`);
     }
     setImportModal(false);
@@ -1140,10 +1270,17 @@ ${contextSummary}`;
   };
 
   // ── Reset all data ──
-  const resetAllData = () => {
+  const resetAllData = async () => {
     if (!window.confirm("Сбросить все данные до демо-версии? Это нельзя отменить.")) return;
     setTutors(initialTutors); setStudents(initialStudents); setLessons(initialLessons);
     setPayments(initialPayments); setSalaries(initialSalaryPayouts);
+    await Promise.all([
+      replaceTable("tutors", initialTutors),
+      replaceTable("students", initialStudents),
+      replaceTable("lessons", initialLessons),
+      replaceTable("payments", initialPayments),
+      replaceTable("salaries", initialSalaryPayouts),
+    ]);
     notify("Данные сброшены");
   };
 
@@ -1164,6 +1301,7 @@ ${contextSummary}`;
     if (removed === 0) { notify("Дубликатов не найдено — данные уже чистые"); return; }
     if (!window.confirm(`Найдено ${removed} дубликатов занятий (было ${lessons.length}, останется ${deduped.length}). Удалить их?`)) return;
     setLessons(deduped);
+    replaceTable("lessons", deduped);
     notify(`Удалено дубликатов: ${removed}. Занятий осталось: ${deduped.length}`);
   };
 
@@ -1216,6 +1354,7 @@ ${contextSummary}`;
       files: [],
     }));
     setStudents([...students, ...newStudents]);
+    insertRows("students", newStudents);
     setFamilyForm({ parentName:"", phone:"", extraPhones:[], address:"", notes:"", children:[emptyChild()] });
     setModal(null); notify(newStudents.length>1 ? `Добавлено детей: ${newStudents.length} — прикрепите документы в карточке` : "Ученик добавлен — прикрепите документы в его карточке");
     setView("students"); setSelTutor(null); setSelStudent(newStudents[0]);
@@ -1225,7 +1364,9 @@ ${contextSummary}`;
     const parts = nTutor.name.trim().split(" ");
     const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
     if (editingTutorId) {
-      setTutors(tutors.map(t => t.id===editingTutorId ? { ...t, ...nTutor, short, rateValue:Number(nTutor.rateValue) } : t));
+      const patch = { ...nTutor, short, rateValue:Number(nTutor.rateValue) };
+      setTutors(tutors.map(t => t.id===editingTutorId ? { ...t, ...patch } : t));
+      updateRow("tutors", editingTutorId, patch);
       setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
       setEditingTutorId(null);
       setModal(null); notify("Данные преподавателя обновлены");
@@ -1233,6 +1374,7 @@ ${contextSummary}`;
     }
     const newTutor = { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue), files:[] };
     setTutors([...tutors, newTutor]);
+    insertRow("tutors", newTutor);
     setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
     setModal(null); notify("Преподаватель добавлен — прикрепите документы в его карточке");
     setView("tutors"); setSelStudent(null); setTTab("overview"); setSelTutor(newTutor);
@@ -1258,6 +1400,7 @@ ${contextSummary}`;
     const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
     const newTutor = { name:c.name, short, phone:c.phone, address:"", notes:c.notes||"", subjects:c.subjects||[], rateType:"percent", rateValue:50, status:"active", color:COLORS[tutors.length % COLORS.length], id:Date.now(), files:c.files||[] };
     setTutors([...tutors, newTutor]);
+    insertRow("tutors", newTutor);
     setCandidates(candidates.map(x=>x.id===c.id?{...x,status:"hired"}:x));
     setSelCandidate(null);
     notify(`${c.name} принят(а) в штат преподавателей!`);
@@ -1275,18 +1418,24 @@ ${contextSummary}`;
   const addPayment = () => {
     if (!nPayment.studentId || !nPayment.amount) return;
     const st = students.find(s=>s.id===Number(nPayment.studentId));
-    setPayments([...payments, { ...nPayment, id:Date.now(), studentName:st?.name||"", amount:Number(nPayment.amount), date:new Date().toISOString().split("T")[0] }]);
-    setStudents(students.map(s=>s.id===Number(nPayment.studentId)?{...s,balance:s.balance+Number(nPayment.amount)}:s));
+    const newPayment = { ...nPayment, id:Date.now(), studentName:st?.name||"", amount:Number(nPayment.amount), date:new Date().toISOString().split("T")[0] };
+    setPayments([...payments, newPayment]);
+    insertRow("payments", newPayment);
+    const newBalance = st.balance + Number(nPayment.amount);
+    setStudents(students.map(s=>s.id===Number(nPayment.studentId)?{...s,balance:newBalance}:s));
+    updateRow("students", Number(nPayment.studentId), { balance: newBalance });
     setNPayment({ studentId:"", amount:"", method:"card", comment:"" });
     setModal(null); notify("Платёж записан");
   };
   const addSalary = () => {
     if (!nSalary.tutorId || !nSalary.amount) return;
-    setSalaries([...salaries, { ...nSalary, id:Date.now(), tutorId:Number(nSalary.tutorId), amount:Number(nSalary.amount), date:new Date().toISOString().split("T")[0] }]);
+    const newSalary = { ...nSalary, id:Date.now(), tutorId:Number(nSalary.tutorId), amount:Number(nSalary.amount), date:new Date().toISOString().split("T")[0] };
+    setSalaries([...salaries, newSalary]);
+    insertRow("salaries", newSalary);
     setNSalary({ tutorId:"", amount:"", comment:"", month:"2026-03" });
     setModal(null); notify("Выплата записана");
   };
-  const completeLesson = id => { setLessons(lessons.map(l=>l.id===id?{...l,status:"completed"}:l)); notify("Занятие проведено"); };
+  const completeLesson = id => { setLessons(lessons.map(l=>l.id===id?{...l,status:"completed"}:l)); updateRow("lessons", id, { status:"completed" }); notify("Занятие проведено"); };
   const sendMailing = () => {
     const cnt = audMap[mDraft.audience]?.length||0;
     setMailings([{ ...mDraft, id:Date.now(), status:"sent", sentAt:new Date().toISOString().split("T")[0], sentCount:cnt }, ...mailings]);
@@ -1708,7 +1857,7 @@ ${contextSummary}`;
                     <button className="bg" onClick={()=>printSchedule(myL, tutors, students, `Преподаватель: ${t.short}`)}>🖨️ Расписание преподавателя</button>
                     <button className="bg" onClick={()=>startEditTutor(t)}>✏️ Редактировать</button>
                     <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
-                      onClick={()=>{ if(window.confirm(`Удалить преподавателя "${t.name}"? Занятия и история останутся в системе.`)){ setTutors(tutors.filter(x=>x.id!==t.id)); setSelTutor(null); notify("Преподаватель удалён"); } }}><Trash2 size={13} /> Удалить</button>
+                      onClick={()=>{ if(window.confirm(`Удалить преподавателя "${t.name}"? Занятия и история останутся в системе.`)){ setTutors(tutors.filter(x=>x.id!==t.id)); deleteRow("tutors", t.id); setSelTutor(null); notify("Преподаватель удалён"); } }}><Trash2 size={13} /> Удалить</button>
                   </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
@@ -1996,7 +2145,7 @@ ${contextSummary}`;
                       <button className="bg" onClick={()=>printSchedule(lessons.filter(l=>l.studentId===selStudentLive.id), tutors, students, `Ученик: ${selStudentLive.name}`)}>🖨️ Расписание ученика</button>
                       <button className="bg" onClick={()=>startEditStudent(selStudentLive)}>✏️ Редактировать</button>
                       <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
-                        onClick={()=>{ if(window.confirm(`Удалить ученика "${selStudentLive.name}"? Занятия и история останутся в системе.`)){ setStudents(students.filter(x=>x.id!==selStudentLive.id)); setSelStudent(null); notify("Ученик удалён"); } }}><Trash2 size={13} /> Удалить</button>
+                        onClick={()=>{ if(window.confirm(`Удалить ученика "${selStudentLive.name}"? Занятия и история останутся в системе.`)){ setStudents(students.filter(x=>x.id!==selStudentLive.id)); deleteRow("students", selStudentLive.id); setSelStudent(null); notify("Ученик удалён"); } }}><Trash2 size={13} /> Удалить</button>
                     </div>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
@@ -2117,6 +2266,7 @@ ${contextSummary}`;
               return { ...base, id: Date.now() + i, date: fmt(d) };
             });
             setLessons(prev => [...prev, ...newLessons]);
+            insertRows("lessons", newLessons);
             setNLesson({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
             setModal(null); setRecurModal(false);
             notify(`Создано ${recurCount} занятий`);
@@ -2163,29 +2313,31 @@ ${contextSummary}`;
               const groupId = editLesson.groupId || Date.now();
               const name = editGroupName || `Группа ${editLesson.subject} ${editLesson.time}`;
               // Remove old records for this group (if any) and the original individual record
+              const oldIds = editLesson.groupId ? lessons.filter(l=>l.groupId===editLesson.groupId).map(l=>l.id) : [editLesson.id];
               let base = lessons.filter(l => (editLesson.groupId ? l.groupId!==editLesson.groupId : true) && l.id!==editLesson.id);
               const mainRows = validRoster.map((r,i)=>{
                 const st = students.find(s=>s.id===Number(r.studentId));
                 return { ...shared, id:groupId+i, studentId:Number(r.studentId), studentName:st?.name||"", price:Number(r.price||0), isGroup:true, groupId, groupName:name };
               });
-              let all = [...base, ...mainRows];
+              const extraRows = [];
               extraDates.forEach((dateStr,di)=>{
                 const gid = groupId + (di+1)*1000;
                 validRoster.forEach((r,i)=>{
                   const st = students.find(s=>s.id===Number(r.studentId));
-                  all.push({ ...shared, id:gid+i, date:dateStr, studentId:Number(r.studentId), studentName:st?.name||"", price:Number(r.price||0), isGroup:true, groupId:gid, groupName:name });
+                  extraRows.push({ ...shared, id:gid+i, date:dateStr, studentId:Number(r.studentId), studentName:st?.name||"", price:Number(r.price||0), isGroup:true, groupId:gid, groupName:name });
                 });
               });
+              let all = [...base, ...mainRows, ...extraRows];
               setLessons(all);
+              deleteRows("lessons", oldIds).then(() => insertRows("lessons", [...mainRows, ...extraRows]));
             } else {
               const st = students.find(s=>s.id===Number(editLesson.studentId));
               const updated = { ...shared, id:editLesson.id, studentId:Number(editLesson.studentId), studentName:st?.name||editLesson.studentName, price:Number(editLesson.price), isGroup:false };
+              const extraRows = extraDates.map((dateStr,di)=>({ ...updated, id:Date.now()+di+1, date:dateStr }));
               let base = lessons.filter(l => l.id!==editLesson.id);
-              let all = [...base, updated];
-              extraDates.forEach((dateStr,di)=>{
-                all.push({ ...updated, id:Date.now()+di+1, date:dateStr });
-              });
+              let all = [...base, updated, ...extraRows];
               setLessons(all);
+              updateRow("lessons", editLesson.id, shared).then(() => insertRows("lessons", extraRows));
             }
             const totalCreated = 1 + extraDates.length;
             setEditLesson(null);
@@ -2193,13 +2345,15 @@ ${contextSummary}`;
           };
           const deleteLesson = id => {
             setLessons(lessons.filter(l=>l.id!==id));
+            deleteRow("lessons", id);
             setEditLesson(null);
             notify("Занятие удалено");
           };
           const deleteGroup = groupId => {
-            const count = lessons.filter(l=>l.groupId===groupId).length;
-            if (!window.confirm(`Удалить всю группу целиком (${count} записей)?`)) return;
+            const groupLessonIds = lessons.filter(l=>l.groupId===groupId).map(l=>l.id);
+            if (!window.confirm(`Удалить всю группу целиком (${groupLessonIds.length} записей)?`)) return;
             setLessons(lessons.filter(l=>l.groupId!==groupId));
+            deleteRows("lessons", groupLessonIds);
             setEditLesson(null);
             notify("Группа удалена");
           };
@@ -2503,7 +2657,7 @@ ${contextSummary}`;
                         <div style={{ display:"flex", gap:6, flexShrink:0 }}>
                           {l.status==="scheduled" && <button className="bg" style={{ fontSize:11, padding:"5px 10px" }} onClick={()=>completeLesson(l.id)}>✓</button>}
                           <button className="bg" style={{ fontSize:11, padding:"5px 10px", background:isEditing?"rgba(99,102,241,0.25)":"" }} onClick={()=>openEditLesson(isEditing?null:l)}>✏️</button>
-                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>{ setLessons(lessons.filter(x=>x.id!==l.id)); notify("Занятие удалено"); }}>🗑</button>
+                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>{ setLessons(lessons.filter(x=>x.id!==l.id)); deleteRow("lessons", l.id); notify("Занятие удалено"); }}>🗑</button>
                         </div>
                       </div>
                     );
@@ -3282,7 +3436,7 @@ ${contextSummary}`;
           const addRequest = () => {
             if (!nRequest.parentName || !nRequest.phone) return;
             setRequests([{ ...nRequest, id:Date.now(), date:new Date().toISOString().split("T")[0], assignedTutorId:null }, ...requests]);
-            setNRequest({ parentName:"", phone:"", studentName:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }], comment:"", status:"new" });
+            setNRequest({ parentName:"", phone:"", comment:"", status:"new", children:[{ studentName:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }] }] });
             setModal(null); notify("Запрос добавлен");
           };
 
@@ -4111,9 +4265,11 @@ ${contextSummary}`;
                         newLessons.forEach((l,li)=>{ all.push({...l, id:gid+li, date:dateStr, groupId:gid}); });
                       });
                       setLessons(prev=>[...prev,...all]);
+                      insertRows("lessons", all);
                       notify(`Создано ${recurDates.length} занятий × ${groupStudents.length} учеников`);
                     } else {
                       setLessons(prev=>[...prev,...newLessons]);
+                      insertRows("lessons", newLessons);
                       notify(`Группа "${name}" добавлена (${groupStudents.length} чел.)`);
                     }
                   } else {
@@ -4124,9 +4280,11 @@ ${contextSummary}`;
                       const recurDates = getRecurDates();
                       const all = recurDates.map((dateStr,i)=>({ ...lesson, id:Date.now()+i, date:dateStr }));
                       setLessons(prev=>[...prev,...all]);
+                      insertRows("lessons", all);
                       notify(`Создано ${recurDates.length} занятий`);
                     } else {
                       setLessons(prev=>[...prev,lesson]);
+                      insertRow("lessons", lesson);
                       notify("Занятие добавлено");
                     }
                   }
@@ -4317,34 +4475,50 @@ ${contextSummary}`;
                 <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО родителя *</div><input placeholder="Иванова Мария" value={nRequest.parentName} onChange={e=>setNRequest({...nRequest,parentName:e.target.value})} /></div>
                 <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nRequest.phone} onChange={e=>setNRequest({...nRequest,phone:e.target.value})} /></div>
               </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Имя ребёнка</div><input placeholder="Иванов Артём" value={nRequest.studentName} onChange={e=>setNRequest({...nRequest,studentName:e.target.value})} /></div>
-                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Класс</div><input placeholder="4 класс" value={nRequest.grade} onChange={e=>setNRequest({...nRequest,grade:e.target.value})} /></div>
-              </div>
-              <div>
-                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы и педагоги</div>
-                {nRequest.subjectTeachers.map((st,si)=>(
-                  <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
-                    <select value={st.subject} onChange={e=>{ const arr=[...nRequest.subjectTeachers]; arr[si]={...arr[si],subject:e.target.value}; setNRequest({...nRequest,subjectTeachers:arr}); }}>
-                      <option value="">Предмет...</option>
-                      {catalogGrouped.map(cat=>(
-                        <optgroup key={cat.id} label={cat.label}>
-                          {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <select value={st.tutorId} onChange={e=>{ const arr=[...nRequest.subjectTeachers]; arr[si]={...arr[si],tutorId:e.target.value}; setNRequest({...nRequest,subjectTeachers:arr}); }}>
-                      <option value="">Педагог...</option>
-                      {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
-                    </select>
-                    {nRequest.subjectTeachers.length>1 && (
-                      <button onClick={()=>setNRequest({...nRequest,subjectTeachers:nRequest.subjectTeachers.filter((_,j)=>j!==si)})}
-                        style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", borderRadius:6, padding:"4px 8px", cursor:"pointer", flexShrink:0 }}><X size={13} /></button>
+              {nRequest.children.map((child, ci) => (
+                <div key={ci} style={{ border:"1px solid #e7eef5", borderRadius:12, padding:12, background:"#f8fafc" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#1da0d4" }}>Ребёнок {ci+1}</div>
+                    {nRequest.children.length>1 && (
+                      <button onClick={()=>setNRequest({...nRequest, children: nRequest.children.filter((_,j)=>j!==ci)})}
+                        style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", borderRadius:6, padding:"3px 8px", cursor:"pointer", fontSize:11 }}><X size={12} /> Убрать</button>
                     )}
                   </div>
-                ))}
-                <button className="bg" style={{ fontSize:11 }} onClick={()=>setNRequest({...nRequest,subjectTeachers:[...nRequest.subjectTeachers,{subject:"",tutorId:""}]})}><Plus size={12} /> Ещё предмет</button>
-              </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:10 }}>
+                    <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Имя ребёнка</div>
+                      <input placeholder="Иванов Артём" value={child.studentName} onChange={e=>{ const arr=[...nRequest.children]; arr[ci]={...arr[ci],studentName:e.target.value}; setNRequest({...nRequest,children:arr}); }} />
+                    </div>
+                    <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Класс</div>
+                      <input placeholder="4 класс" value={child.grade} onChange={e=>{ const arr=[...nRequest.children]; arr[ci]={...arr[ci],grade:e.target.value}; setNRequest({...nRequest,children:arr}); }} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы и педагоги</div>
+                  {child.subjectTeachers.map((st,si)=>(
+                    <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
+                      <select value={st.subject} onChange={e=>{ const arr=[...nRequest.children]; const sts=[...arr[ci].subjectTeachers]; sts[si]={...sts[si],subject:e.target.value}; arr[ci]={...arr[ci],subjectTeachers:sts}; setNRequest({...nRequest,children:arr}); }}>
+                        <option value="">Предмет...</option>
+                        {catalogGrouped.map(cat=>(
+                          <optgroup key={cat.id} label={cat.label}>
+                            {cat.courses.map(c=><option key={c} value={c}>{c}</option>)}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <select value={st.tutorId} onChange={e=>{ const arr=[...nRequest.children]; const sts=[...arr[ci].subjectTeachers]; sts[si]={...sts[si],tutorId:e.target.value}; arr[ci]={...arr[ci],subjectTeachers:sts}; setNRequest({...nRequest,children:arr}); }}>
+                        <option value="">Педагог...</option>
+                        {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                      </select>
+                      {child.subjectTeachers.length>1 && (
+                        <button onClick={()=>{ const arr=[...nRequest.children]; arr[ci]={...arr[ci],subjectTeachers:arr[ci].subjectTeachers.filter((_,j)=>j!==si)}; setNRequest({...nRequest,children:arr}); }}
+                          style={{ background:"rgba(226,87,76,0.1)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", borderRadius:6, padding:"4px 8px", cursor:"pointer", flexShrink:0 }}><X size={13} /></button>
+                      )}
+                    </div>
+                  ))}
+                  <button className="bg" style={{ fontSize:11 }} onClick={()=>{ const arr=[...nRequest.children]; arr[ci]={...arr[ci],subjectTeachers:[...arr[ci].subjectTeachers,{subject:"",tutorId:""}]}; setNRequest({...nRequest,children:arr}); }}><Plus size={12} /> Ещё предмет</button>
+                </div>
+              ))}
+              <button className="bg" onClick={()=>setNRequest({...nRequest, children:[...nRequest.children, { studentName:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }] }]})}>
+                <UserPlus size={14} /> Ещё один ребёнок из этой семьи
+              </button>
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Комментарий / пожелания</div>
                 <textarea rows={3} placeholder="Опишите запрос родителя..." value={nRequest.comment} onChange={e=>setNRequest({...nRequest,comment:e.target.value})} />
               </div>
@@ -4358,7 +4532,23 @@ ${contextSummary}`;
                 </select>
               </div>
               <div style={{ display:"flex", gap:10, marginTop:4 }}>
-                <button className="bp" style={{ flex:1 }} onClick={()=>{ if(!nRequest.parentName||!nRequest.phone)return; setRequests([{...nRequest,subjectTeachers:nRequest.subjectTeachers.filter(st=>st.subject),id:Date.now(),date:new Date().toISOString().split("T")[0],assignedTutorId:null},...requests]); setNRequest({parentName:"",phone:"",studentName:"",grade:"",subjectTeachers:[{ subject:"", tutorId:"" }],comment:"",status:"new"}); setModal(null); notify("Запрос добавлен"); }}>Добавить запрос</button>
+                <button className="bp" style={{ flex:1 }} onClick={()=>{
+                  if(!nRequest.parentName||!nRequest.phone)return;
+                  const validChildren = nRequest.children.filter(c=>c.studentName);
+                  if (validChildren.length===0) return;
+                  const dateStr = new Date().toISOString().split("T")[0];
+                  const newRows = validChildren.map((c,i)=>({
+                    id: Date.now()+i, parentName: nRequest.parentName, phone: nRequest.phone,
+                    studentName: c.studentName, grade: c.grade,
+                    subjectTeachers: c.subjectTeachers.filter(st=>st.subject),
+                    comment: nRequest.comment, status: nRequest.status,
+                    date: dateStr, assignedTutorId: null,
+                  }));
+                  setRequests([...newRows, ...requests]);
+                  setNRequest({ parentName:"", phone:"", comment:"", status:"new", children:[{ studentName:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }] }] });
+                  setModal(null);
+                  notify(newRows.length>1 ? `Добавлено заявок: ${newRows.length}` : "Запрос добавлен");
+                }}>Добавить запрос</button>
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
               </div>
             </div>
