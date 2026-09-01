@@ -463,7 +463,7 @@ const RequestTableRow = memo(function RequestTableRow({ req, reqCfg, assignedTut
       <td style={{ padding:"11px 14px" }}>
         <select value={req.assignedTutorId||""} onChange={e=>onAssignTutor(req.id, e.target.value)} style={{ fontSize:12, padding:"5px 8px" }}>
           <option value="">—</option>
-          {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+          {tutors.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </td>
       <td style={{ padding:"11px 14px" }}>
@@ -857,13 +857,14 @@ export default function App() {
     setModal(null); setEditingStudentId(null); setNStudentEdit(null);
     notify(siblingCount>0 ? `Данные ученика обновлены, контакты семьи синхронизированы у ${siblingCount} братьев/сестёр` : "Данные ученика обновлены");
   }
-  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
   const [editingTutorId, setEditingTutorId] = useState(null);
   const [editingCatalogId, setEditingCatalogId] = useState(null);
   const [nLesson,   setNLesson]   = useState({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
   const [lessonType,  setLessonType]  = useState("individual"); // individual | group
   const [groupStudents, setGroupStudents] = useState([]); // [{studentId, price}]
   const [groupName,   setGroupName]   = useState("");
+  const [lessonStudentLocked, setLessonStudentLocked] = useState(false); // true when opened from a student's own profile — no need to search for them again
   const [nPayment,  setNPayment]  = useState({ studentId:"", amount:"", method:"card", comment:"" });
   const [nSalary,   setNSalary]   = useState({ tutorId:"", amount:"", comment:"", month:"2026-03" });
   const [mDraft,    setMDraft]    = useState({ title:"", channel:"whatsapp", audience:"all", text:"" });
@@ -1367,7 +1368,7 @@ ${contextSummary}`;
       const patch = { ...nTutor, short, rateValue:Number(nTutor.rateValue) };
       setTutors(tutors.map(t => t.id===editingTutorId ? { ...t, ...patch } : t));
       updateRow("tutors", editingTutorId, patch);
-      setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+      setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
       setEditingTutorId(null);
       setModal(null); notify("Данные преподавателя обновлены");
       return;
@@ -1375,12 +1376,12 @@ ${contextSummary}`;
     const newTutor = { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue), files:[] };
     setTutors([...tutors, newTutor]);
     insertRow("tutors", newTutor);
-    setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+    setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
     setModal(null); notify("Преподаватель добавлен — прикрепите документы в его карточке");
     setView("tutors"); setSelStudent(null); setTTab("overview"); setSelTutor(newTutor);
   };
   const startEditTutor = (t) => {
-    setNTutor({ name:t.name, phone:t.phone, address:t.address||"", notes:t.notes||"", subjects:t.subjects||[], rateType:t.rateType, rateValue:t.rateValue, status:t.status, color:t.color });
+    setNTutor({ name:t.name, phone:t.phone, email:t.email||"", address:t.address||"", notes:t.notes||"", subjects:t.subjects||[], rateType:t.rateType, rateValue:t.rateValue, status:t.status, color:t.color });
     setEditingTutorId(t.id);
     setModal("addTutor");
   };
@@ -1846,6 +1847,7 @@ ${contextSummary}`;
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:22, fontWeight:700, color:"#12283d" }}>{t.name}</div>
                     <div style={{ fontSize:16, fontWeight:600, color:"#22344a", marginTop:6, display:"flex", alignItems:"center", gap:6 }}><Phone size={14} color="#1da0d4" /> {t.phone}</div>
+                    {t.email && <div style={{ fontSize:14, color:"#55677a", marginTop:4, display:"flex", alignItems:"center", gap:6 }}><Mail size={14} color="#1da0d4" /> {t.email}</div>}
                     {t.address && <div style={{ fontSize:14, color:"#55677a", marginTop:4, display:"flex", alignItems:"center", gap:6 }}><MapPin size={14} color="#1da0d4" /> {t.address}</div>}
                     <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8 }}>
                       {t.subjects.map(s=><Tag key={s} c="#1da0d4" bg="rgba(99,102,241,0.15)">{s}</Tag>)}
@@ -2141,7 +2143,7 @@ ${contextSummary}`;
                     </div>
                     <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"flex-end" }}>
                       <Tag c={statusCfg[selStudentLive.status]?.color} bg={statusCfg[selStudentLive.status]?.bg}>{statusCfg[selStudentLive.status]?.label}</Tag>
-                      <button className="bp" onClick={()=>{ setNLesson({ studentId:String(selStudentLive.id), subject:selStudentLive.subjects?.[0]||"", tutorId:selStudentLive.subjectTeachers?.[0]?.tutorId||"", date:"", time:"", duration:60, price:1200 }); setLessonType("individual"); setModal("addLesson"); }}><Calendar size={14} /> Запланировать занятие</button>
+                      <button className="bp" onClick={()=>{ setNLesson({ studentId:String(selStudentLive.id), subject:selStudentLive.subjects?.[0]||"", tutorId:selStudentLive.subjectTeachers?.[0]?.tutorId||"", date:"", time:"", duration:60, price:1200 }); setLessonType("individual"); setLessonStudentLocked(true); setModal("addLesson"); }}><Calendar size={14} /> Запланировать занятие</button>
                       <button className="bg" onClick={()=>printSchedule(lessons.filter(l=>l.studentId===selStudentLive.id), tutors, students, `Ученик: ${selStudentLive.name}`)}>🖨️ Расписание ученика</button>
                       <button className="bg" onClick={()=>startEditStudent(selStudentLive)}>✏️ Редактировать</button>
                       <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
@@ -2378,7 +2380,7 @@ ${contextSummary}`;
                         style={{ background:schedView===k?"rgba(29,160,212,0.15)":"transparent", color:schedView===k?"#1da0d4":"#55677a", display:"flex", alignItems:"center", gap:6, fontSize:14 }}><Ic size={15} />{l}</button>
                     ))}
                   </div>
-                  <button className="bp" onClick={()=>setModal("addLesson")} style={{ fontSize:14, display:"flex", alignItems:"center", gap:6 }}><Plus size={15} /> Добавить занятие</button>
+                  <button className="bp" onClick={()=>{ setLessonStudentLocked(false); setModal("addLesson"); }} style={{ fontSize:14, display:"flex", alignItems:"center", gap:6 }}><Plus size={15} /> Добавить занятие</button>
                   <button className="bg" style={{ fontSize:14 }} onClick={()=>printSchedule(allLessonsFiltered, tutors, students, `${fmtLabel(weekDates[0])} — ${fmtLabel(weekDates[6])}`)}><Printer size={14} /> Печать</button>
                 </div>
               </div>
@@ -2423,7 +2425,7 @@ ${contextSummary}`;
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
                       <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Преподаватель</div>
                         <select value={editLesson.tutorId} onChange={e=>{ const t=tutors.find(x=>x.id===Number(e.target.value)); setEditLesson({...editLesson,tutorId:Number(e.target.value),tutorShort:t?.short||""}); }}>
-                          {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                          {tutors.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                       </div>
                       <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Предмет</div>
@@ -2600,7 +2602,7 @@ ${contextSummary}`;
                           return (
                             <div key={di}
                               style={{ borderLeft:"1px solid #f2f6fa", padding:"3px 4px", background:isToday?"rgba(99,102,241,0.03)":"transparent", cursor:"pointer" }}
-                              onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:slot})); setModal("addLesson"); }}>
+                              onClick={()=>{ setNLesson(prev=>({...prev,date:dateStr,time:slot})); setLessonStudentLocked(false); setModal("addLesson"); }}>
                               {dayLessons.map(l=>{
                                 const tu=tutors.find(x=>x.id===l.tutorId);
                                 const isActive = editLesson?.id===l.id;
@@ -2767,7 +2769,7 @@ ${contextSummary}`;
                                 return (
                                   <td key={t.id}
                                     style={{ padding:"2px 4px", border:"1px solid #f2f6fa", verticalAlign:"top", background:`${t.color}06`, cursor:"pointer", minWidth:130 }}
-                                    onClick={()=>{ setNLesson(prev=>({...prev,date:selectedDate,time:slot,tutorId:String(t.id)})); setModal("addLesson"); }}>
+                                    onClick={()=>{ setNLesson(prev=>({...prev,date:selectedDate,time:slot,tutorId:String(t.id)})); setLessonStudentLocked(false); setModal("addLesson"); }}>
                                     {cellLessons.map(l=>{
                                       const isActive = editLesson?.id===l.id;
                                       return (
@@ -3766,12 +3768,15 @@ ${contextSummary}`;
       {/* ══ MODALS ══ */}
 
       {modal==="addTutor" && (
-        <div className="ov" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" }); }}>
+        <div className="ov" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" }); }}>
           <div className="mo" onClick={e=>e.stopPropagation()}>
             <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>{editingTutorId ? "Редактирование преподавателя" : "Новый преподаватель"}</h2>
             <div style={{ display:"grid", gap:14 }}>
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО *</div><input placeholder="Иванова Наталья Владимировна" value={nTutor.name} onChange={e=>setNTutor({...nTutor,name:e.target.value})} /></div>
-              <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nTutor.phone} onChange={e=>setNTutor({...nTutor,phone:e.target.value})} /></div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nTutor.phone} onChange={e=>setNTutor({...nTutor,phone:e.target.value})} /></div>
+                <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>✉️ Email</div><input type="email" placeholder="ivanova@mail.ru" value={nTutor.email} onChange={e=>setNTutor({...nTutor,email:e.target.value})} /></div>
+              </div>
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>📍 Адрес</div><input placeholder="ул. Ленина, д. 12, кв. 34" value={nTutor.address} onChange={e=>setNTutor({...nTutor,address:e.target.value})} /></div>
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Примечания</div><textarea rows={2} placeholder="Любая дополнительная информация" value={nTutor.notes} onChange={e=>setNTutor({...nTutor,notes:e.target.value})} /></div>
               <div>
@@ -3817,7 +3822,7 @@ ${contextSummary}`;
               </div>
               <div style={{ display:"flex", gap:10, marginTop:8 }}>
                 <button className="bp" style={{ flex:1 }} onClick={addTutor}>{editingTutorId ? "Сохранить" : "Добавить"}</button>
-                <button className="bg" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" }); }}>Отмена</button>
+                <button className="bg" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" }); }}>Отмена</button>
               </div>
             </div>
           </div>
@@ -3890,7 +3895,7 @@ ${contextSummary}`;
                         </select>
                         <select value={st.tutorId} onChange={e=>{ const arr=[...familyForm.children]; const sts=[...arr[ci].subjectTeachers]; sts[si]={...sts[si],tutorId:e.target.value}; arr[ci]={...arr[ci],subjectTeachers:sts}; setFamilyForm({...familyForm,children:arr}); }}>
                           <option value="">Педагог...</option>
-                          {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                          {tutors.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                         {child.subjectTeachers.length>1 && (
                           <button onClick={()=>{ const arr=[...familyForm.children]; arr[ci]={...arr[ci],subjectTeachers:arr[ci].subjectTeachers.filter((_,j)=>j!==si)}; setFamilyForm({...familyForm,children:arr}); }}
@@ -3967,7 +3972,7 @@ ${contextSummary}`;
                     </select>
                     <select value={st.tutorId} onChange={e=>{ const arr=[...nStudentEdit.subjectTeachers]; arr[si]={...arr[si],tutorId:e.target.value}; setNStudentEdit({...nStudentEdit,subjectTeachers:arr}); }}>
                       <option value="">Педагог...</option>
-                      {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                      {tutors.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                     {nStudentEdit.subjectTeachers.length>1 && (
                       <button onClick={()=>setNStudentEdit({...nStudentEdit,subjectTeachers:nStudentEdit.subjectTeachers.filter((_,j)=>j!==si)})}
@@ -4002,7 +4007,7 @@ ${contextSummary}`;
       )}
 
       {modal==="addLesson" && (
-        <div className="ov" onClick={()=>{ setModal(null); setRecurModal(false); setLessonType("individual"); setGroupStudents([]); setGroupName(""); }}>
+        <div className="ov" onClick={()=>{ setModal(null); setRecurModal(false); setLessonType("individual"); setGroupStudents([]); setGroupName(""); setLessonStudentLocked(false); }}>
           <div className="mo" style={{ width:580, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
 
             {/* ── TYPE SWITCHER ── */}
@@ -4112,10 +4117,22 @@ ${contextSummary}`;
 
               {lessonType==="individual" && (
                 <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Ученик *</div>
-                  <select value={nLesson.studentId} onChange={e=>setNLesson({...nLesson,studentId:e.target.value})}>
-                    <option value="">Выберите ученика</option>
-                    {students.map(s=><option key={s.id} value={s.id}>{s.name} {s.school?`· ${s.school}`:""}</option>)}
-                  </select>
+                  {lessonStudentLocked && nLesson.studentId ? (
+                    (() => {
+                      const st = students.find(s=>s.id===Number(nLesson.studentId));
+                      return (
+                        <div style={{ display:"flex", alignItems:"center", gap:10, background:"#f2f6fa", border:"1px solid #dbe6f0", borderRadius:10, padding:"9px 14px" }}>
+                          <Av name={st?.name||"?"} color="#1da0d4" size={28} />
+                          <div style={{ fontWeight:700, fontSize:14 }}>{st?.name}</div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <select value={nLesson.studentId} onChange={e=>setNLesson({...nLesson,studentId:e.target.value})}>
+                      <option value="">Выберите ученика</option>
+                      {students.map(s=><option key={s.id} value={s.id}>{s.name} {s.school?`· ${s.school}`:""}</option>)}
+                    </select>
+                  )}
                   {nLesson.studentId && (()=>{
                     const st = students.find(s=>s.id===Number(nLesson.studentId));
                     if (!st) return null;
@@ -4290,14 +4307,14 @@ ${contextSummary}`;
                   }
                   setNLesson({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
                   setGroupStudents([]); setGroupName(""); setRecurModal(false); setLessonType("individual");
-                  setRecurWeekdays([]); setRecurEndDate("");
+                  setRecurWeekdays([]); setRecurEndDate(""); setLessonStudentLocked(false);
                   setModal(null);
                 }}>
                   {lessonType==="group"
                     ? (recurModal ? `🔁 Создать серию для группы (${groupStudents.length} уч.)` : `👥 Создать групповое (${groupStudents.length} уч.)`)
                     : (recurModal ? "🔁 Создать серию занятий" : "👤 Добавить занятие")}
                 </button>
-                <button className="bg" onClick={()=>{ setModal(null); setRecurModal(false); setLessonType("individual"); setGroupStudents([]); setGroupName(""); }}>Отмена</button>
+                <button className="bg" onClick={()=>{ setModal(null); setRecurModal(false); setLessonType("individual"); setGroupStudents([]); setGroupName(""); setLessonStudentLocked(false); }}>Отмена</button>
               </div>
             </div>
           </div>
@@ -4505,7 +4522,7 @@ ${contextSummary}`;
                       </select>
                       <select value={st.tutorId} onChange={e=>{ const arr=[...nRequest.children]; const sts=[...arr[ci].subjectTeachers]; sts[si]={...sts[si],tutorId:e.target.value}; arr[ci]={...arr[ci],subjectTeachers:sts}; setNRequest({...nRequest,children:arr}); }}>
                         <option value="">Педагог...</option>
-                        {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                        {tutors.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
                       {child.subjectTeachers.length>1 && (
                         <button onClick={()=>{ const arr=[...nRequest.children]; arr[ci]={...arr[ci],subjectTeachers:arr[ci].subjectTeachers.filter((_,j)=>j!==si)}; setNRequest({...nRequest,children:arr}); }}
@@ -4592,7 +4609,7 @@ ${contextSummary}`;
                       </select>
                       <select value={st.tutorId} onChange={e=>{ const arr=[...editingRequest.subjectTeachers]; arr[si]={...arr[si],tutorId:e.target.value}; setEditingRequest({...editingRequest,subjectTeachers:arr}); }}>
                         <option value="">Педагог...</option>
-                        {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                        {tutors.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
                       {editingRequest.subjectTeachers.length>1 && (
                         <button onClick={()=>setEditingRequest({...editingRequest,subjectTeachers:editingRequest.subjectTeachers.filter((_,j)=>j!==si)})}
@@ -4611,7 +4628,7 @@ ${contextSummary}`;
                   <div><div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Педагог</div>
                     <select value={editingRequest.assignedTutorId||""} onChange={e=>setEditingRequest({...editingRequest,assignedTutorId:e.target.value?Number(e.target.value):null})}>
                       <option value="">Не назначен</option>
-                      {tutors.map(t=><option key={t.id} value={t.id}>{t.short}</option>)}
+                      {tutors.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                   </div>
                 </div>
