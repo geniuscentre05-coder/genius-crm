@@ -1679,25 +1679,27 @@ ${contextSummary}`;
   if (!currentUser) {
     return (
       <div style={{ fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif", background:"linear-gradient(135deg,#1da0d4,#5cb85c)", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
-        <div style={{ background:"#ffffff", borderRadius:20, padding:36, width:360, boxShadow:"0 24px 48px rgba(18,40,61,.25)", textAlign:"center" }}>
-          <img src="/logo.jpg" alt="Гений" style={{ width:72, height:72, borderRadius:"50%", margin:"0 auto 16px", objectFit:"cover" }} />
-          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:24, color:"#12283d", marginBottom:4 }}>Гений CRM</div>
-          <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:24 }}>Образовательный центр</div>
-          <div style={{ textAlign:"left", marginBottom:12 }}>
-            <div style={{ fontSize:12, color:"#55677a", marginBottom:5 }}>Логин</div>
+        <div style={{ background:"#ffffff", borderRadius:24, padding:"48px 44px", width:460, boxShadow:"0 24px 64px rgba(18,40,61,.3)", textAlign:"center" }}>
+          <img src="/logo.jpg" alt="Гений" style={{ width:96, height:96, borderRadius:"50%", margin:"0 auto 20px", objectFit:"cover" }} />
+          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:30, color:"#12283d", marginBottom:6 }}>Гений CRM</div>
+          <div style={{ fontSize:14, color:"#7a8a9c", marginBottom:32 }}>Образовательный центр</div>
+          <div style={{ textAlign:"left", marginBottom:16 }}>
+            <div style={{ fontSize:14, color:"#55677a", marginBottom:7, fontWeight:600 }}>Логин</div>
             <input autoFocus placeholder="Введите логин" value={loginInput}
+              style={{ fontSize:16, padding:"14px 18px" }}
               onChange={e=>{ setLoginInput(e.target.value); setLoginError(""); }}
               onKeyDown={e=>e.key==="Enter" && doLogin()} />
           </div>
-          <div style={{ textAlign:"left", marginBottom:loginError?8:20 }}>
-            <div style={{ fontSize:12, color:"#55677a", marginBottom:5 }}>Пароль</div>
+          <div style={{ textAlign:"left", marginBottom:loginError?12:28 }}>
+            <div style={{ fontSize:14, color:"#55677a", marginBottom:7, fontWeight:600 }}>Пароль</div>
             <input type="password" placeholder="Введите пароль" value={passInput}
+              style={{ fontSize:16, padding:"14px 18px" }}
               onChange={e=>{ setPassInput(e.target.value); setLoginError(""); }}
               onKeyDown={e=>e.key==="Enter" && doLogin()} />
           </div>
-          {loginError && <div style={{ color:"#e2574c", fontSize:12, marginBottom:14 }}>{loginError}</div>}
-          <button className="bp" style={{ width:"100%" }} onClick={doLogin} disabled={loginBusy}>
-            {loginBusy ? "Вхожу..." : "Войти"}
+          {loginError && <div style={{ color:"#e2574c", fontSize:13, marginBottom:16 }}>{loginError}</div>}
+          <button className="bp" style={{ width:"100%", fontSize:16, padding:"14px" }} onClick={doLogin} disabled={loginBusy}>
+            {loginBusy ? "Вхожу..." : "Войти →"}
           </button>
         </div>
       </div>
