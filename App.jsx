@@ -1289,81 +1289,93 @@ ${contextSummary}`;
   // recurring group series accidentally shared one groupId across every date,
   // which could balloon into hundreds/thousands of duplicate rows and make the
   // whole app (especially the schedule) freeze on load.
-  // ── РЕЗЕРВНЫЕ КОПИИ ──────────────────────────────────────────────────
-  // Скачивает АБСОЛЮТНО все данные в один файл на компьютер. Это защита
-  // от любых сбоев: базы, сети, случайного удаления, ошибок в коде.
+  // ── ОБЛАЧНЫЕ РЕЗЕРВНЫЕ КОПИИ ─────────────────────────────────────────
+  // Сохраняет полный снимок данных в таблицу backups прямо в Supabase.
+  // Ничего скачивать не нужно — копии хранятся в облаке, доступны с
+  // любого устройства, восстанавливаются одной кнопкой прямо в CRM.
   const [lastBackup, setLastBackup] = useState(() => localStorage.getItem("lastBackupDate") || null);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [backupList, setBackupList] = useState([]);
+  const [showBackups, setShowBackups] = useState(false);
 
-  const downloadBackup = async () => {
+  // Автосохранение раз в 24 часа
+  useEffect(() => {
+    const lastTs = localStorage.getItem("lastBackupTs");
+    const hoursSince = lastTs ? (Date.now() - Number(lastTs)) / 3600000 : 999;
+    if (hoursSince >= 24) {
+      // Делаем тихий автобэкап через 10 секунд после загрузки
+      const t = setTimeout(() => saveCloudBackup("Авто"), 10000);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
+  const saveCloudBackup = async (label = "Ручная") => {
     setBackupBusy(true);
     try {
-      // Берём данные напрямую из базы (а не с экрана) — так копия точно полная
       const [t, s, l, p, sal] = await Promise.all([
         fetchTable("tutors"), fetchTable("students"), fetchTable("lessons"),
         fetchTable("payments"), fetchTable("salaries"),
       ]);
-      const backup = {
-        _формат: "Резервная копия ГЕНИЙ CRM",
-        _дата: new Date().toISOString(),
-        _версия: 1,
-        tutors: t || tutors,
-        students: s || students,
-        lessons: l || lessons,
-        payments: p || payments,
-        salaries: sal || salaries,
+      const data = {
+        tutors: t || tutors, students: s || students, lessons: l || lessons,
+        payments: p || payments, salaries: sal || salaries,
         mailings, requests, pricing, rules, courseCatalog, candidates,
       };
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const d = new Date();
-      const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}_${String(d.getHours()).padStart(2,"0")}-${String(d.getMinutes()).padStart(2,"0")}`;
-      a.href = url;
-      a.download = `Гений-CRM-копия-${stamp}.json`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const { error } = await supabase.from("backups").insert({
+        label: `${label} — ${new Date().toLocaleString("ru-RU")}`,
+        students_count: (s || students).length,
+        lessons_count: (l || lessons).length,
+        data,
+      });
+      if (error) throw error;
+      // Оставляем только последние 30 копий
+      const { data: old } = await supabase.from("backups").select("id").order("created_at", { ascending: true });
+      if (old && old.length > 30) {
+        const toDelete = old.slice(0, old.length - 30).map(r => r.id);
+        await supabase.from("backups").delete().in("id", toDelete);
+      }
       const today = new Date().toISOString().split("T")[0];
       localStorage.setItem("lastBackupDate", today);
+      localStorage.setItem("lastBackupTs", String(Date.now()));
       setLastBackup(today);
-      notify(`Копия сохранена: ${(backup.students||[]).length} учеников, ${(backup.lessons||[]).length} занятий`);
+      if (label !== "Авто") notify(`Копия сохранена в облако: ${(s||students).length} учеников, ${(l||lessons).length} занятий`);
     } catch (e) {
-      notify("Не удалось создать копию: " + e.message, "error");
+      notify("Не удалось сохранить копию: " + e.message, "error");
     }
     setBackupBusy(false);
   };
 
-  const restoreBackupRef = useRef(null);
-  const restoreFromBackup = async (file) => {
-    if (!file) return;
+  const loadBackupList = async () => {
+    const { data } = await supabase.from("backups").select("id, created_at, label, students_count, lessons_count").order("created_at", { ascending: false }).limit(30);
+    setBackupList(data || []);
+    setShowBackups(true);
+  };
+
+  const restoreCloudBackup = async (backupId, label) => {
+    if (!window.confirm(`Восстановить данные из копии:\n«${label}»?\n\nТекущие данные будут заменены.`)) return;
     setBackupBusy(true);
     try {
-      const text = await file.text();
-      const b = JSON.parse(text);
-      if (!b.students && !b.tutors) { notify("Это не похоже на файл копии CRM", "error"); setBackupBusy(false); return; }
-      const summary = `Восстановить данные из копии от ${b._дата ? new Date(b._дата).toLocaleString("ru-RU") : "неизвестной даты"}?\n\n` +
-        `Преподавателей: ${(b.tutors||[]).length}\nУчеников: ${(b.students||[]).length}\n` +
-        `Занятий: ${(b.lessons||[]).length}\nПлатежей: ${(b.payments||[]).length}\n\n` +
-        `ВНИМАНИЕ: текущие данные будут полностью заменены на данные из файла.`;
-      if (!window.confirm(summary)) { setBackupBusy(false); return; }
-
-      // Порядок важен: сначала те, на кого ссылаются остальные
+      const { data: row } = await supabase.from("backups").select("data").eq("id", backupId).single();
+      if (!row?.data) throw new Error("Копия не найдена");
+      const b = row.data;
       await replaceTable("tutors", b.tutors || []);
       await replaceTable("students", b.students || []);
       await replaceTable("lessons", b.lessons || []);
       await replaceTable("payments", b.payments || []);
       await replaceTable("salaries", b.salaries || []);
-      setTutors(b.tutors || []); setStudents(b.students || []); setLessons(b.lessons || []);
-      setPayments(b.payments || []); setSalaries(b.salaries || []);
+      setTutors(b.tutors || []); setStudents(b.students || []);
+      setLessons(b.lessons || []); setPayments(b.payments || []);
+      setSalaries(b.salaries || []);
       if (b.mailings) setMailings(b.mailings);
       if (b.requests) setRequests(b.requests);
       if (b.pricing) setPricing(b.pricing);
       if (b.rules) setRules(b.rules);
       if (b.courseCatalog) setCourseCatalog(b.courseCatalog);
       if (b.candidates) setCandidates(b.candidates);
-      notify("Данные восстановлены из копии");
+      setShowBackups(false);
+      notify("Данные восстановлены из облачной копии ✅");
     } catch (e) {
-      notify("Ошибка при восстановлении: " + e.message, "error");
+      notify("Ошибка восстановления: " + e.message, "error");
     }
     setBackupBusy(false);
   };
@@ -1763,23 +1775,21 @@ ${contextSummary}`;
             🧹 Убрать дубликаты занятий
           </button>
 
-          {/* ── РЕЗЕРВНАЯ КОПИЯ ── */}
+          {/* ── ОБЛАЧНЫЕ РЕЗЕРВНЫЕ КОПИИ ── */}
           <div style={{ marginTop:10, background: backupOverdue ? "rgba(245,166,35,0.25)" : "rgba(255,255,255,0.12)", border:`1px solid ${backupOverdue ? "rgba(245,166,35,0.6)" : "rgba(255,255,255,0.25)"}`, borderRadius:12, padding:10 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:"#ffffff", marginBottom:2 }}>🛡️ Резервная копия</div>
+            <div style={{ fontSize:11, fontWeight:700, color:"#ffffff", marginBottom:2 }}>🛡️ Резервные копии</div>
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.75)", marginBottom:8, lineHeight:1.4 }}>
               {lastBackup ? `Последняя: ${new Date(lastBackup).toLocaleDateString("ru-RU")}` : "Ещё ни разу не делали"}
-              {backupOverdue && " · пора сделать новую"}
+              {backupOverdue && " · пора сохранить"}
             </div>
-            <button onClick={downloadBackup} disabled={backupBusy}
+            <button onClick={()=>saveCloudBackup("Ручная")} disabled={backupBusy}
               style={{ width:"100%", padding:"8px", background:"#ffffff", border:"none", borderRadius:8, color:"#1da0d4", fontSize:11, fontWeight:700, cursor:backupBusy?"wait":"pointer", fontFamily:"inherit", marginBottom:5 }}>
-              {backupBusy ? "Подождите..." : "💾 Скачать копию на компьютер"}
+              {backupBusy ? "Сохраняю..." : "☁️ Сохранить копию в облако"}
             </button>
-            <button onClick={()=>restoreBackupRef.current?.click()} disabled={backupBusy}
+            <button onClick={loadBackupList} disabled={backupBusy}
               style={{ width:"100%", padding:"6px", background:"transparent", border:"1px solid rgba(255,255,255,0.4)", borderRadius:8, color:"#ffffff", fontSize:10, cursor:backupBusy?"wait":"pointer", fontFamily:"inherit" }}>
               ↩️ Восстановить из копии
             </button>
-            <input ref={restoreBackupRef} type="file" accept=".json" style={{ display:"none" }}
-              onChange={e=>{ restoreFromBackup(e.target.files?.[0]); e.target.value=""; }} />
           </div>
 
           {trash.length > 0 && (
@@ -4707,6 +4717,39 @@ ${contextSummary}`;
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ОБЛАЧНЫЕ КОПИИ — СПИСОК ── */}
+      {showBackups && (
+        <div className="ov" onClick={()=>setShowBackups(false)}>
+          <div className="mo" style={{ width:560, maxHeight:"85vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 8px", fontSize:19, fontWeight:700 }}>☁️ Резервные копии в облаке</h2>
+            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:16 }}>
+              Хранятся последние 30 копий. Автосохранение происходит каждые 24 часа.
+            </div>
+            {backupList.length===0 ? (
+              <div style={{ padding:"40px", textAlign:"center", color:"#a9b8c6" }}>Копий пока нет — нажмите «Сохранить копию в облако»</div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {backupList.map(b=>(
+                  <div key={b.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, border:"1px solid #dbe6f0", borderRadius:10, padding:"12px 14px" }}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:600, color:"#12283d" }}>{b.label}</div>
+                      <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>
+                        👥 {b.students_count} учеников · 📅 {b.lessons_count} занятий
+                      </div>
+                    </div>
+                    <button className="bp" style={{ fontSize:11, padding:"7px 14px", flexShrink:0 }}
+                      onClick={()=>restoreCloudBackup(b.id, b.label)}>
+                      ↩️ Восстановить
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button className="bg" style={{ width:"100%", marginTop:16 }} onClick={()=>setShowBackups(false)}>Закрыть</button>
           </div>
         </div>
       )}
