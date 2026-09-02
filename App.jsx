@@ -1289,6 +1289,118 @@ ${contextSummary}`;
   // recurring group series accidentally shared one groupId across every date,
   // which could balloon into hundreds/thousands of duplicate rows and make the
   // whole app (especially the schedule) freeze on load.
+  // ── РЕЗЕРВНЫЕ КОПИИ ──────────────────────────────────────────────────
+  // Скачивает АБСОЛЮТНО все данные в один файл на компьютер. Это защита
+  // от любых сбоев: базы, сети, случайного удаления, ошибок в коде.
+  const [lastBackup, setLastBackup] = useState(() => localStorage.getItem("lastBackupDate") || null);
+  const [backupBusy, setBackupBusy] = useState(false);
+
+  const downloadBackup = async () => {
+    setBackupBusy(true);
+    try {
+      // Берём данные напрямую из базы (а не с экрана) — так копия точно полная
+      const [t, s, l, p, sal] = await Promise.all([
+        fetchTable("tutors"), fetchTable("students"), fetchTable("lessons"),
+        fetchTable("payments"), fetchTable("salaries"),
+      ]);
+      const backup = {
+        _формат: "Резервная копия ГЕНИЙ CRM",
+        _дата: new Date().toISOString(),
+        _версия: 1,
+        tutors: t || tutors,
+        students: s || students,
+        lessons: l || lessons,
+        payments: p || payments,
+        salaries: sal || salaries,
+        mailings, requests, pricing, rules, courseCatalog, candidates,
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const d = new Date();
+      const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}_${String(d.getHours()).padStart(2,"0")}-${String(d.getMinutes()).padStart(2,"0")}`;
+      a.href = url;
+      a.download = `Гений-CRM-копия-${stamp}.json`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      const today = new Date().toISOString().split("T")[0];
+      localStorage.setItem("lastBackupDate", today);
+      setLastBackup(today);
+      notify(`Копия сохранена: ${(backup.students||[]).length} учеников, ${(backup.lessons||[]).length} занятий`);
+    } catch (e) {
+      notify("Не удалось создать копию: " + e.message, "error");
+    }
+    setBackupBusy(false);
+  };
+
+  const restoreBackupRef = useRef(null);
+  const restoreFromBackup = async (file) => {
+    if (!file) return;
+    setBackupBusy(true);
+    try {
+      const text = await file.text();
+      const b = JSON.parse(text);
+      if (!b.students && !b.tutors) { notify("Это не похоже на файл копии CRM", "error"); setBackupBusy(false); return; }
+      const summary = `Восстановить данные из копии от ${b._дата ? new Date(b._дата).toLocaleString("ru-RU") : "неизвестной даты"}?\n\n` +
+        `Преподавателей: ${(b.tutors||[]).length}\nУчеников: ${(b.students||[]).length}\n` +
+        `Занятий: ${(b.lessons||[]).length}\nПлатежей: ${(b.payments||[]).length}\n\n` +
+        `ВНИМАНИЕ: текущие данные будут полностью заменены на данные из файла.`;
+      if (!window.confirm(summary)) { setBackupBusy(false); return; }
+
+      // Порядок важен: сначала те, на кого ссылаются остальные
+      await replaceTable("tutors", b.tutors || []);
+      await replaceTable("students", b.students || []);
+      await replaceTable("lessons", b.lessons || []);
+      await replaceTable("payments", b.payments || []);
+      await replaceTable("salaries", b.salaries || []);
+      setTutors(b.tutors || []); setStudents(b.students || []); setLessons(b.lessons || []);
+      setPayments(b.payments || []); setSalaries(b.salaries || []);
+      if (b.mailings) setMailings(b.mailings);
+      if (b.requests) setRequests(b.requests);
+      if (b.pricing) setPricing(b.pricing);
+      if (b.rules) setRules(b.rules);
+      if (b.courseCatalog) setCourseCatalog(b.courseCatalog);
+      if (b.candidates) setCandidates(b.candidates);
+      notify("Данные восстановлены из копии");
+    } catch (e) {
+      notify("Ошибка при восстановлении: " + e.message, "error");
+    }
+    setBackupBusy(false);
+  };
+
+  // Напоминание: если копию не делали больше 7 дней — подсветим кнопку
+  const backupOverdue = (() => {
+    if (!lastBackup) return true;
+    const diff = (Date.now() - new Date(lastBackup).getTime()) / 86400000;
+    return diff > 7;
+  })();
+
+  // ── КОРЗИНА ─────────────────────────────────────────────────────────
+  // Удалённые записи не исчезают навсегда: копия остаётся в браузере на
+  // 30 дней, и её можно вернуть одной кнопкой. Защита от случайного клика.
+  const [trash, setTrash] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("crmTrash") || "[]"); } catch { return []; }
+  });
+  const saveTrash = (items) => {
+    // выкидываем всё старше 30 дней
+    const cutoff = Date.now() - 30*86400000;
+    const fresh = items.filter(i => i.deletedAt > cutoff);
+    setTrash(fresh);
+    try { localStorage.setItem("crmTrash", JSON.stringify(fresh)); } catch {}
+  };
+  const moveToTrash = (table, record, label) => {
+    saveTrash([{ id: `${table}-${record.id}-${Date.now()}`, table, record, label, deletedAt: Date.now() }, ...trash]);
+  };
+  const restoreFromTrash = async (entry) => {
+    const ok = await insertRow(entry.table, entry.record);
+    if (!ok) { notify("Не удалось восстановить — возможно, запись уже есть", "error"); return; }
+    if (entry.table === "tutors") setTutors(prev => [...prev, entry.record]);
+    if (entry.table === "students") setStudents(prev => [...prev, entry.record]);
+    if (entry.table === "lessons") setLessons(prev => [...prev, entry.record]);
+    saveTrash(trash.filter(t => t.id !== entry.id));
+    notify(`Восстановлено: ${entry.label}`);
+  };
+
   const cleanupDuplicateLessons = () => {
     const seen = new Map();
     const deduped = [];
@@ -1650,6 +1762,32 @@ ${contextSummary}`;
           <button onClick={cleanupDuplicateLessons} style={{ width:"100%", marginTop:6, padding:"7px", background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.3)", borderRadius:8, color:"#ffffff", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
             🧹 Убрать дубликаты занятий
           </button>
+
+          {/* ── РЕЗЕРВНАЯ КОПИЯ ── */}
+          <div style={{ marginTop:10, background: backupOverdue ? "rgba(245,166,35,0.25)" : "rgba(255,255,255,0.12)", border:`1px solid ${backupOverdue ? "rgba(245,166,35,0.6)" : "rgba(255,255,255,0.25)"}`, borderRadius:12, padding:10 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#ffffff", marginBottom:2 }}>🛡️ Резервная копия</div>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.75)", marginBottom:8, lineHeight:1.4 }}>
+              {lastBackup ? `Последняя: ${new Date(lastBackup).toLocaleDateString("ru-RU")}` : "Ещё ни разу не делали"}
+              {backupOverdue && " · пора сделать новую"}
+            </div>
+            <button onClick={downloadBackup} disabled={backupBusy}
+              style={{ width:"100%", padding:"8px", background:"#ffffff", border:"none", borderRadius:8, color:"#1da0d4", fontSize:11, fontWeight:700, cursor:backupBusy?"wait":"pointer", fontFamily:"inherit", marginBottom:5 }}>
+              {backupBusy ? "Подождите..." : "💾 Скачать копию на компьютер"}
+            </button>
+            <button onClick={()=>restoreBackupRef.current?.click()} disabled={backupBusy}
+              style={{ width:"100%", padding:"6px", background:"transparent", border:"1px solid rgba(255,255,255,0.4)", borderRadius:8, color:"#ffffff", fontSize:10, cursor:backupBusy?"wait":"pointer", fontFamily:"inherit" }}>
+              ↩️ Восстановить из копии
+            </button>
+            <input ref={restoreBackupRef} type="file" accept=".json" style={{ display:"none" }}
+              onChange={e=>{ restoreFromBackup(e.target.files?.[0]); e.target.value=""; }} />
+          </div>
+
+          {trash.length > 0 && (
+            <button onClick={()=>setModal("trash")}
+              style={{ width:"100%", marginTop:8, padding:"8px", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:10, color:"#ffffff", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+              🗑️ Корзина ({trash.length}) — вернуть удалённое
+            </button>
+          )}
         </div>
       </div>
 
@@ -1859,7 +1997,7 @@ ${contextSummary}`;
                     <button className="bg" onClick={()=>printSchedule(myL, tutors, students, `Преподаватель: ${t.short}`)}>🖨️ Расписание преподавателя</button>
                     <button className="bg" onClick={()=>startEditTutor(t)}>✏️ Редактировать</button>
                     <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
-                      onClick={()=>{ if(window.confirm(`Удалить преподавателя "${t.name}"? Занятия и история останутся в системе.`)){ setTutors(tutors.filter(x=>x.id!==t.id)); deleteRow("tutors", t.id); setSelTutor(null); notify("Преподаватель удалён"); } }}><Trash2 size={13} /> Удалить</button>
+                      onClick={()=>{ if(window.confirm(`Удалить преподавателя "${t.name}"?\n\nЗанятия и история останутся. Запись попадёт в Корзину — её можно вернуть в течение 30 дней.`)){ moveToTrash("tutors", t, `Преподаватель: ${t.name}`); setTutors(tutors.filter(x=>x.id!==t.id)); deleteRow("tutors", t.id); setSelTutor(null); notify("Преподаватель удалён — можно вернуть из Корзины"); } }}><Trash2 size={13} /> Удалить</button>
                   </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
@@ -2147,7 +2285,7 @@ ${contextSummary}`;
                       <button className="bg" onClick={()=>printSchedule(lessons.filter(l=>l.studentId===selStudentLive.id), tutors, students, `Ученик: ${selStudentLive.name}`)}>🖨️ Расписание ученика</button>
                       <button className="bg" onClick={()=>startEditStudent(selStudentLive)}>✏️ Редактировать</button>
                       <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
-                        onClick={()=>{ if(window.confirm(`Удалить ученика "${selStudentLive.name}"? Занятия и история останутся в системе.`)){ setStudents(students.filter(x=>x.id!==selStudentLive.id)); deleteRow("students", selStudentLive.id); setSelStudent(null); notify("Ученик удалён"); } }}><Trash2 size={13} /> Удалить</button>
+                        onClick={()=>{ if(window.confirm(`Удалить ученика "${selStudentLive.name}"?\n\nЗанятия и история останутся. Запись попадёт в Корзину — её можно вернуть в течение 30 дней.`)){ moveToTrash("students", selStudentLive, `Ученик: ${selStudentLive.name}`); setStudents(students.filter(x=>x.id!==selStudentLive.id)); deleteRow("students", selStudentLive.id); setSelStudent(null); notify("Ученик удалён — можно вернуть из Корзины"); } }}><Trash2 size={13} /> Удалить</button>
                     </div>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
@@ -2659,7 +2797,7 @@ ${contextSummary}`;
                         <div style={{ display:"flex", gap:6, flexShrink:0 }}>
                           {l.status==="scheduled" && <button className="bg" style={{ fontSize:11, padding:"5px 10px" }} onClick={()=>completeLesson(l.id)}>✓</button>}
                           <button className="bg" style={{ fontSize:11, padding:"5px 10px", background:isEditing?"rgba(99,102,241,0.25)":"" }} onClick={()=>openEditLesson(isEditing?null:l)}>✏️</button>
-                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>{ setLessons(lessons.filter(x=>x.id!==l.id)); deleteRow("lessons", l.id); notify("Занятие удалено"); }}>🗑</button>
+                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>{ moveToTrash("lessons", l, `Занятие: ${l.subject}, ${l.date} — ${l.studentName||l.groupName||""}`); setLessons(lessons.filter(x=>x.id!==l.id)); deleteRow("lessons", l.id); notify("Занятие удалено — можно вернуть из Корзины"); }}>🗑</button>
                         </div>
                       </div>
                     );
@@ -4568,6 +4706,44 @@ ${contextSummary}`;
                 }}>Добавить запрос</button>
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── КОРЗИНА ── */}
+      {modal==="trash" && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" style={{ width:560, maxHeight:"85vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 8px", fontSize:19, fontWeight:700 }}>🗑️ Корзина</h2>
+            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:16 }}>
+              Удалённые записи хранятся 30 дней. Нажмите «Вернуть», чтобы восстановить.
+            </div>
+            {trash.length===0 ? (
+              <div style={{ padding:"40px", textAlign:"center", color:"#a9b8c6" }}>Корзина пуста</div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {trash.map(entry=>(
+                  <div key={entry.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, border:"1px solid #dbe6f0", borderRadius:10, padding:"10px 14px" }}>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:600, color:"#12283d", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{entry.label}</div>
+                      <div style={{ fontSize:11, color:"#7a8a9c" }}>Удалено: {new Date(entry.deletedAt).toLocaleString("ru-RU")}</div>
+                    </div>
+                    <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                      <button className="bp" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>restoreFromTrash(entry)}>↩️ Вернуть</button>
+                      <button onClick={()=>{ if(window.confirm("Убрать из корзины навсегда?")) saveTrash(trash.filter(t=>t.id!==entry.id)); }}
+                        style={{ background:"transparent", border:"1px solid #dbe6f0", color:"#a9b8c6", borderRadius:7, padding:"6px 10px", cursor:"pointer", fontSize:11, fontFamily:"inherit" }}>✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display:"flex", gap:10, marginTop:18 }}>
+              <button className="bg" style={{ flex:1 }} onClick={()=>setModal(null)}>Закрыть</button>
+              {trash.length>0 && (
+                <button onClick={()=>{ if(window.confirm(`Очистить корзину полностью (${trash.length} записей)? Восстановить будет нельзя.`)) { saveTrash([]); notify("Корзина очищена"); } }}
+                  style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"9px 16px", borderRadius:10, cursor:"pointer", fontSize:13, fontFamily:"inherit" }}>Очистить всё</button>
+              )}
             </div>
           </div>
         </div>
