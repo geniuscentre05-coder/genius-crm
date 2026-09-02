@@ -1637,48 +1637,76 @@ ${contextSummary}`;
   const selStudentLive = selStudent ? (students.find(x=>x.id===selStudent.id) || selStudent) : null;
   const totalSalPaid = salaries.reduce((s,p)=>s+p.amount,0);
 
-  // ── Simple app-wide password gate ──
-  // NOTE: this is a basic deterrent, not real security — the password lives in front-end
-  // code and is verified in the browser. Anyone with technical knowledge could bypass it.
-  // It stops casual link-sharing access, not a determined attacker.
-  const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "";
-  const [unlocked, setUnlocked] = useState(() => {
-    if (!APP_PASSWORD) return true;
-    try { return sessionStorage.getItem("genius_crm_unlocked") === "1"; } catch(e) { return false; }
+  // ── Система входа по логину и паролю ──────────────────────────────────
+  const [currentUser, setCurrentUser] = useState(() => {
+    try { const u = sessionStorage.getItem("genius_crm_user"); return u ? JSON.parse(u) : null; } catch { return null; }
   });
-  const [pwInput, setPwInput] = useState("");
-  const [pwError, setPwError] = useState(false);
+  const [loginInput, setLoginInput] = useState("");
+  const [passInput, setPassInput] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
 
-  if (APP_PASSWORD && !unlocked) {
+  const doLogin = async () => {
+    if (!loginInput || !passInput) { setLoginError("Введите логин и пароль"); return; }
+    setLoginBusy(true); setLoginError("");
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, login, role, name, tutor_id")
+        .eq("login", loginInput.trim().toLowerCase())
+        .maybeSingle();
+      if (!data) { setLoginError("Неверный логин или пароль"); setLoginBusy(false); return; }
+      // Проверяем пароль: сравниваем md5(пароль) через базу
+      const { data: ok } = await supabase.rpc("check_password", {
+        p_login: loginInput.trim().toLowerCase(),
+        p_password: passInput,
+      });
+      if (!ok) { setLoginError("Неверный логин или пароль"); setLoginBusy(false); return; }
+      sessionStorage.setItem("genius_crm_user", JSON.stringify(data));
+      setCurrentUser(data);
+    } catch (e) {
+      setLoginError("Ошибка входа: " + e.message);
+    }
+    setLoginBusy(false);
+  };
+
+  const doLogout = () => {
+    sessionStorage.removeItem("genius_crm_user");
+    setCurrentUser(null);
+    setLoginInput(""); setPassInput("");
+  };
+
+  if (!currentUser) {
     return (
       <div style={{ fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif", background:"linear-gradient(135deg,#1da0d4,#5cb85c)", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
-        <div style={{ background:"#ffffff", borderRadius:20, padding:36, width:340, boxShadow:"0 24px 48px rgba(18,40,61,.25)", textAlign:"center" }}>
-          <img src="/logo.jpg" alt="Гений" style={{ width:64, height:64, borderRadius:"50%", margin:"0 auto 16px" }} />
-          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:22, color:"#12283d", marginBottom:4 }}>Гений CRM</div>
-          <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:20 }}>Введите пароль для доступа</div>
-          <input
-            type="password"
-            autoFocus
-            placeholder="Пароль"
-            value={pwInput}
-            onChange={e=>{ setPwInput(e.target.value); setPwError(false); }}
-            onKeyDown={e=>{
-              if (e.key==="Enter") {
-                if (pwInput===APP_PASSWORD) { try{sessionStorage.setItem("genius_crm_unlocked","1");}catch(e){} setUnlocked(true); }
-                else setPwError(true);
-              }
-            }}
-            style={{ marginBottom:pwError?6:16, borderColor:pwError?"#e2574c":undefined }}
-          />
-          {pwError && <div style={{ color:"#e2574c", fontSize:12, marginBottom:14 }}>Неверный пароль</div>}
-          <button className="bp" style={{ width:"100%" }} onClick={()=>{
-            if (pwInput===APP_PASSWORD) { try{sessionStorage.setItem("genius_crm_unlocked","1");}catch(e){} setUnlocked(true); }
-            else setPwError(true);
-          }}>Войти</button>
+        <div style={{ background:"#ffffff", borderRadius:20, padding:36, width:360, boxShadow:"0 24px 48px rgba(18,40,61,.25)", textAlign:"center" }}>
+          <img src="/logo.jpg" alt="Гений" style={{ width:72, height:72, borderRadius:"50%", margin:"0 auto 16px", objectFit:"cover" }} />
+          <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:24, color:"#12283d", marginBottom:4 }}>Гений CRM</div>
+          <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:24 }}>Образовательный центр</div>
+          <div style={{ textAlign:"left", marginBottom:12 }}>
+            <div style={{ fontSize:12, color:"#55677a", marginBottom:5 }}>Логин</div>
+            <input autoFocus placeholder="Введите логин" value={loginInput}
+              onChange={e=>{ setLoginInput(e.target.value); setLoginError(""); }}
+              onKeyDown={e=>e.key==="Enter" && doLogin()} />
+          </div>
+          <div style={{ textAlign:"left", marginBottom:loginError?8:20 }}>
+            <div style={{ fontSize:12, color:"#55677a", marginBottom:5 }}>Пароль</div>
+            <input type="password" placeholder="Введите пароль" value={passInput}
+              onChange={e=>{ setPassInput(e.target.value); setLoginError(""); }}
+              onKeyDown={e=>e.key==="Enter" && doLogin()} />
+          </div>
+          {loginError && <div style={{ color:"#e2574c", fontSize:12, marginBottom:14 }}>{loginError}</div>}
+          <button className="bp" style={{ width:"100%" }} onClick={doLogin} disabled={loginBusy}>
+            {loginBusy ? "Вхожу..." : "Войти"}
+          </button>
         </div>
       </div>
     );
   }
+
+  const isAdmin = currentUser.role === "admin";
+  const myTutorId = currentUser.tutor_id;
+
 
   if (cloudLoading) {
     return (
@@ -1759,6 +1787,14 @@ ${contextSummary}`;
           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10, padding:"6px 10px", background:"#ffffff", boxShadow:"0 1px 3px rgba(18,40,61,.15)", borderRadius:8, transition:"all .3s" }}>
             <div style={{ width:7, height:7, borderRadius:"50%", background:(saveIndicator||cloudSyncing)?"#5cb85c":"#a9b8c6", transition:"all .3s", flexShrink:0 }} />
             <span style={{ fontSize:11, color:(saveIndicator||cloudSyncing)?"#5cb85c":"#55677a", fontWeight:600 }}>{cloudSyncing?"Синхронизация...":saveIndicator?"Сохранено ✓":"Облако · синхронизировано"}</span>
+          </div>
+          {/* Текущий пользователь + выход */}
+          <div style={{ background:"rgba(255,255,255,0.12)", borderRadius:10, padding:"8px 12px", marginBottom:8, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#ffffff" }}>{currentUser.name || currentUser.login}</div>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.7)" }}>{isAdmin ? "Администратор" : "Преподаватель"}</div>
+            </div>
+            <button onClick={doLogout} style={{ background:"rgba(255,255,255,0.2)", border:"none", borderRadius:7, color:"#ffffff", fontSize:10, fontWeight:600, cursor:"pointer", padding:"5px 8px", fontFamily:"inherit" }}>Выйти</button>
           </div>
           {/* Import Excel */}
           <button onClick={()=>fileInputRef.current?.click()} style={{ width:"100%", padding:"8px", background:"#ffffff", border:"none", boxShadow:"0 1px 3px rgba(18,40,61,.15)", borderRadius:9, color:"#1da0d4", fontSize:12, fontWeight:700, cursor:"pointer", marginBottom:8, fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
