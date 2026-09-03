@@ -533,8 +533,10 @@ export default function App() {
   const [lessons, setLessons]   = useState(saved?.lessons    || initialLessons);
   const [payments, setPayments] = useState(saved?.payments   || initialPayments);
   const [salaries, setSalaries] = useState(saved?.salaries   || initialSalaryPayouts);
-   const [subscriptions, setSubscriptions] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [mailings,  setMailings]  = useState(saved?.mailings  || [
+    { id:1, title:"Напоминание об оплате", channel:"whatsapp", audience:"debtors", status:"sent", sentAt:"2026-03-07", sentCount:1, text:"Здравствуйте, {{parentName}}! У {{studentName}} задолженность {{balance}}₽. Просим оплатить до конца недели." },
     { id:2, title:"Поздравление 8 марта",  channel:"sms",      audience:"all",     status:"sent", sentAt:"2026-03-08", sentCount:5, text:"Дорогой {{studentName}} и {{parentName}}! Поздравляем с праздником! 🌸" },
   ]);
   const [requests,  setRequests]  = useState(saved?.requests  || initialRequests);
@@ -679,14 +681,16 @@ export default function App() {
           fetchTable("students"),
           fetchTable("lessons"),
           fetchTable("payments"),
-          fetchTable("salaries"),          fetchTable("subscriptions"),
+          fetchTable("salaries"),
+          fetchTable("subscriptions"),
         ]);
         if (cancelled) return;
         if (tData) setTutors(tData);
         if (sData) setStudents(sData);
         if (lData) setLessons(lData);
         if (pData) setPayments(pData);
-        if (salData) setSalaries(salData);        if (subData) setSubscriptions(subData);
+        if (salData) setSalaries(salData);
+        if (subData) setSubscriptions(subData);
 
         // Load the remaining, not-yet-migrated entities from the old blob
         const { data: row, error } = await supabase
@@ -1563,8 +1567,14 @@ ${contextSummary}`;
     setNSalary({ tutorId:"", amount:"", comment:"", month:"2026-03" });
     setModal(null); notify("Выплата записана");
   };
-  const completeLesson = id => { setLessons(lessons.map(l=>l.id===id?{...l,status:"completed"}:l)); updateRow("lessons", id, { status:"completed" }); notify("Занятие проведено"); };
-    async function loadUsers() {
+  const completeLesson = id => { const lsn = lessons.find(l=>l.id===id); setLessons(lessons.map(l=>l.id===id?{...l,status:"completed"}:l)); updateRow("lessons", id, { status:"completed" }); if (lsn) chargeSubscriptionForLesson(lsn); notify("Занятие проведено"); };
+  const sendMailing = () => {
+    const cnt = audMap[mDraft.audience]?.length||0;
+    setMailings([{ ...mDraft, id:Date.now(), status:"sent", sentAt:new Date().toISOString().split("T")[0], sentCount:cnt }, ...mailings]);
+    setMDraft({ title:"", channel:"whatsapp", audience:"all", text:"" });
+    setModal(null); setMStep(1); notify(`Отправлено ${cnt} получателям`);
+  };
+  async function loadUsers() {
     const { data, error } = await supabase
       .from("users")
       .select("id, login, role, name, tutor_id, created_at")
@@ -1573,7 +1583,51 @@ ${contextSummary}`;
     setAllUsers(data || []);
   }
   useEffect(() => { if (view === "users" && isAdmin) loadUsers(); }, [view]);
-     const [nSubscription, setNSubscription] = useState({
+     const [nUser, setNUser] = useState({ login:"", password:"", role:"tutor", tutorId:"", name:"" });
+
+  async function addUser() {
+    if (!isAdmin) return;
+    if (!nUser.login || !nUser.password) { notify("Укажите логин и пароль"); return; }
+    const login = nUser.login.trim().toLowerCase();
+    const { data: exists } = await supabase.rpc("login_exists", { p_login: login });
+    if (exists) { notify("Такой логин уже занят"); return; }
+    const { error } = await supabase.from("users").insert({
+      login, password_hash: "pending", role: nUser.role,
+      tutor_id: nUser.role === "tutor" && nUser.tutorId ? Number(nUser.tutorId) : null,
+      name: nUser.name || null,
+    });
+    if (error) { notify("Ошибка: " + error.message); return; }
+    await supabase.rpc("set_user_password", { p_login: login, p_new_password: nUser.password });
+    notify("Пользователь " + login + " создан");
+    setModal(null);
+    setNUser({ login:"", password:"", role:"tutor", tutorId:"", name:"" });
+    loadUsers();
+  }
+
+  async function resetUserPassword(login) {
+    const newPass = window.prompt("Новый пароль для «" + login + "»:");
+    if (!newPass) return;
+    const { error } = await supabase.rpc("set_user_password", { p_login: login, p_new_password: newPass });
+    notify(error ? "Ошибка: " + error.message : "Пароль обновлён");
+  }
+
+  async function changeUserRole(userId, role) {
+    const { error } = await supabase.from("users").update({ role }).eq("id", userId);
+    if (error) { notify("Ошибка: " + error.message); return; }
+    setAllUsers(allUsers.map(u => u.id === userId ? { ...u, role } : u));
+    notify("Роль изменена");
+  }
+
+  async function deleteUser(userId, login) {
+    if (login === currentUser.login) { notify("Нельзя удалить свою учётную запись"); return; }
+    if (!window.confirm("Удалить пользователя «" + login + "»?")) return;
+    const { error } = await supabase.from("users").delete().eq("id", userId);
+    if (error) { notify("Ошибка: " + error.message); return; }
+    setAllUsers(allUsers.filter(u => u.id !== userId));
+    notify("Пользователь удалён");
+  }
+
+  const [nSubscription, setNSubscription] = useState({
     studentId: "", subject: "", tutorId: "", type: "package",
     totalLessons: 8, periodStart: "", periodEnd: "", price: 0, comment: "",
   });
@@ -2394,6 +2448,107 @@ ${contextSummary}`;
         })()}
 
         {/* ── STUDENTS ── */}
+        {view==="subscriptions" && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <h2 style={{ fontSize:22, fontWeight:700 }}>Абонементы</h2>
+              <button className="bp" onClick={()=>{ setNSubscription({ studentId:"", subject:"", tutorId:"", type:"package", totalLessons:8, periodStart:"", periodEnd:"", price:0, comment:"" }); setModal("addSubscription"); }}>
+                <Plus size={15} /> Новый абонемент
+              </button>
+            </div>
+            {subscriptions.length === 0 ? (
+              <div style={{ background:"#fff", borderRadius:14, padding:40, textAlign:"center", color:"#a9b8c6" }}>
+                Абонементов пока нет. Нажмите «Новый абонемент», чтобы создать первый.
+              </div>
+            ) : (
+            <div style={{ background:"#fff", border:"1px solid rgba(18,40,61,.05)", borderRadius:14, overflow:"hidden" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead>
+                  <tr style={{ background:"#f2f6fa" }}>
+                    {["Ученик","Предмет / препод.","Тип","Остаток","Действует до","Статус",""].map((h,i)=>(
+                      <th key={i} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:"#55677a", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {subscriptions.map(s => {
+                    const st = students.find(x => x.id === s.student_id);
+                    const tu = tutors.find(x => x.id === s.tutor_id);
+                    const remaining = s.type === "package" ? Math.max((s.total_lessons||0) - (s.used_lessons||0), 0) : null;
+                    return (
+                      <tr key={s.id} style={{ borderTop:"1px solid #f2f6fa" }}>
+                        <td style={{ padding:"10px 14px", fontWeight:600, fontSize:13 }}>{st?.name || "—"}</td>
+                        <td style={{ padding:"10px 14px", fontSize:13, color:"#55677a" }}>{s.subject || "Все предметы"}{tu ? " — " + tu.short : ""}</td>
+                        <td style={{ padding:"10px 14px", fontSize:13 }}>{s.type === "package" ? "Пакет" : "Безлимит"}</td>
+                        <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700 }}>{s.type === "package" ? remaining + " из " + s.total_lessons : "—"}</td>
+                        <td style={{ padding:"10px 14px", fontSize:13 }}>{s.period_end || "—"}</td>
+                        <td style={{ padding:"10px 14px" }}>
+                          <Tag c={s.status==="active"?"#5cb85c":s.status==="frozen"?"#f5a623":"#a9b8c6"}
+                               bg={s.status==="active"?"rgba(34,197,94,.12)":s.status==="frozen"?"rgba(245,158,11,.12)":"rgba(148,163,184,.12)"}>
+                            {s.status==="active"?"Активен":s.status==="frozen"?"Заморожен":s.status==="finished"?"Закончился":"Истёк"}
+                          </Tag>
+                        </td>
+                        <td style={{ padding:"10px 14px" }}>
+                          <div style={{ display:"flex", gap:6 }}>
+                            <button className="bg" style={{ fontSize:11, padding:"5px 8px" }} onClick={()=>startEditSubscription(s)}><Pencil size={12} /></button>
+                            <button className="bg" style={{ fontSize:11, padding:"5px 8px" }} onClick={()=>freezeSubscription(s.id, s.status !== "frozen")}>{s.status === "frozen" ? "▶" : "⏸"}</button>
+                            <button style={{ background:"rgba(226,87,76,.08)", border:"1px solid rgba(226,87,76,.2)", color:"#e2574c", padding:"5px 8px", borderRadius:7, cursor:"pointer" }} onClick={()=>deleteSubscription(s.id)}><Trash2 size={12} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            )}
+          </div>
+        )}
+
+        {view==="users" && isAdmin && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <h2 style={{ fontSize:22, fontWeight:700 }}>Пользователи</h2>
+              <button className="bp" onClick={()=>{ setNUser({ login:"", password:"", role:"tutor", tutorId:"", name:"" }); setModal("addUser"); }}>
+                <Plus size={15} /> Новый пользователь
+              </button>
+            </div>
+            <div style={{ background:"#fff", border:"1px solid rgba(18,40,61,.05)", borderRadius:14, overflow:"hidden" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead>
+                  <tr style={{ background:"#f2f6fa" }}>
+                    {["Логин","Имя","Роль","Преподаватель",""].map((h,i)=>(
+                      <th key={i} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:"#55677a", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allUsers.map(u => (
+                    <tr key={u.id} style={{ borderTop:"1px solid #f2f6fa" }}>
+                      <td style={{ padding:"10px 14px", fontWeight:600, fontSize:13 }}>{u.login}</td>
+                      <td style={{ padding:"10px 14px", fontSize:13 }}>{u.name || "—"}</td>
+                      <td style={{ padding:"10px 14px" }}>
+                        <select value={u.role} onChange={e=>changeUserRole(u.id, e.target.value)} style={{ fontSize:12, padding:"5px 8px" }}>
+                          <option value="admin">Администратор</option>
+                          <option value="tutor">Преподаватель</option>
+                          <option value="manager">Менеджер</option>
+                        </select>
+                      </td>
+                      <td style={{ padding:"10px 14px", fontSize:13 }}>{tutors.find(t=>t.id===u.tutor_id)?.short || "—"}</td>
+                      <td style={{ padding:"10px 14px" }}>
+                        <div style={{ display:"flex", gap:6 }}>
+                          <button className="bg" style={{ fontSize:11, padding:"5px 8px" }} onClick={()=>resetUserPassword(u.login)}>Сбросить пароль</button>
+                          <button style={{ background:"rgba(226,87,76,.08)", border:"1px solid rgba(226,87,76,.2)", color:"#e2574c", padding:"5px 8px", borderRadius:7, cursor:"pointer" }} onClick={()=>deleteUser(u.id, u.login)}><Trash2 size={12} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {view==="students" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
@@ -4663,6 +4818,118 @@ ${contextSummary}`;
               <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Комментарий</div><input value={nSalary.comment} onChange={e=>setNSalary({...nSalary,comment:e.target.value})} /></div>
               <div style={{ display:"flex", gap:10, marginTop:8 }}>
                 <button className="bp" style={{ flex:1 }} onClick={addSalary}>Выплатить</button>
+                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(modal==="addSubscription" || modal==="editSubscription") && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" style={{ width:520 }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 16px", fontSize:20, fontWeight:700 }}>{modal==="addSubscription" ? "Новый абонемент" : "Редактировать абонемент"}</h2>
+            <div style={{ display:"grid", gap:14 }}>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Ученик *</div>
+                <select value={nSubscription.studentId} disabled={modal==="editSubscription"} onChange={e=>setNSubscription({...nSubscription, studentId:e.target.value})}>
+                  <option value="">Выберите ученика</option>
+                  {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предмет</div>
+                  <input value={nSubscription.subject} onChange={e=>setNSubscription({...nSubscription, subject:e.target.value})} placeholder="Все предметы" />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Преподаватель</div>
+                  <select value={nSubscription.tutorId} onChange={e=>setNSubscription({...nSubscription, tutorId:e.target.value})}>
+                    <option value="">Любой</option>
+                    {tutors.map(t => <option key={t.id} value={t.id}>{t.short}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Тип</div>
+                  <select value={nSubscription.type} onChange={e=>setNSubscription({...nSubscription, type:e.target.value})}>
+                    <option value="package">Пакет занятий</option>
+                    <option value="unlimited">Безлимит на период</option>
+                  </select>
+                </div>
+                {nSubscription.type === "package" && (
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Число занятий</div>
+                    <input type="number" value={nSubscription.totalLessons} onChange={e=>setNSubscription({...nSubscription, totalLessons:e.target.value})} />
+                  </div>
+                )}
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Начало</div>
+                  <input type="date" value={nSubscription.periodStart} onChange={e=>setNSubscription({...nSubscription, periodStart:e.target.value})} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Действует до</div>
+                  <input type="date" value={nSubscription.periodEnd} onChange={e=>setNSubscription({...nSubscription, periodEnd:e.target.value})} />
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Стоимость (₽)</div>
+                  <input type="number" value={nSubscription.price} onChange={e=>setNSubscription({...nSubscription, price:e.target.value})} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Комментарий</div>
+                  <input value={nSubscription.comment} onChange={e=>setNSubscription({...nSubscription, comment:e.target.value})} />
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                <button className="bp" style={{ flex:1 }} onClick={modal==="addSubscription" ? addSubscription : saveEditSubscription}>Сохранить</button>
+                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal==="addUser" && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 16px", fontSize:20, fontWeight:700 }}>Новый пользователь</h2>
+            <div style={{ display:"grid", gap:14 }}>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Логин *</div>
+                <input value={nUser.login} onChange={e=>setNUser({...nUser, login:e.target.value})} placeholder="например ivanova" />
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Пароль *</div>
+                <input value={nUser.password} onChange={e=>setNUser({...nUser, password:e.target.value})} />
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Имя</div>
+                <input value={nUser.name} onChange={e=>setNUser({...nUser, name:e.target.value})} />
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Роль</div>
+                <select value={nUser.role} onChange={e=>setNUser({...nUser, role:e.target.value})}>
+                  <option value="admin">Администратор — полный доступ</option>
+                  <option value="tutor">Преподаватель — только своё расписание</option>
+                  <option value="manager">Менеджер</option>
+                </select>
+              </div>
+              {nUser.role === "tutor" && (
+                <div>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Связать с преподавателем</div>
+                  <select value={nUser.tutorId} onChange={e=>setNUser({...nUser, tutorId:e.target.value})}>
+                    <option value="">—</option>
+                    {tutors.map(t => <option key={t.id} value={t.id}>{t.short} — {t.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                <button className="bp" style={{ flex:1 }} onClick={addUser}>Создать</button>
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
               </div>
             </div>
