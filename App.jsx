@@ -1564,8 +1564,108 @@ ${contextSummary}`;
     setModal(null); notify("Выплата записана");
   };
   const completeLesson = id => { setLessons(lessons.map(l=>l.id===id?{...l,status:"completed"}:l)); updateRow("lessons", id, { status:"completed" }); notify("Занятие проведено"); };
-  const sendMailing = () => {
-    const cnt = audMap[mDraft.audience]?.length||0;
+    async function loadUsers() {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, login, role, name, tutor_id, created_at")
+      .order("created_at", { ascending: false });
+    if (error) { console.error("Load users error:", error); return; }
+    setAllUsers(data || []);
+  }
+  useEffect(() => { if (view === "users" && isAdmin) loadUsers(); }, [view]);
+     const [nSubscription, setNSubscription] = useState({
+    studentId: "", subject: "", tutorId: "", type: "package",
+    totalLessons: 8, periodStart: "", periodEnd: "", price: 0, comment: "",
+  });
+  const [editingSubscriptionId, setEditingSubscriptionId] = useState(null);
+
+  function addMonths(dateStr, months) {
+    const d = dateStr ? new Date(dateStr) : new Date();
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().slice(0, 10);
+  }
+
+  async function addSubscription() {
+    if (!nSubscription.studentId) { notify("Выберите ученика"); return; }
+    const student = students.find(s => s.id === Number(nSubscription.studentId));
+    const periodStart = nSubscription.periodStart || new Date().toISOString().slice(0, 10);
+    const row = {
+      student_id: Number(nSubscription.studentId),
+      subject: nSubscription.subject || null,
+      tutor_id: nSubscription.tutorId ? Number(nSubscription.tutorId) : null,
+      type: nSubscription.type,
+      total_lessons: nSubscription.type === "package" ? Number(nSubscription.totalLessons) || 0 : null,
+      used_lessons: 0,
+      period_start: periodStart,
+      period_end: nSubscription.periodEnd || addMonths(periodStart, 1),
+      price: Number(nSubscription.price) || 0,
+      status: "active",
+      comment: nSubscription.comment || "",
+    };
+    const { error } = await supabase.from("subscriptions").insert(row);
+    if (!error) {
+      const d = await fetchTable("subscriptions");
+      if (d) setSubscriptions(d);
+      notify(`Абонемент для ${student?.name || "ученика"} добавлен`);
+      setModal(null);
+      setNSubscription({ studentId:"", subject:"", tutorId:"", type:"package", totalLessons:8, periodStart:"", periodEnd:"", price:0, comment:"" });
+    } else {
+      notify("Ошибка: " + error.message);
+    }
+  }
+
+  function startEditSubscription(sub) {
+    setNSubscription({
+      studentId: sub.student_id, subject: sub.subject || "", tutorId: sub.tutor_id || "",
+      type: sub.type, totalLessons: sub.total_lessons || 8,
+      periodStart: sub.period_start || "", periodEnd: sub.period_end || "",
+      price: sub.price || 0, comment: sub.comment || "",
+    });
+    setEditingSubscriptionId(sub.id);
+    setModal("editSubscription");
+  }
+
+  async function saveEditSubscription() {
+    const patch = {
+      subject: nSubscription.subject || null,
+      tutor_id: nSubscription.tutorId ? Number(nSubscription.tutorId) : null,
+      type: nSubscription.type,
+      total_lessons: nSubscription.type === "package" ? Number(nSubscription.totalLessons) || 0 : null,
+      period_start: nSubscription.periodStart,
+      period_end: nSubscription.periodEnd,
+      price: Number(nSubscription.price) || 0,
+      comment: nSubscription.comment || "",
+    };
+    setSubscriptions(subscriptions.map(s => s.id === editingSubscriptionId ? { ...s, ...patch } : s));
+    await updateRow("subscriptions", editingSubscriptionId, patch);
+    setModal(null); setEditingSubscriptionId(null);
+    notify("Абонемент обновлён");
+  }
+
+  async function deleteSubscription(id) {
+    if (!window.confirm("Удалить абонемент?")) return;
+    setSubscriptions(subscriptions.filter(s => s.id !== id));
+    await supabase.from("subscriptions").delete().eq("id", id);
+    notify("Абонемент удалён");
+  }
+
+  async function freezeSubscription(id, freeze) {
+    const patch = { status: freeze ? "frozen" : "active" };
+    setSubscriptions(subscriptions.map(s => s.id === id ? { ...s, ...patch } : s));
+    await updateRow("subscriptions", id, patch);
+    notify(freeze ? "Абонемент заморожен" : "Абонемент возобновлён");
+  }
+
+  async function chargeSubscriptionForLesson(lesson) {
+    const candidates = subscriptions.filter(s =>
+      s.student_id === lesson.studentId &&
+      s.status === "active" &&
+      s.type === "package" &&
+      (s.total_lessons - s.used_lessons) > 0 &&
+      (!s.period_end || s.period_end >= lesson.date)
+    );
+    if (!candidates.length) return;
+    const exact =
     setMailings([{ ...mDraft, id:Date.now(), status:"sent", sentAt:new Date().toISOString().split("T")[0], sentCount:cnt }, ...mailings]);
     setMDraft({ title:"", channel:"whatsapp", audience:"all", text:"" });
     setModal(null); setMStep(1); notify(`Отправлено ${cnt} получателям`);
