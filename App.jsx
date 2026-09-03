@@ -533,8 +533,8 @@ export default function App() {
   const [lessons, setLessons]   = useState(saved?.lessons    || initialLessons);
   const [payments, setPayments] = useState(saved?.payments   || initialPayments);
   const [salaries, setSalaries] = useState(saved?.salaries   || initialSalaryPayouts);
-  const [mailings,  setMailings]  = useState(saved?.mailings  || [
-    { id:1, title:"Напоминание об оплате", channel:"whatsapp", audience:"debtors", status:"sent", sentAt:"2026-03-07", sentCount:1, text:"Здравствуйте, {{parentName}}! У {{studentName}} задолженность {{balance}}₽. Просим оплатить до конца недели." },
+   const [subscriptions, setSubscriptions] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
     { id:2, title:"Поздравление 8 марта",  channel:"sms",      audience:"all",     status:"sent", sentAt:"2026-03-08", sentCount:5, text:"Дорогой {{studentName}} и {{parentName}}! Поздравляем с праздником! 🌸" },
   ]);
   const [requests,  setRequests]  = useState(saved?.requests  || initialRequests);
@@ -674,19 +674,19 @@ export default function App() {
     async function loadInitial() {
       try {
         // Load the 5 migrated entities from their own real tables
-        const [tData, sData, lData, pData, salData] = await Promise.all([
+         const [tData, sData, lData, pData, salData, subData] = await Promise.all([
           fetchTable("tutors"),
           fetchTable("students"),
           fetchTable("lessons"),
           fetchTable("payments"),
-          fetchTable("salaries"),
+          fetchTable("salaries"),          fetchTable("subscriptions"),
         ]);
         if (cancelled) return;
         if (tData) setTutors(tData);
         if (sData) setStudents(sData);
         if (lData) setLessons(lData);
         if (pData) setPayments(pData);
-        if (salData) setSalaries(salData);
+        if (salData) setSalaries(salData);        if (subData) setSubscriptions(subData);
 
         // Load the remaining, not-yet-migrated entities from the old blob
         const { data: row, error } = await supabase
@@ -735,6 +735,9 @@ export default function App() {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "salaries" }, async () => {
         const d = await fetchTable("salaries"); if (d) setSalaries(d);
+          })
+      .on("postgres_changes", { event: "*", schema: "public", table: "subscriptions" }, async () => {
+        const d = await fetchTable("subscriptions"); if (d) setSubscriptions(d);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
