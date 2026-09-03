@@ -1576,18 +1576,20 @@ ${contextSummary}`;
     return (s.name.toLowerCase().includes(q) || s.subjects.some(x=>x.toLowerCase().includes(q)) || phoneMatch) && (fStatus==="all"||s.status===fStatus);
   });
 
-  const nav = [
+ const nav = [
     { id:"dashboard", icon:LayoutGrid,    label:"Дашборд"        },
     { id:"tutors",    icon:GraduationCap, label:"Преподаватели"  },
     { id:"students",  icon:Users,         label:"Ученики"        },
     { id:"courses",   icon:BookOpen,      label:"Курсы"          },
     { id:"schedule",  icon:Calendar,      label:"Расписание"     },
+    { id:"subscriptions", icon:CreditCard, label:"Абонементы"    },
     { id:"pricing",   icon:Wallet,        label:"Цены и правила" },
     { id:"payments",  icon:CreditCard,    label:"Финансы"        },
     { id:"reports",   icon:BarChart3,     label:"Отчёты"         },
     { id:"requests",  icon:Inbox,         label:"Запросы родит." },
     { id:"mailings",  icon:Send,          label:"Рассылки"       },
     { id:"candidates",icon:UserPlus,      label:"Соискатели"     },
+    { id:"users",     icon:Users,         label:"Пользователи"   },
     { id:"ai",        icon:Sparkles,      label:"ИИ-Помощник"    },
   ];
 
@@ -1775,7 +1777,7 @@ ${contextSummary}`;
             <div style={{ fontSize:13, color:"rgba(255,255,255,0.9)", marginTop:5, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>Образовательный центр</div>
           </div>
         </div>
-        {nav.map(n=>(
+                      {nav.filter(n => n.id !== "users" || isAdmin).map(n=>(
           <button key={n.id} className={`nb ${view===n.id?"on":""}`} onClick={()=>goView(n.id)}
             style={{ display:"flex", alignItems:"center", gap:13, padding:"14px 24px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"rgba(255,255,255,0.9)", fontSize:17, fontWeight:500, cursor:"pointer", width:"100%", textAlign:"left" }}>
             <n.icon size={21} strokeWidth={2} style={{ flexShrink:0 }} />{n.label}
