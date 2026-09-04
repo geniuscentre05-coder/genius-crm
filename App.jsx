@@ -40,9 +40,18 @@ function snakeToCamelObj(obj) {
   return out;
 }
 async function fetchTable(table) {
-  const { data, error } = await supabase.from(table).select("*");
-  if (error) { console.error(`Fetch ${table} error:`, error); return null; }
-  return (data || []).map(snakeToCamelObj);
+  // Supabase отдаёт максимум 1000 строк за запрос. Читаем страницами,
+  // иначе часть записей молча теряется (у центра >1900 учеников).
+  const PAGE = 1000;
+  let all = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase.from(table).select("*").range(from, from + PAGE - 1);
+    if (error) { console.error(`Fetch ${table} error:`, error); return from === 0 ? null : all.map(snakeToCamelObj); }
+    if (!data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < PAGE) break;
+  }
+  return all.map(snakeToCamelObj);
 }
 async function insertRow(table, obj) {
   const { error } = await supabase.from(table).insert(camelToSnakeObj(obj));
@@ -408,7 +417,7 @@ function AttachmentsBlock({ title = "Документы", files = [], onUpload, 
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
           {files.map((f,i)=>(
-            <div key={i} style={{ display:"flex", alignItems:"center", gap:8, background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:8, padding:"7px 10px", boxShadow:"0 1px 2px rgba(18,40,61,0.05)", transition:"box-shadow .15s" }}>
+            <div key={i} style={{ display:"flex", alignItems:"center", gap:8, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:8, padding:"7px 10px", boxShadow:"0 1px 2px rgba(18,40,61,0.05)", transition:"box-shadow .15s" }}>
               <FileText size={15} color="#1da0d4" style={{ flexShrink:0 }} />
               <a href={f.url} target="_blank" rel="noopener noreferrer" style={{ flex:1, fontSize:12, color:"#1da0d4", textDecoration:"none", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</a>
               <span style={{ fontSize:10, color:"#7a8a9c" }}>{f.uploadedAt}</span>
@@ -1548,10 +1557,11 @@ ${contextSummary}`;
         data,
       });
       if (error) throw error;
-      // Оставляем только последние 30 копий
+      // Оставляем последние 10 копий: каждая содержит полный снимок базы,
+      // при ~2000 учеников это мегабайты на копию — 30 штук съедали хранилище.
       const { data: old } = await supabase.from("backups").select("id").order("created_at", { ascending: true });
-      if (old && old.length > 30) {
-        const toDelete = old.slice(0, old.length - 30).map(r => r.id);
+      if (old && old.length > 10) {
+        const toDelete = old.slice(0, old.length - 10).map(r => r.id);
         await supabase.from("backups").delete().in("id", toDelete);
       }
       const today = new Date().toISOString().split("T")[0];
