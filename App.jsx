@@ -541,6 +541,7 @@ export default function App() {
   ]);
   const [requests,  setRequests]  = useState(saved?.requests  || initialRequests);
   const [nRequest,  setNRequest]  = useState({ parentName:"", phone:"", comment:"", status:"new", children:[{ studentName:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }] }] });
+  const [reqStudentSearch, setReqStudentSearch] = useState("");
   const [pricing,    setPricing]    = useState(saved?.pricing   || initialPricing);
   const [courseCatalog, setCourseCatalog] = useState(saved?.courseCatalog || initialCourseCatalog);
   const [candidates, setCandidates] = useState(saved?.candidates || []);
@@ -1689,6 +1690,33 @@ ${contextSummary}`;
     else notify("Задача удалена");
   }
 
+  // ===== ДИАГНОСТИКА / ПРОБНОЕ ЗАНЯТИЕ =====
+  const [trialKind, setTrialKind] = useState("diagnostic");
+
+  async function addTrialLesson() {
+    if (!nLesson.studentId || !nLesson.subject || !nLesson.tutorId || !nLesson.date || !nLesson.time) {
+      notify("Заполните все обязательные поля", "error"); return;
+    }
+    const st = students.find(s => s.id === Number(nLesson.studentId));
+    const tu = tutors.find(t => t.id === Number(nLesson.tutorId));
+    const label = trialKind === "diagnostic" ? "Диагностика" : "Пробное занятие";
+    const newLesson = {
+      id: Date.now(),
+      studentId: Number(nLesson.studentId), studentName: st?.name || "",
+      subject: `${label}: ${nLesson.subject}`,
+      tutorId: Number(nLesson.tutorId), tutorShort: tu?.short || "",
+      date: nLesson.date, time: nLesson.time,
+      duration: Number(nLesson.duration) || 60,
+      price: Number(nLesson.price) || 0,
+      status: "scheduled", isGroup: false,
+    };
+    setLessons(prev => [...prev, newLesson]);
+    insertRow("lessons", newLesson);
+    setNLesson({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
+    setModal(null);
+    notify(`${label} запланирована на ${nLesson.date}`);
+  }
+
   const [nUser, setNUser] = useState({ login:"", password:"", role:"tutor", tutorId:"", name:"" });
 
   async function addUser() {
@@ -2777,12 +2805,55 @@ ${contextSummary}`;
                     <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"flex-end" }}>
                       <Tag c={statusCfg[selStudentLive.status]?.color} bg={statusCfg[selStudentLive.status]?.bg}>{statusCfg[selStudentLive.status]?.label}</Tag>
                       <button className="bp" onClick={()=>{ setNLesson({ studentId:String(selStudentLive.id), subject:selStudentLive.subjects?.[0]||"", tutorId:selStudentLive.subjectTeachers?.[0]?.tutorId||"", date:"", time:"", duration:60, price:1200 }); setLessonType("individual"); setLessonStudentLocked(true); setModal("addLesson"); }}><Calendar size={14} /> Запланировать занятие</button>
+                      <button className="bp" style={{ background:"linear-gradient(135deg,#f5a623,#e2574c)" }} onClick={()=>{ setNLesson({ studentId:String(selStudentLive.id), subject:selStudentLive.subjects?.[0]||"", tutorId:selStudentLive.subjectTeachers?.[0]?.tutorId||"", date:"", time:"", duration:60, price:0 }); setTrialKind("diagnostic"); setModal("addTrial"); }}>🎯 Диагностика / пробное</button>
+                      <button className="bg" onClick={()=>{ setNSubscription({ studentId:String(selStudentLive.id), subject:selStudentLive.subjects?.[0]||"", tutorId:selStudentLive.subjectTeachers?.[0]?.tutorId||"", type:"package", totalLessons:8, periodStart:"", periodEnd:"", price:0, comment:"" }); setModal("addSubscription"); }}><CreditCard size={14} /> Выдать абонемент</button>
                       <button className="bg" onClick={()=>printSchedule(lessons.filter(l=>l.studentId===selStudentLive.id), tutors, students, `Ученик: ${selStudentLive.name}`)}>🖨️ Расписание ученика</button>
                       <button className="bg" onClick={()=>startEditStudent(selStudentLive)}>✏️ Редактировать</button>
                       <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
                         onClick={()=>{ if(window.confirm(`Удалить ученика "${selStudentLive.name}"?\n\nЗанятия и история останутся. Запись попадёт в Корзину — её можно вернуть в течение 30 дней.`)){ moveToTrash("students", selStudentLive, `Ученик: ${selStudentLive.name}`); setStudents(students.filter(x=>x.id!==selStudentLive.id)); deleteRow("students", selStudentLive.id); setSelStudent(null); notify("Ученик удалён — можно вернуть из Корзины"); } }}><Trash2 size={13} /> Удалить</button>
                     </div>
                   </div>
+                  {/* АБОНЕМЕНТЫ УЧЕНИКА */}
+                  {(() => {
+                    const mySubs = subscriptions.filter(s => s.student_id === selStudentLive.id);
+                    if (mySubs.length === 0) return null;
+                    return (
+                      <div style={{ marginBottom:20 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:"#12283d", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
+                          <CreditCard size={14} color="#1da0d4" /> Абонементы
+                        </div>
+                        <div style={{ display:"grid", gap:8 }}>
+                          {mySubs.map(s => {
+                            const tu = tutors.find(x => x.id === s.tutor_id);
+                            const remaining = s.type === "package" ? Math.max((s.total_lessons||0) - (s.used_lessons||0), 0) : null;
+                            const low = remaining !== null && remaining <= 2 && s.status === "active";
+                            return (
+                              <div key={s.id} style={{ background:"#fff", border:"1px solid " + (low ? "rgba(245,158,11,.4)" : "#dbe6f0"), borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+                                <div style={{ minWidth:0 }}>
+                                  <div style={{ fontSize:13, fontWeight:600, color:"#12283d" }}>
+                                    {s.subject || "Все предметы"}{tu ? " · " + tu.short : ""}
+                                  </div>
+                                  <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>
+                                    {s.type === "package" ? `Осталось ${remaining} из ${s.total_lessons}` : "Безлимит"}
+                                    {s.period_end ? ` · до ${s.period_end}` : ""}
+                                  </div>
+                                </div>
+                                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                  {low && <Tag c="#f5a623" bg="rgba(245,158,11,.12)">Заканчивается</Tag>}
+                                  <Tag c={s.status==="active"?"#5cb85c":s.status==="frozen"?"#f5a623":"#a9b8c6"}
+                                       bg={s.status==="active"?"rgba(34,197,94,.12)":s.status==="frozen"?"rgba(245,158,11,.12)":"rgba(148,163,184,.12)"}>
+                                    {s.status==="active"?"Активен":s.status==="frozen"?"Заморожен":s.status==="finished"?"Закончился":"Истёк"}
+                                  </Tag>
+                                  <button className="bg" style={{ fontSize:11, padding:"4px 8px" }} onClick={()=>startEditSubscription(s)}><Pencil size={11} /></button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
                     {[
                       { l:"Баланс",  v:`${selStudentLive.balance}₽`, c:selStudentLive.balance>=0?"#5cb85c":"#e2574c" },
@@ -5056,6 +5127,72 @@ ${contextSummary}`;
         </div>
       )}
 
+      {modal==="addTrial" && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" style={{ width:520 }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 6px", fontSize:20, fontWeight:700 }}>Диагностика или пробное занятие</h2>
+            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:16 }}>Занятие создаётся в расписании с пометкой в комментарии</div>
+            <div style={{ display:"grid", gap:14 }}>
+              <div style={{ display:"flex", gap:0, background:"#f2f6fa", borderRadius:12, padding:4 }}>
+                {[["diagnostic","🎯 Диагностика"],["trial","✨ Пробное занятие"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setTrialKind(k)}
+                    style={{ flex:1, padding:"9px", borderRadius:9, fontSize:13, fontWeight:700, border:"none", cursor:"pointer", fontFamily:"inherit", transition:"all .2s",
+                      background: trialKind===k ? "linear-gradient(135deg,#1da0d4,#5cb85c)" : "transparent",
+                      color: trialKind===k ? "white" : "#55677a" }}>{l}</button>
+                ))}
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Ученик *</div>
+                <select value={nLesson.studentId} onChange={e=>setNLesson({...nLesson, studentId:e.target.value})}>
+                  <option value="">Выберите ученика</option>
+                  {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предмет *</div>
+                  <select value={nLesson.subject} onChange={e=>setNLesson({...nLesson, subject:e.target.value})}>
+                    <option value="">Выберите предмет</option>
+                    {allSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Преподаватель *</div>
+                  <select value={nLesson.tutorId} onChange={e=>setNLesson({...nLesson, tutorId:e.target.value})}>
+                    <option value="">Выберите</option>
+                    {tutors.map(t => <option key={t.id} value={t.id}>{t.short}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Дата *</div>
+                  <input type="date" value={nLesson.date} onChange={e=>setNLesson({...nLesson, date:e.target.value})} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Время *</div>
+                  <input type="time" value={nLesson.time} onChange={e=>setNLesson({...nLesson, time:e.target.value})} />
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Длительность (мин)</div>
+                  <input type="number" value={nLesson.duration} onChange={e=>setNLesson({...nLesson, duration:e.target.value})} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Стоимость (₽)</div>
+                  <input type="number" value={nLesson.price} onChange={e=>setNLesson({...nLesson, price:e.target.value})} placeholder="0 — бесплатно" />
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                <button className="bp" style={{ flex:1 }} onClick={addTrialLesson}>Создать</button>
+                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {(modal==="addTask" || modal==="editTask") && (
         <div className="ov" onClick={()=>setModal(null)}>
           <div className="mo" style={{ width:560 }} onClick={e=>e.stopPropagation()}>
@@ -5340,6 +5477,50 @@ ${contextSummary}`;
           <div className="mo" style={{ width:520 }} onClick={e=>e.stopPropagation()}>
             <h2 style={{ margin:"0 0 20px", fontSize:20, fontWeight:700 }}>📩 Новый запрос от родителя</h2>
             <div style={{ display:"grid", gap:14 }}>
+              <div style={{ padding:12, background:"rgba(29,160,212,.06)", border:"1px solid rgba(29,160,212,.2)", borderRadius:12 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:"#1da0d4", marginBottom:8 }}>🔎 Заполнить из существующей анкеты</div>
+                <input placeholder="Начните вводить имя ученика или родителя..." value={reqStudentSearch} onChange={e=>setReqStudentSearch(e.target.value)} />
+                {reqStudentSearch.trim().length >= 2 && (() => {
+                  const q = reqStudentSearch.trim().toLowerCase();
+                  const found = students.filter(s =>
+                    (s.name||"").toLowerCase().includes(q) ||
+                    (s.parentName||"").toLowerCase().includes(q) ||
+                    (s.phone||"").replace(/\D/g,"").includes(q.replace(/\D/g,"")) ||
+                    (s.parentPhone||"").replace(/\D/g,"").includes(q.replace(/\D/g,""))
+                  ).slice(0, 6);
+                  if (found.length === 0) return <div style={{ fontSize:12, color:"#a9b8c6", marginTop:8 }}>Ничего не найдено</div>;
+                  return (
+                    <div style={{ marginTop:8, display:"grid", gap:6, maxHeight:200, overflowY:"auto" }}>
+                      {found.map(s => (
+                        <div key={s.id} onClick={()=>{
+                            setNRequest({
+                              ...nRequest,
+                              parentName: s.parentName || nRequest.parentName,
+                              phone: s.parentPhone || s.phone || nRequest.phone,
+                              children: [{
+                                studentName: s.name,
+                                grade: s.grade || "",
+                                subjectTeachers: (s.subjectTeachers?.length ? s.subjectTeachers : (s.subjects||[]).map(x=>({subject:x, tutorId:""}))).map(st=>({ subject:st.subject||"", tutorId:st.tutorId||"" }))
+                              }],
+                            });
+                            setReqStudentSearch("");
+                            notify(`Анкета «${s.name}» подставлена`);
+                          }}
+                          style={{ padding:"8px 10px", background:"#fff", border:"1px solid #dbe6f0", borderRadius:8, cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:"#12283d" }}>{s.name}</div>
+                            <div style={{ fontSize:11, color:"#7a8a9c", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                              {s.parentName ? s.parentName + " · " : ""}{s.parentPhone || s.phone || ""}{s.grade ? " · " + s.grade + " кл." : ""}
+                            </div>
+                          </div>
+                          <Tag c={statusCfg[s.status]?.color} bg={statusCfg[s.status]?.bg}>{statusCfg[s.status]?.label}</Tag>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                 <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>ФИО родителя *</div><input placeholder="Иванова Мария" value={nRequest.parentName} onChange={e=>setNRequest({...nRequest,parentName:e.target.value})} /></div>
                 <div><div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nRequest.phone} onChange={e=>setNRequest({...nRequest,phone:e.target.value})} /></div>
