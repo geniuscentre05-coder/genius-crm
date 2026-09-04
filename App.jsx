@@ -523,6 +523,208 @@ const ReqSkeletonRow = () => (
   </tr>
 );
 
+// ============================================================
+// КАБИНЕТ РОДИТЕЛЯ — открывается по ссылке ?p=ТОКЕН
+// Данные приходят только из функции get_parent_portal.
+// ============================================================
+function ParentPortal({ token }) {
+  const [data, setData] = useState(null);
+  const [state, setState] = useState("loading"); // loading | ok | error | notfound
+  const [activeChild, setActiveChild] = useState(0);
+  const [tab, setTab] = useState("schedule");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: res, error } = await supabase.rpc("get_parent_portal", { p_token: token });
+        if (error) { setState("error"); return; }
+        if (!res || res.error === "not_found") { setState("notfound"); return; }
+        setData(res); setState("ok");
+      } catch (e) { setState("error"); }
+    })();
+  }, [token]);
+
+  const wrap = (children) => (
+    <div style={{ fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif", background:"#eef4f8", minHeight:"100vh", padding:"0 0 40px" }}>
+      <div style={{ background:"linear-gradient(135deg,#1da0d4,#5cb85c)", padding:"20px 16px 26px", color:"#fff" }}>
+        <div style={{ maxWidth:640, margin:"0 auto", display:"flex", alignItems:"center", gap:12 }}>
+          <img src="/logo.jpg" alt="Гений" style={{ width:44, height:44, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+          <div>
+            <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:21, lineHeight:1.1 }}>Гений</div>
+            <div style={{ fontSize:12, opacity:.9 }}>Образовательный центр</div>
+          </div>
+        </div>
+      </div>
+      <div style={{ maxWidth:640, margin:"-14px auto 0", padding:"0 14px" }}>{children}</div>
+    </div>
+  );
+
+  if (state === "loading") return wrap(
+    <div style={{ background:"#fff", borderRadius:16, padding:40, textAlign:"center", color:"#7a8a9c" }}>Загрузка…</div>
+  );
+
+  if (state === "notfound") return wrap(
+    <div style={{ background:"#fff", borderRadius:16, padding:"36px 24px", textAlign:"center" }}>
+      <div style={{ fontSize:38, marginBottom:10 }}>🔒</div>
+      <div style={{ fontSize:17, fontWeight:700, color:"#12283d", marginBottom:8 }}>Ссылка недействительна</div>
+      <div style={{ fontSize:13, color:"#7a8a9c", lineHeight:1.5 }}>Возможно, доступ был отозван или ссылка скопирована не полностью. Обратитесь к администратору центра.</div>
+    </div>
+  );
+
+  if (state === "error") return wrap(
+    <div style={{ background:"#fff", borderRadius:16, padding:"36px 24px", textAlign:"center" }}>
+      <div style={{ fontSize:38, marginBottom:10 }}>⚠️</div>
+      <div style={{ fontSize:17, fontWeight:700, color:"#12283d", marginBottom:8 }}>Не удалось загрузить</div>
+      <div style={{ fontSize:13, color:"#7a8a9c" }}>Проверьте соединение и обновите страницу.</div>
+    </div>
+  );
+
+  const children = data.children || [];
+  if (children.length === 0) return wrap(
+    <div style={{ background:"#fff", borderRadius:16, padding:36, textAlign:"center", color:"#7a8a9c" }}>Данные пока не заполнены.</div>
+  );
+
+  const child = children[Math.min(activeChild, children.length - 1)];
+  const today = new Date().toISOString().split("T")[0];
+  const MONTHS = ["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+  const fmtDate = ds => { if (!ds) return ""; const d = new Date(ds); return `${d.getDate()} ${MONTHS[d.getMonth()]}`; };
+  const WD = ["вс","пн","вт","ср","чт","пт","сб"];
+
+  const lessons = child.lessons || [];
+  const upcoming = lessons.filter(l => l.date >= today);
+  const past = lessons.filter(l => l.date < today).reverse();
+  const hw = child.homework || [];
+  const subs = child.subscriptions || [];
+
+  const lsnLabel = { scheduled:"", completed:"проведено", cancelled:"отменено", noshow_burned:"пропуск", sick_valid:"болезнь", sick_invalid:"пропуск" };
+  const lsnColor = { completed:"#5cb85c", cancelled:"#a9b8c6", noshow_burned:"#e2574c", sick_valid:"#f5a623", sick_invalid:"#e2574c" };
+
+  return wrap(
+    <>
+      {children.length > 1 && (
+        <div style={{ display:"flex", gap:8, marginBottom:12, overflowX:"auto", paddingBottom:2 }}>
+          {children.map((c, i) => (
+            <button key={c.id} onClick={()=>setActiveChild(i)}
+              style={{ padding:"9px 16px", borderRadius:12, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700, whiteSpace:"nowrap",
+                background: i===activeChild ? "#1da0d4" : "#fff", color: i===activeChild ? "#fff" : "#55677a", boxShadow:"0 1px 3px rgba(18,40,61,.08)" }}>
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Абонементы */}
+      {subs.length > 0 && (
+        <div style={{ display:"grid", gap:8, marginBottom:14 }}>
+          {subs.map((s, i) => {
+            const low = s.type === "package" && s.remaining <= 2;
+            return (
+              <div key={i} style={{ background:"#fff", borderRadius:14, padding:"14px 16px", boxShadow:"0 1px 3px rgba(18,40,61,.06)", borderLeft:`4px solid ${low ? "#f5a623" : "#5cb85c"}` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:12, color:"#7a8a9c" }}>{s.subject || "Абонемент"}</div>
+                    <div style={{ fontSize:19, fontWeight:700, color: low ? "#f5a623" : "#12283d", marginTop:2 }}>
+                      {s.type === "package" ? `Осталось ${s.remaining} ${s.remaining===1?"занятие":s.remaining<5?"занятия":"занятий"}` : "Безлимит"}
+                    </div>
+                  </div>
+                  {s.period_end && <div style={{ fontSize:11, color:"#7a8a9c", textAlign:"right", flexShrink:0 }}>до<br/>{fmtDate(s.period_end)}</div>}
+                </div>
+                {low && <div style={{ fontSize:12, color:"#f5a623", marginTop:6, fontWeight:600 }}>Пора продлевать</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Вкладки */}
+      <div style={{ display:"flex", gap:0, background:"#fff", borderRadius:12, padding:4, marginBottom:12, boxShadow:"0 1px 3px rgba(18,40,61,.06)" }}>
+        {[["schedule","Расписание"],["homework",`Задания${hw.filter(h=>h.status==="assigned").length ? " · " + hw.filter(h=>h.status==="assigned").length : ""}`]].map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)}
+            style={{ flex:1, padding:"10px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700,
+              background: tab===k ? "linear-gradient(135deg,#1da0d4,#5cb85c)" : "transparent", color: tab===k ? "#fff" : "#55677a" }}>{l}</button>
+        ))}
+      </div>
+
+      {tab === "schedule" && (
+        <div>
+          {upcoming.length === 0 && past.length === 0 && (
+            <div style={{ background:"#fff", borderRadius:14, padding:30, textAlign:"center", color:"#a9b8c6", fontSize:13 }}>Занятий пока нет</div>
+          )}
+          {upcoming.length > 0 && (
+            <>
+              <div style={{ fontSize:12, fontWeight:700, color:"#7a8a9c", margin:"4px 0 8px 4px", textTransform:"uppercase" }}>Предстоящие</div>
+              <div style={{ display:"grid", gap:8, marginBottom:16 }}>
+                {upcoming.map((l,i)=>{
+                  const d = new Date(l.date);
+                  const isToday = l.date === today;
+                  return (
+                    <div key={i} style={{ background:"#fff", borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", gap:12, boxShadow:"0 1px 3px rgba(18,40,61,.06)", border: isToday ? "1px solid rgba(29,160,212,.4)" : "1px solid transparent" }}>
+                      <div style={{ textAlign:"center", flexShrink:0, width:44 }}>
+                        <div style={{ fontSize:18, fontWeight:700, color: isToday ? "#1da0d4" : "#12283d", lineHeight:1 }}>{d.getDate()}</div>
+                        <div style={{ fontSize:10, color:"#7a8a9c", marginTop:2 }}>{MONTHS[d.getMonth()]} · {WD[d.getDay()]}</div>
+                      </div>
+                      <div style={{ width:1, alignSelf:"stretch", background:"#eef4f8" }} />
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:600, color:"#12283d" }}>{l.subject}</div>
+                        <div style={{ fontSize:12, color:"#7a8a9c", marginTop:2 }}>{l.time}{l.tutor ? ` · ${l.tutor}` : ""}{l.duration ? ` · ${l.duration} мин` : ""}</div>
+                      </div>
+                      {isToday && <div style={{ fontSize:11, fontWeight:700, color:"#1da0d4", flexShrink:0 }}>сегодня</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          {past.length > 0 && (
+            <>
+              <div style={{ fontSize:12, fontWeight:700, color:"#7a8a9c", margin:"4px 0 8px 4px", textTransform:"uppercase" }}>Прошедшие</div>
+              <div style={{ display:"grid", gap:6 }}>
+                {past.slice(0,10).map((l,i)=>(
+                  <div key={i} style={{ background:"#fff", borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"center", gap:10, opacity:.75 }}>
+                    <div style={{ fontSize:12, color:"#7a8a9c", width:56, flexShrink:0 }}>{fmtDate(l.date)}</div>
+                    <div style={{ flex:1, fontSize:13, color:"#55677a", minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.subject}</div>
+                    {lsnLabel[l.status] && <div style={{ fontSize:11, color:lsnColor[l.status]||"#a9b8c6", flexShrink:0, fontWeight:600 }}>{lsnLabel[l.status]}</div>}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {tab === "homework" && (
+        <div style={{ display:"grid", gap:8 }}>
+          {hw.length === 0 && (
+            <div style={{ background:"#fff", borderRadius:14, padding:30, textAlign:"center", color:"#a9b8c6", fontSize:13 }}>Заданий пока нет</div>
+          )}
+          {hw.map((h,i)=>{
+            const overdue = h.status === "assigned" && h.due_date && h.due_date < today;
+            return (
+              <div key={i} style={{ background:"#fff", borderRadius:12, padding:"14px 16px", boxShadow:"0 1px 3px rgba(18,40,61,.06)",
+                borderLeft:`4px solid ${h.status==="checked" ? "#5cb85c" : overdue ? "#e2574c" : "#1da0d4"}` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10, marginBottom:6 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#12283d" }}>{h.subject || "Задание"}</div>
+                  <div style={{ fontSize:11, fontWeight:600, flexShrink:0, color: h.status==="checked" ? "#5cb85c" : h.status==="submitted" ? "#f5a623" : overdue ? "#e2574c" : "#7a8a9c" }}>
+                    {h.status==="checked" ? "проверено" : h.status==="submitted" ? "сдано" : overdue ? "просрочено" : "задано"}
+                  </div>
+                </div>
+                <div style={{ fontSize:14, color:"#22344a", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{h.text}</div>
+                {h.due_date && <div style={{ fontSize:12, color: overdue ? "#e2574c" : "#7a8a9c", marginTop:8 }}>Сдать до {fmtDate(h.due_date)}</div>}
+                {h.comment && <div style={{ fontSize:12, color:"#55677a", marginTop:8, padding:"8px 10px", background:"#f8fbfd", borderRadius:8 }}>💬 {h.comment}</div>}
+                {h.grade && <div style={{ fontSize:13, fontWeight:700, color:"#5cb85c", marginTop:6 }}>Оценка: {h.grade}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ textAlign:"center", fontSize:11, color:"#a9b8c6", marginTop:20 }}>
+        Вопросы по расписанию и оплате — администратору центра
+      </div>
+    </>
+  );
+}
+
 export default function App() {
   // ── Load from localStorage or use defaults (instant local cache) ──
   const saved = loadFromLS();
@@ -1594,6 +1796,7 @@ ${contextSummary}`;
     setAllUsers(data || []);
   }
   useEffect(() => { if (view === "users" && isAdmin) loadUsers(); }, [view]);
+  useEffect(() => { if (view === "portal" && isAdmin) loadParentLinks(); }, [view]);
      // ===== ДОМАШНИЕ ЗАДАНИЯ =====
   const [homework, setHomework] = useState([]);
   const [hwDraft, setHwDraft] = useState({ text:"", dueDate:"" });
@@ -1715,6 +1918,47 @@ ${contextSummary}`;
     setNLesson({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
     setModal(null);
     notify(`${label} запланирована на ${nLesson.date}`);
+  }
+
+  // ===== ССЫЛКИ ДЛЯ РОДИТЕЛЕЙ =====
+  const [parentLinks, setParentLinks] = useState([]);
+  const [portalSearch, setPortalSearch] = useState("");
+
+  async function loadParentLinks() {
+    const { data, error } = await supabase.rpc("list_parent_links");
+    if (error) { console.error("parent links:", error); return; }
+    setParentLinks(data || []);
+  }
+
+  async function createParentLink(student) {
+    const family = student.familyId || null;
+    const { data, error } = await supabase.rpc("create_parent_link", {
+      p_student_id: student.id,
+      p_family_id: family,
+      p_parent_name: student.parentName || null,
+      p_parent_phone: student.parentPhone || student.phone || null,
+    });
+    if (error) { notify("Ошибка: " + error.message, "error"); return; }
+    const url = `${window.location.origin}/?p=${data.token}`;
+    try { await navigator.clipboard.writeText(url); notify(data.existing ? "Ссылка уже была — скопирована" : "Ссылка создана и скопирована"); }
+    catch { window.prompt("Скопируйте ссылку:", url); }
+    loadParentLinks();
+  }
+
+  async function revokeParentLink(id) {
+    if (!window.confirm("Отозвать доступ? Родитель больше не сможет открыть кабинет по этой ссылке.")) return;
+    const { error } = await supabase.rpc("revoke_parent_link", { p_id: id });
+    if (error) { notify("Ошибка: " + error.message, "error"); return; }
+    setParentLinks(parentLinks.filter(l => l.id !== id));
+    notify("Доступ отозван");
+  }
+
+  function copyParentLink(token) {
+    const url = `${window.location.origin}/?p=${token}`;
+    navigator.clipboard.writeText(url).then(
+      () => notify("Ссылка скопирована"),
+      () => window.prompt("Скопируйте ссылку:", url)
+    );
   }
 
   const [nUser, setNUser] = useState({ login:"", password:"", role:"tutor", tutorId:"", name:"" });
@@ -1881,6 +2125,7 @@ ${contextSummary}`;
     { id:"requests",  icon:Inbox,         label:"Запросы родит." },
     { id:"mailings",  icon:Send,          label:"Рассылки"       },
     { id:"candidates",icon:UserPlus,      label:"Соискатели"     },
+    { id:"portal",    icon:Mail,          label:"Кабинет родит." },
     { id:"users",     icon:Users,         label:"Пользователи"   },
     { id:"ai",        icon:Sparkles,      label:"ИИ-Помощник"    },
   ];
@@ -1969,6 +2214,12 @@ ${contextSummary}`;
     setCurrentUser(null);
     setLoginInput(""); setPassInput("");
   };
+
+  // Кабинет родителя по ссылке ?p=ТОКЕН — открывается вместо входа в CRM
+  const portalToken = useMemo(() => {
+    try { return new URLSearchParams(window.location.search).get("p"); } catch { return null; }
+  }, []);
+  if (portalToken) return <ParentPortal token={portalToken} />;
 
   if (!currentUser) {
     return (
@@ -2069,7 +2320,7 @@ ${contextSummary}`;
             <div style={{ fontSize:13, color:"rgba(255,255,255,0.9)", marginTop:5, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>Образовательный центр</div>
           </div>
         </div>
-                      {nav.filter(n => n.id !== "users" || isAdmin).map(n=>(
+                      {nav.filter(n => (n.id !== "users" && n.id !== "portal") || isAdmin).map(n=>(
           <button key={n.id} className={`nb ${view===n.id?"on":""}`} onClick={()=>goView(n.id)}
             style={{ display:"flex", alignItems:"center", gap:13, padding:"14px 24px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"rgba(255,255,255,0.9)", fontSize:17, fontWeight:500, cursor:"pointer", width:"100%", textAlign:"left" }}>
             <n.icon size={21} strokeWidth={2} style={{ flexShrink:0 }} />{n.label}
@@ -2583,6 +2834,82 @@ ${contextSummary}`;
         })()}
 
         {/* ── STUDENTS ── */}
+        {view==="portal" && isAdmin && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap", gap:12 }}>
+              <h2 style={{ fontSize:22, fontWeight:700, margin:0 }}>Кабинет родителя</h2>
+            </div>
+            <div style={{ fontSize:13, color:"#7a8a9c", marginBottom:20, lineHeight:1.5 }}>
+              Родитель открывает ссылку и видит расписание, домашние задания и остаток абонемента своих детей. Вход не требуется. Ссылку можно отозвать в любой момент.
+            </div>
+
+            <div style={{ background:"#fff", border:"1px solid #dbe6f0", borderRadius:14, padding:16, marginBottom:20 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#12283d", marginBottom:10 }}>Создать ссылку</div>
+              <input placeholder="Найдите ученика по имени или телефону..." value={portalSearch} onChange={e=>setPortalSearch(e.target.value)} />
+              {portalSearch.trim().length >= 2 && (() => {
+                const q = portalSearch.trim().toLowerCase();
+                const found = students.filter(s =>
+                  (s.name||"").toLowerCase().includes(q) ||
+                  (s.parentName||"").toLowerCase().includes(q) ||
+                  (s.parentPhone||"").replace(/\D/g,"").includes(q.replace(/\D/g,""))
+                ).slice(0, 6);
+                if (!found.length) return <div style={{ fontSize:12, color:"#a9b8c6", marginTop:10 }}>Ничего не найдено</div>;
+                return (
+                  <div style={{ marginTop:10, display:"grid", gap:6 }}>
+                    {found.map(s => (
+                      <div key={s.id} style={{ padding:"10px 12px", background:"#f8fbfd", border:"1px solid #dbe6f0", borderRadius:9, display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:"#12283d" }}>{s.name}</div>
+                          <div style={{ fontSize:11, color:"#7a8a9c" }}>
+                            {s.parentName || "родитель не указан"}{s.parentPhone ? " · " + s.parentPhone : ""}
+                            {s.familyId && students.filter(x=>x.familyId===s.familyId).length > 1 ? ` · семья (${students.filter(x=>x.familyId===s.familyId).length} детей)` : ""}
+                          </div>
+                        </div>
+                        <button className="bp" style={{ fontSize:12, padding:"7px 12px", flexShrink:0 }} onClick={()=>{ createParentLink(s); setPortalSearch(""); }}>Создать</button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div style={{ fontSize:13, fontWeight:700, color:"#12283d", marginBottom:10 }}>Выданные ссылки · {parentLinks.length}</div>
+            {parentLinks.length === 0 ? (
+              <div style={{ background:"#fff", borderRadius:14, padding:30, textAlign:"center", color:"#a9b8c6", fontSize:13 }}>
+                Ссылок пока нет. Найдите ученика выше и нажмите «Создать».
+              </div>
+            ) : (
+              <div style={{ display:"grid", gap:8 }}>
+                {parentLinks.map(l => {
+                  const kids = l.family_id
+                    ? students.filter(s => s.familyId === l.family_id)
+                    : students.filter(s => s.id === l.student_id);
+                  return (
+                    <div key={l.id} style={{ background:"#fff", border:"1px solid #dbe6f0", borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+                      <div style={{ minWidth:0, flex:"1 1 240px" }}>
+                        <div style={{ fontSize:13, fontWeight:600, color:"#12283d" }}>
+                          {kids.length ? kids.map(k=>k.name).join(", ") : "(ученик удалён)"}
+                        </div>
+                        <div style={{ fontSize:11, color:"#7a8a9c", marginTop:3 }}>
+                          {l.parent_name || "—"}{l.parent_phone ? " · " + l.parent_phone : ""}
+                          {" · "}
+                          {l.open_count > 0 ? `открыто ${l.open_count} раз` : "ещё не открывали"}
+                          {l.last_opened_at ? ` · ${new Date(l.last_opened_at).toLocaleDateString("ru-RU")}` : ""}
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                        <button className="bg" style={{ fontSize:11, padding:"6px 10px" }} onClick={()=>copyParentLink(l.token)}>📋 Копировать</button>
+                        <button className="bg" style={{ fontSize:11, padding:"6px 10px" }} onClick={()=>window.open(`/?p=${l.token}`, "_blank")}>👁 Открыть</button>
+                        <button style={{ background:"rgba(226,87,76,.08)", border:"1px solid rgba(226,87,76,.2)", color:"#e2574c", padding:"6px 10px", borderRadius:7, cursor:"pointer", fontSize:11 }} onClick={()=>revokeParentLink(l.id)}>Отозвать</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {view==="tasks" && (()=>{
           const todayStr = new Date().toISOString().split("T")[0];
           const visible = tasks.filter(t => taskFilter==="all" ? true : taskFilter==="done" ? t.status==="done" : t.status!=="done");
