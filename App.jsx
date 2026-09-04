@@ -1036,6 +1036,104 @@ export default function App() {
 
   function emptyChild() { return { name:"", birthDate:"", school:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }], status:"trial", tuitionNote:"" }; }
   const [familyForm, setFamilyForm] = useState({ parentName:"", phone:"", extraPhones:[], address:"", notes:"", children:[emptyChild()] });
+  // ===== РАСПОЗНАВАНИЕ БУМАЖНОЙ АНКЕТЫ =====
+  // Фото анкеты уходит в Claude, оттуда возвращается JSON, которым
+  // заполняется форма нового ученика. Данные всегда показываются на
+  // проверку — ничего не сохраняется автоматически.
+  const [scanBusy, setScanBusy] = useState(false);
+  const scanInputRef = useRef(null);
+
+  async function scanStudentForm(file) {
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { notify("Фото больше 8 МБ — сожмите или переснимите", "error"); return; }
+    setScanBusy(true);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(",")[1]);
+        r.onerror = () => reject(new Error("read failed"));
+        r.readAsDataURL(file);
+      });
+
+      const mediaType = file.type === "image/png" ? "image/png"
+        : file.type === "image/webp" ? "image/webp" : "image/jpeg";
+
+      const prompt = `Это фотография бумажной анкеты ученика образовательного центра.
+Извлеки данные и верни ТОЛЬКО JSON, без пояснений и markdown-разметки.
+
+Формат:
+{
+  "parentName": "ФИО родителя",
+  "phone": "+7XXXXXXXXXX",
+  "extraPhones": ["доп. телефоны, если есть"],
+  "address": "адрес",
+  "notes": "прочие пометки со сканера",
+  "children": [
+    { "name": "ФИО ребёнка", "birthDate": "ГГГГ-ММ-ДД", "school": "школа", "grade": "класс", "subjects": ["предметы"] }
+  ]
+}
+
+Правила:
+- Телефоны приводи к виду +7XXXXXXXXXX.
+- Дату рождения — строго ГГГГ-ММ-ДД. Если в анкете только возраст, оставь birthDate пустым.
+- Класс — только число ("7", а не "7 класс").
+- Если поле неразборчиво или отсутствует — пустая строка "" (или [] для списков).
+- Ничего не выдумывай: пустое поле лучше, чем догадка.`;
+
+      const response = await fetch("/api/ai-proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "claude",
+          max_tokens: 1500,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+              { type: "text", text: prompt },
+            ],
+          }],
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) { notify("Ошибка распознавания: " + (result.error || "нет ответа"), "error"); return; }
+
+      const raw = (result.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+      const jsonText = raw.replace(/```json|```/g, "").trim();
+      let parsed;
+      try { parsed = JSON.parse(jsonText); }
+      catch { notify("Не удалось разобрать ответ — попробуйте переснять анкету чётче", "error"); return; }
+
+      const kids = Array.isArray(parsed.children) && parsed.children.length ? parsed.children : [{}];
+      setFamilyForm({
+        parentName: parsed.parentName || "",
+        phone: parsed.phone || "",
+        extraPhones: Array.isArray(parsed.extraPhones) ? parsed.extraPhones.filter(Boolean) : [],
+        address: parsed.address || "",
+        notes: parsed.notes || "",
+        children: kids.map(k => ({
+          ...emptyChild(),
+          name: k.name || "",
+          birthDate: k.birthDate || "",
+          school: k.school || "",
+          grade: k.grade || "",
+          subjectTeachers: (Array.isArray(k.subjects) && k.subjects.length ? k.subjects : [""])
+            .map(s => ({ subject: s || "", tutorId: "" })),
+        })),
+      });
+
+      const filled = [parsed.parentName, parsed.phone, kids[0]?.name].filter(Boolean).length;
+      notify(filled >= 2 ? "Анкета распознана — проверьте поля" : "Распознано частично — заполните недостающее", filled >= 2 ? "success" : "error");
+    } catch (e) {
+      notify("Ошибка при обработке фото", "error");
+    } finally {
+      setScanBusy(false);
+      if (scanInputRef.current) scanInputRef.current.value = "";
+    }
+  }
+
+
   function calcAge(birthDate) {
     if (!birthDate) return null;
     const b = new Date(birthDate); const now = new Date();
@@ -1436,7 +1534,24 @@ ${contextSummary}`;
     if (!file) return;
     setUploadingFile(true);
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9а-яА-Я._-]/g, "_");
+      // Supabase Storage не принимает кириллицу и пробелы в ключе объекта,
+      // поэтому транслитерируем. Исходное имя сохраняем отдельно, в fileEntry.name.
+      const TRANSLIT = { а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",
+        н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"ts",ч:"ch",ш:"sh",щ:"sch",ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya" };
+      const safeName = file.name
+        .split("")
+        .map(ch => {
+          const low = ch.toLowerCase();
+          if (TRANSLIT[low] !== undefined) {
+            const t = TRANSLIT[low];
+            return ch === low ? t : t.charAt(0).toUpperCase() + t.slice(1);
+          }
+          return ch;
+        })
+        .join("")
+        .replace(/[^a-zA-Z0-9._-]/g, "_")
+        .replace(/_+/g, "_")
+        .slice(-120) || "file";
       const path = `${kind}/${entityId}/${Date.now()}_${safeName}`;
       const { error: upErr } = await supabase.storage.from("attachments").upload(path, file);
       if (upErr) { notify("Не удалось загрузить файл: " + upErr.message, "error"); setUploadingFile(false); return; }
@@ -4985,7 +5100,20 @@ ${contextSummary}`;
         <div className="ov" onClick={()=>setModal(null)}>
           <div className="mo" style={{ width:640, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
             <h2 style={{ margin:"0 0 4px", fontSize:21, fontWeight:700, color:"#12283d" }}>Новый ученик</h2>
-            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:20 }}>Если из одной семьи несколько детей — добавьте их всех сразу, контакты родителя общие</div>
+            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:14 }}>Если из одной семьи несколько детей — добавьте их всех сразу, контакты родителя общие</div>
+
+            <div style={{ background:"rgba(29,160,212,.07)", border:"1px dashed rgba(29,160,212,.4)", borderRadius:12, padding:"12px 14px", marginBottom:18, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:"#12283d" }}>📷 Заполнить с фото анкеты</div>
+                <div style={{ fontSize:11, color:"#7a8a9c", marginTop:2 }}>Сфотографируйте бумажную анкету — поля заполнятся сами, останется проверить</div>
+              </div>
+              <button className="bp" disabled={scanBusy} style={{ fontSize:12, padding:"8px 14px", flexShrink:0, opacity:scanBusy?0.6:1 }}
+                onClick={()=>scanInputRef.current?.click()}>
+                {scanBusy ? "Распознаю..." : "Выбрать фото"}
+              </button>
+              <input ref={scanInputRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }}
+                onChange={e=>scanStudentForm(e.target.files?.[0])} />
+            </div>
             <div style={{ display:"grid", gap:14 }}>
 
               <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:11, fontWeight:700, color:"#1da0d4", textTransform:"uppercase", letterSpacing:"0.06em" }}>
