@@ -676,13 +676,15 @@ export default function App() {
     async function loadInitial() {
       try {
         // Load the 5 migrated entities from their own real tables
-         const [tData, sData, lData, pData, salData, subData] = await Promise.all([
+         const [tData, sData, lData, pData, salData, subData, tskData, hwData] = await Promise.all([
           fetchTable("tutors"),
           fetchTable("students"),
           fetchTable("lessons"),
           fetchTable("payments"),
           fetchTable("salaries"),
           fetchTable("subscriptions"),
+          fetchTable("tasks"),
+          fetchTable("homework"),
         ]);
         if (cancelled) return;
         if (tData) setTutors(tData);
@@ -691,6 +693,8 @@ export default function App() {
         if (pData) setPayments(pData);
         if (salData) setSalaries(salData);
         if (subData) setSubscriptions(subData);
+        if (tskData) setTasks(tskData);
+        if (hwData) setHomework(hwData);
 
         // Load the remaining, not-yet-migrated entities from the old blob
         const { data: row, error } = await supabase
@@ -742,6 +746,12 @@ export default function App() {
           })
       .on("postgres_changes", { event: "*", schema: "public", table: "subscriptions" }, async () => {
         const d = await fetchTable("subscriptions"); if (d) setSubscriptions(d);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, async () => {
+        const d = await fetchTable("tasks"); if (d) setTasks(d);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "homework" }, async () => {
+        const d = await fetchTable("homework"); if (d) setHomework(d);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -1583,7 +1593,103 @@ ${contextSummary}`;
     setAllUsers(data || []);
   }
   useEffect(() => { if (view === "users" && isAdmin) loadUsers(); }, [view]);
-     const [nUser, setNUser] = useState({ login:"", password:"", role:"tutor", tutorId:"", name:"" });
+     // ===== ДОМАШНИЕ ЗАДАНИЯ =====
+  const [homework, setHomework] = useState([]);
+  const [hwDraft, setHwDraft] = useState({ text:"", dueDate:"" });
+
+  async function saveHomework(lesson) {
+    if (!hwDraft.text.trim()) { notify("Введите текст задания", "error"); return; }
+    const row = {
+      lesson_id: lesson.id, student_id: lesson.studentId, tutor_id: lesson.tutorId,
+      subject: lesson.subject, text: hwDraft.text.trim(),
+      due_date: hwDraft.dueDate || null, status: "assigned",
+    };
+    const existing = homework.find(h => h.lesson_id === lesson.id);
+    if (existing) {
+      const { error } = await supabase.from("homework").update({ text: row.text, due_date: row.due_date }).eq("id", existing.id);
+      if (error) { notify("Ошибка: " + error.message, "error"); return; }
+      setHomework(homework.map(h => h.id === existing.id ? { ...h, ...row } : h));
+    } else {
+      const { error } = await supabase.from("homework").insert(row);
+      if (error) { notify("Ошибка: " + error.message, "error"); return; }
+      const d = await fetchTable("homework"); if (d) setHomework(d);
+    }
+    notify("Домашнее задание сохранено");
+  }
+
+  async function setHomeworkStatus(hwId, status) {
+    const patch = { status };
+    setHomework(homework.map(h => h.id === hwId ? { ...h, ...patch } : h));
+    const { error } = await supabase.from("homework").update(patch).eq("id", hwId);
+    if (error) notify("Ошибка: " + error.message, "error");
+  }
+
+  // ===== ЗАДАЧИ (планнер) =====
+  const [tasks, setTasks] = useState([]);
+  const [nTask, setNTask] = useState({ title:"", description:"", dueDate:"", priority:"normal", assignedTo:"", studentId:"", tutorId:"" });
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [taskFilter, setTaskFilter] = useState("open");
+
+  async function addTask() {
+    if (!nTask.title.trim()) { notify("Введите название задачи", "error"); return; }
+    const row = {
+      title: nTask.title.trim(), description: nTask.description || null,
+      due_date: nTask.dueDate || null, priority: nTask.priority, status: "open",
+      assigned_to: nTask.assignedTo ? Number(nTask.assignedTo) : null,
+      student_id: nTask.studentId ? Number(nTask.studentId) : null,
+      tutor_id: nTask.tutorId ? Number(nTask.tutorId) : null,
+      created_by: currentUser.login,
+    };
+    const { error } = await supabase.from("tasks").insert(row);
+    if (error) { notify("Ошибка: " + error.message, "error"); return; }
+    const d = await fetchTable("tasks"); if (d) setTasks(d);
+    notify("Задача создана");
+    setModal(null);
+    setNTask({ title:"", description:"", dueDate:"", priority:"normal", assignedTo:"", studentId:"", tutorId:"" });
+  }
+
+  function startEditTask(t) {
+    setNTask({
+      title: t.title, description: t.description || "", dueDate: t.due_date || "",
+      priority: t.priority || "normal", assignedTo: t.assigned_to || "",
+      studentId: t.student_id || "", tutorId: t.tutor_id || "",
+    });
+    setEditingTaskId(t.id);
+    setModal("editTask");
+  }
+
+  async function saveEditTask() {
+    const patch = {
+      title: nTask.title.trim(), description: nTask.description || null,
+      due_date: nTask.dueDate || null, priority: nTask.priority,
+      assigned_to: nTask.assignedTo ? Number(nTask.assignedTo) : null,
+      student_id: nTask.studentId ? Number(nTask.studentId) : null,
+      tutor_id: nTask.tutorId ? Number(nTask.tutorId) : null,
+    };
+    setTasks(tasks.map(t => t.id === editingTaskId ? { ...t, ...patch } : t));
+    const { error } = await supabase.from("tasks").update(patch).eq("id", editingTaskId);
+    if (error) { notify("Ошибка: " + error.message, "error"); return; }
+    setModal(null); setEditingTaskId(null);
+    notify("Задача обновлена");
+  }
+
+  async function toggleTask(t) {
+    const done = t.status !== "done";
+    const patch = { status: done ? "done" : "open", completed_at: done ? new Date().toISOString() : null };
+    setTasks(tasks.map(x => x.id === t.id ? { ...x, ...patch } : x));
+    const { error } = await supabase.from("tasks").update(patch).eq("id", t.id);
+    if (error) notify("Ошибка: " + error.message, "error");
+  }
+
+  async function deleteTask(id) {
+    if (!window.confirm("Удалить задачу?")) return;
+    setTasks(tasks.filter(t => t.id !== id));
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    if (error) notify("Ошибка: " + error.message, "error");
+    else notify("Задача удалена");
+  }
+
+  const [nUser, setNUser] = useState({ login:"", password:"", role:"tutor", tutorId:"", name:"" });
 
   async function addUser() {
     if (!isAdmin) return;
@@ -1739,6 +1845,7 @@ ${contextSummary}`;
     { id:"students",  icon:Users,         label:"Ученики"        },
     { id:"courses",   icon:BookOpen,      label:"Курсы"          },
     { id:"schedule",  icon:Calendar,      label:"Расписание"     },
+    { id:"tasks",     icon:Check,         label:"Задачи"         },
     { id:"subscriptions", icon:CreditCard, label:"Абонементы"    },
     { id:"pricing",   icon:Wallet,        label:"Цены и правила" },
     { id:"payments",  icon:CreditCard,    label:"Финансы"        },
@@ -2448,6 +2555,86 @@ ${contextSummary}`;
         })()}
 
         {/* ── STUDENTS ── */}
+        {view==="tasks" && (()=>{
+          const todayStr = new Date().toISOString().split("T")[0];
+          const visible = tasks.filter(t => taskFilter==="all" ? true : taskFilter==="done" ? t.status==="done" : t.status!=="done");
+          const sorted = [...visible].sort((a,b)=>{
+            if (a.status !== b.status) return a.status === "done" ? 1 : -1;
+            if (!a.due_date) return 1; if (!b.due_date) return -1;
+            return a.due_date.localeCompare(b.due_date);
+          });
+          const prioCfg = { high:{label:"Высокий",color:"#e2574c",bg:"rgba(226,87,76,.12)"}, normal:{label:"Обычный",color:"#1da0d4",bg:"rgba(29,160,212,.12)"}, low:{label:"Низкий",color:"#a9b8c6",bg:"rgba(148,163,184,.12)"} };
+          const overdue = tasks.filter(t => t.status!=="done" && t.due_date && t.due_date < todayStr).length;
+          return (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+              <div>
+                <h2 style={{ fontSize:22, fontWeight:700, margin:0 }}>Задачи</h2>
+                {overdue > 0 && <div style={{ fontSize:12, color:"#e2574c", fontWeight:600, marginTop:4 }}>Просрочено: {overdue}</div>}
+              </div>
+              <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                <div style={{ display:"flex", gap:0, background:"#f2f6fa", borderRadius:10, padding:3 }}>
+                  {[["open","Активные"],["done","Выполненные"],["all","Все"]].map(([k,l])=>(
+                    <button key={k} onClick={()=>setTaskFilter(k)}
+                      style={{ padding:"6px 14px", borderRadius:8, fontSize:12, fontWeight:700, border:"none", cursor:"pointer", fontFamily:"inherit",
+                        background: taskFilter===k ? "linear-gradient(135deg,#1da0d4,#5cb85c)" : "transparent",
+                        color: taskFilter===k ? "white" : "#55677a" }}>{l}</button>
+                  ))}
+                </div>
+                <button className="bp" onClick={()=>{ setNTask({ title:"", description:"", dueDate:"", priority:"normal", assignedTo:"", studentId:"", tutorId:"" }); setModal("addTask"); }}>
+                  <Plus size={15} /> Новая задача
+                </button>
+              </div>
+            </div>
+            {sorted.length === 0 ? (
+              <div style={{ background:"#fff", borderRadius:14, padding:40, textAlign:"center", color:"#a9b8c6" }}>
+                {taskFilter==="done" ? "Выполненных задач пока нет." : "Задач пока нет. Нажмите «Новая задача», чтобы создать первую."}
+              </div>
+            ) : (
+              <div style={{ display:"grid", gap:10 }}>
+                {sorted.map(t => {
+                  const isDone = t.status === "done";
+                  const isOverdue = !isDone && t.due_date && t.due_date < todayStr;
+                  const isToday = !isDone && t.due_date === todayStr;
+                  const st = students.find(s=>s.id===t.student_id);
+                  const tu = tutors.find(x=>x.id===t.tutor_id);
+                  const asg = allUsers.find(u=>u.id===t.assigned_to);
+                  const p = prioCfg[t.priority] || prioCfg.normal;
+                  return (
+                    <div key={t.id} style={{ background:"#fff", border:"1px solid " + (isOverdue ? "rgba(226,87,76,.3)" : "rgba(18,40,61,.05)"), borderLeft:"4px solid " + (isDone ? "#a9b8c6" : isOverdue ? "#e2574c" : p.color), borderRadius:12, padding:"14px 16px", display:"flex", alignItems:"flex-start", gap:12, opacity:isDone?0.6:1 }}>
+                      <button onClick={()=>toggleTask(t)} title={isDone?"Вернуть в работу":"Отметить выполненной"}
+                        style={{ width:22, height:22, borderRadius:6, flexShrink:0, marginTop:2, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
+                          border: isDone ? "none" : "2px solid #d7e2ee", background: isDone ? "#5cb85c" : "transparent" }}>
+                        {isDone && <Check size={14} color="#fff" />}
+                      </button>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:15, fontWeight:700, color:"#12283d", textDecoration:isDone?"line-through":"none", marginBottom:t.description?4:6 }}>{t.title}</div>
+                        {t.description && <div style={{ fontSize:13, color:"#55677a", marginBottom:6, whiteSpace:"pre-wrap" }}>{t.description}</div>}
+                        <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+                          {t.due_date && (
+                            <Tag c={isOverdue?"#e2574c":isToday?"#f5a623":"#7a8a9c"} bg={isOverdue?"rgba(226,87,76,.12)":isToday?"rgba(245,158,11,.12)":"rgba(122,138,156,.1)"}>
+                              {isOverdue ? "Просрочено: " : isToday ? "Сегодня: " : "До "}{t.due_date}
+                            </Tag>
+                          )}
+                          {!isDone && <Tag c={p.color} bg={p.bg}>{p.label}</Tag>}
+                          {st && <Tag c="#1da0d4" bg="rgba(29,160,212,.1)">👤 {st.name}</Tag>}
+                          {tu && <Tag c="#5cb85c" bg="rgba(92,184,92,.1)">🎓 {tu.short}</Tag>}
+                          {asg && <Tag c="#7a8a9c" bg="rgba(122,138,156,.1)">→ {asg.name || asg.login}</Tag>}
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                        <button className="bg" style={{ fontSize:11, padding:"5px 8px" }} onClick={()=>startEditTask(t)}><Pencil size={12} /></button>
+                        <button style={{ background:"rgba(226,87,76,.08)", border:"1px solid rgba(226,87,76,.2)", color:"#e2574c", padding:"5px 8px", borderRadius:7, cursor:"pointer" }} onClick={()=>deleteTask(t.id)}><Trash2 size={12} /></button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          );
+        })()}
+
         {view==="subscriptions" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
@@ -2733,6 +2920,8 @@ ${contextSummary}`;
               setEditGroupName("");
             }
             setEditRecurOn(false); setEditRecurWeekdays([]); setEditRecurEndDate("");
+            const existingHw = homework.find(h => h.lesson_id === l.id);
+            setHwDraft({ text: existingHw?.text || "", dueDate: existingHw?.due_date || "" });
           };
           const closeEditLesson = () => { setEditLesson(null); };
 
@@ -3007,6 +3196,45 @@ ${contextSummary}`;
                       )}
                     </div>
 
+                    {/* ДОМАШНЕЕ ЗАДАНИЕ */}
+                    {(() => {
+                      const hw = homework.find(h => h.lesson_id === editLesson.id);
+                      return (
+                        <div style={{ marginTop:16, padding:14, background:"#f8fbfd", border:"1px solid #dbe6f0", borderRadius:12 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:10 }}>
+                            <FileText size={15} color="#1da0d4" />
+                            <span style={{ fontSize:14, fontWeight:700, color:"#12283d" }}>Домашнее задание</span>
+                            {hw && (
+                              <Tag c={hw.status==="checked"?"#5cb85c":hw.status==="submitted"?"#f5a623":"#7a8a9c"}
+                                   bg={hw.status==="checked"?"rgba(92,184,92,.12)":hw.status==="submitted"?"rgba(245,158,11,.12)":"rgba(122,138,156,.1)"}>
+                                {hw.status==="checked"?"Проверено":hw.status==="submitted"?"Сдано":"Задано"}
+                              </Tag>
+                            )}
+                          </div>
+                          <textarea
+                            value={hwDraft.text !== "" || !hw ? hwDraft.text : hw.text}
+                            onChange={e=>setHwDraft({...hwDraft, text:e.target.value})}
+                            placeholder="Что задано на дом..."
+                            rows={3}
+                            style={{ width:"100%", padding:"10px 12px", border:"1px solid #d7e2ee", borderRadius:10, fontSize:13, fontFamily:"inherit", resize:"vertical", marginBottom:10 }} />
+                          <div style={{ display:"flex", gap:10, alignItems:"flex-end", flexWrap:"wrap" }}>
+                            <div style={{ flex:"1 1 160px" }}>
+                              <div style={{ fontSize:11, color:"#55677a", marginBottom:5 }}>Сдать до</div>
+                              <input type="date" value={hwDraft.dueDate || hw?.due_date || ""} onChange={e=>setHwDraft({...hwDraft, dueDate:e.target.value})} />
+                            </div>
+                            <button className="bp" style={{ fontSize:12, padding:"9px 16px" }} onClick={()=>saveHomework(editLesson)}>
+                              {hw ? "Обновить" : "Задать"}
+                            </button>
+                            {hw && hw.status !== "checked" && (
+                              <button className="bg" style={{ fontSize:12, padding:"9px 14px" }} onClick={()=>setHomeworkStatus(hw.id, hw.status==="assigned" ? "submitted" : "checked")}>
+                                {hw.status==="assigned" ? "Отметить сданным" : "Отметить проверенным"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     <div style={{ display:"flex", gap:10, marginTop:20, flexWrap:"wrap" }}>
                       <button className="bp" style={{ flex:1 }} onClick={saveEdit}>Сохранить</button>
                       <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"10px 18px", borderRadius:10, cursor:"pointer", fontSize:14, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }} onClick={()=>deleteLesson(editLesson.id)}><Trash2 size={15} /> Удалить</button>
@@ -3022,7 +3250,7 @@ ${contextSummary}`;
               {/* WEEK GRID */}
               {schedView==="week" && (
                 <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, overflow:"hidden" }}>
-                  <div style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom:"1px solid #dbe6f0" }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"64px repeat(7,1fr)", borderBottom:"1px solid #dbe6f0" }}>
                     <div style={{ background:"#1b6f8c" }} />
                     {weekDates.map((d,i)=>{
                       const isToday = fmt(d)===fmt(today);
@@ -3036,10 +3264,10 @@ ${contextSummary}`;
                       );
                     })}
                   </div>
-                  <div style={{ overflowY:"auto", maxHeight:"58vh" }}>
+                  <div style={{ overflowY:"auto", maxHeight:"72vh" }}>
                     {SLOTS.map(slot=>(
-                      <div key={slot} style={{ display:"grid", gridTemplateColumns:"52px repeat(7,1fr)", borderBottom: slot.endsWith(":30") ? "1px dashed #f2f6fa" : "1px solid #dbe6f0", minHeight:26 }}>
-                        <div style={{ padding:"3px 6px", fontSize:10, color:"#a9b8c6", textAlign:"right", borderRight:"1px solid #dbe6f0", background:"#1b6f8c" }}>{slot.endsWith(":00") ? slot : ""}</div>
+                      <div key={slot} style={{ display:"grid", gridTemplateColumns:"64px repeat(7,1fr)", borderBottom: slot.endsWith(":30") ? "1px dashed #f2f6fa" : "1px solid #dbe6f0", minHeight:44 }}>
+                        <div style={{ padding:"4px 8px", fontSize:12, fontWeight:600, color:"#a9b8c6", textAlign:"right", borderRight:"1px solid #dbe6f0", background:"#1b6f8c" }}>{slot.endsWith(":00") ? slot : ""}</div>
                         {weekDates.map((d,di)=>{
                           const dateStr = fmt(d);
                           const cellAll = lessonsByDateTime[`${dateStr}|${slot}`] || [];
@@ -3055,9 +3283,12 @@ ${contextSummary}`;
                                 return (
                                   <div key={l.id} onClick={e=>{ e.stopPropagation(); openEditLesson(isActive?null:l); }}
                                     title={`${l.subject} · ${l.isGroup?l.groupName:l.studentName} · ${l.time}`}
-                                    style={{ display:"flex", alignItems:"center", gap:4, background: isActive?`${tu?.color||"#1da0d4"}33`:`${tu?.color||"#1da0d4"}18`, border:`1px solid ${isActive?tu?.color||"#1da0d4":(tu?.color||"#1da0d4")+"33"}`, borderLeft:`3px solid ${tu?.color||"#1da0d4"}`, borderRadius:5, padding:"3px 5px", marginBottom:2, cursor:"pointer", transition:"all .15s", minHeight:20 }}>
+                                    style={{ display:"flex", alignItems:"center", gap:4, background: isActive?`${tu?.color||"#1da0d4"}33`:`${tu?.color||"#1da0d4"}18`, border:`1px solid ${isActive?tu?.color||"#1da0d4":(tu?.color||"#1da0d4")+"33"}`, borderLeft:`3px solid ${tu?.color||"#1da0d4"}`, borderRadius:6, padding:"5px 7px", marginBottom:3, cursor:"pointer", transition:"all .15s", minHeight:32 }}>
                                     {l.isGroup && <Users size={9} color="#22344a" style={{ flexShrink:0 }} />}
-                                    <span style={{ fontSize:10, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, lineHeight:1.2 }}>{l.subject}</span>
+                                    <div style={{ overflow:"hidden", flex:1, lineHeight:1.25 }}>
+                                      <div style={{ fontSize:12, fontWeight:700, color:"#22344a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.subject}</div>
+                                      <div style={{ fontSize:10, color:"#55677a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.isGroup ? l.groupName : l.studentName}</div>
+                                    </div>
                                     {l.status!=="scheduled" && (
                                       <span style={{ width:6, height:6, borderRadius:"50%", background:lsnCfg[l.status]?.color, flexShrink:0 }} />
                                     )}
@@ -4825,6 +5056,66 @@ ${contextSummary}`;
         </div>
       )}
 
+      {(modal==="addTask" || modal==="editTask") && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" style={{ width:560 }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 16px", fontSize:20, fontWeight:700 }}>{modal==="addTask" ? "Новая задача" : "Редактировать задачу"}</h2>
+            <div style={{ display:"grid", gap:14 }}>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Название *</div>
+                <input value={nTask.title} onChange={e=>setNTask({...nTask, title:e.target.value})} placeholder="Например: позвонить родителям Иванова" />
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Описание</div>
+                <textarea value={nTask.description} onChange={e=>setNTask({...nTask, description:e.target.value})} rows={3}
+                  style={{ width:"100%", padding:"10px 12px", border:"1px solid #d7e2ee", borderRadius:10, fontSize:13, fontFamily:"inherit", resize:"vertical" }} />
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Срок</div>
+                  <input type="date" value={nTask.dueDate} onChange={e=>setNTask({...nTask, dueDate:e.target.value})} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Приоритет</div>
+                  <select value={nTask.priority} onChange={e=>setNTask({...nTask, priority:e.target.value})}>
+                    <option value="low">Низкий</option>
+                    <option value="normal">Обычный</option>
+                    <option value="high">Высокий</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Поручить</div>
+                <select value={nTask.assignedTo} onChange={e=>setNTask({...nTask, assignedTo:e.target.value})}>
+                  <option value="">Никому конкретно</option>
+                  {allUsers.map(u => <option key={u.id} value={u.id}>{u.name || u.login}</option>)}
+                </select>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Связать с учеником</div>
+                  <select value={nTask.studentId} onChange={e=>setNTask({...nTask, studentId:e.target.value})}>
+                    <option value="">—</option>
+                    {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Связать с преподавателем</div>
+                  <select value={nTask.tutorId} onChange={e=>setNTask({...nTask, tutorId:e.target.value})}>
+                    <option value="">—</option>
+                    {tutors.map(t => <option key={t.id} value={t.id}>{t.short}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                <button className="bp" style={{ flex:1 }} onClick={modal==="addTask" ? addTask : saveEditTask}>Сохранить</button>
+                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {(modal==="addSubscription" || modal==="editSubscription") && (
         <div className="ov" onClick={()=>setModal(null)}>
           <div className="mo" style={{ width:520 }} onClick={e=>e.stopPropagation()}>
@@ -4840,7 +5131,10 @@ ${contextSummary}`;
               <div style={{ display:"flex", gap:10 }}>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предмет</div>
-                  <input value={nSubscription.subject} onChange={e=>setNSubscription({...nSubscription, subject:e.target.value})} placeholder="Все предметы" />
+                  <select value={nSubscription.subject} onChange={e=>setNSubscription({...nSubscription, subject:e.target.value})}>
+                    <option value="">Все предметы</option>
+                    {allSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Преподаватель</div>
