@@ -1931,6 +1931,19 @@ ${contextSummary}`;
   }
 
   // ===== ССЫЛКИ ДЛЯ РОДИТЕЛЕЙ =====
+  // ===== ТЁМНАЯ ТЕМА =====
+  // Реализована фильтром на корне: инвертирует светлые поверхности и
+  // возвращает исходный оттенок цветным элементам. Не требует правки
+  // тысячи инлайновых цветов по всему файлу.
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem("darkMode") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("darkMode", darkMode ? "1" : "0"); } catch {}
+    document.documentElement.classList.toggle("dark-mode", darkMode);
+    document.body.style.background = darkMode ? "#12181d" : "#f4f6f9";
+  }, [darkMode]);
+
   const [parentLinks, setParentLinks] = useState([]);
   const [portalSearch, setPortalSearch] = useState("");
 
@@ -2229,7 +2242,7 @@ ${contextSummary}`;
   const portalToken = useMemo(() => {
     try { return new URLSearchParams(window.location.search).get("p"); } catch { return null; }
   }, []);
-  if (portalToken) return <ParentPortal token={portalToken} />;
+  if (portalToken) { document.documentElement.classList.remove("dark-mode"); return <ParentPortal token={portalToken} />; }
 
   if (!currentUser) {
     return (
@@ -2298,6 +2311,16 @@ ${contextSummary}`;
         .rh{transition:background .15s;cursor:pointer}.rh:hover{background:rgba(29,160,212,.05)!important}
         .notif{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:500;z-index:999;animation:si .3s ease}
         @keyframes si{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+        /* ===== ТЁМНАЯ ТЕМА ===== */
+        html.dark-mode { filter: invert(1) hue-rotate(180deg); background:#12181d; }
+        /* возвращаем нормальный вид тому, что инвертировать не нужно */
+        html.dark-mode img,
+        html.dark-mode video,
+        html.dark-mode canvas,
+        html.dark-mode svg.keep-color { filter: invert(1) hue-rotate(180deg); }
+        html.dark-mode ::-webkit-scrollbar-track{background:#d6dde3}
+        html.dark-mode ::-webkit-scrollbar-thumb{background:#5a6570}
         @keyframes reqShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         .stab{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all .2s}
         .hamburger-btn{display:none}
@@ -2345,11 +2368,23 @@ ${contextSummary}`;
             <div style={{ width:7, height:7, borderRadius:"50%", background:(saveIndicator||cloudSyncing)?"#5cb85c":"#a9b8c6", transition:"all .3s", flexShrink:0 }} />
             <span style={{ fontSize:11, color:(saveIndicator||cloudSyncing)?"#5cb85c":"#55677a", fontWeight:600 }}>{cloudSyncing?"Синхронизация...":saveIndicator?"Сохранено ✓":"Облако · синхронизировано"}</span>
           </div>
+          {/* Переключатель темы */}
+          <button onClick={()=>setDarkMode(!darkMode)}
+            style={{ width:"100%", background:"rgba(255,255,255,0.12)", border:"none", borderRadius:10, padding:"8px 12px", marginBottom:8,
+              display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", fontFamily:"inherit" }}>
+            <span style={{ fontSize:11, fontWeight:600, color:"#ffffff" }}>
+              {darkMode ? "🌙 Тёмная тема" : "☀️ Светлая тема"}
+            </span>
+            <span style={{ width:32, height:18, borderRadius:9, background: darkMode ? "#5cb85c" : "rgba(255,255,255,0.3)", position:"relative", transition:"background .2s", flexShrink:0 }}>
+              <span style={{ position:"absolute", top:2, left: darkMode ? 16 : 2, width:14, height:14, borderRadius:"50%", background:"#fff", transition:"left .2s" }} />
+            </span>
+          </button>
+
           {/* Текущий пользователь + выход */}
           <div style={{ background:"rgba(255,255,255,0.12)", borderRadius:10, padding:"8px 12px", marginBottom:8, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:"#ffffff" }}>{currentUser.name || currentUser.login}</div>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.7)" }}>{isAdmin ? "Администратор" : "Преподаватель"}</div>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.92)" }}>{isAdmin ? "Администратор" : "Преподаватель"}</div>
             </div>
             <button onClick={doLogout} style={{ background:"rgba(255,255,255,0.2)", border:"none", borderRadius:7, color:"#ffffff", fontSize:10, fontWeight:600, cursor:"pointer", padding:"5px 8px", fontFamily:"inherit" }}>Выйти</button>
           </div>
@@ -2363,7 +2398,7 @@ ${contextSummary}`;
             <div style={{ fontSize:20, fontWeight:700, color:"#e2574c" }}>{students.filter(s=>s.balance<0).length}</div>
             <div style={{ fontSize:10, color:"#7a8a9c" }}>учеников</div>
           </div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.7)", textAlign:"center", marginTop:8 }}>Занятий в базе: {lessons.length}</div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.92)", textAlign:"center", marginTop:8 }}>Занятий в базе: {lessons.length}</div>
           <button onClick={cleanupDuplicateLessons} style={{ width:"100%", marginTop:6, padding:"7px", background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.3)", borderRadius:8, color:"#ffffff", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
             🧹 Убрать дубликаты занятий
           </button>
@@ -2371,7 +2406,7 @@ ${contextSummary}`;
           {/* ── ОБЛАЧНЫЕ РЕЗЕРВНЫЕ КОПИИ ── */}
           <div style={{ marginTop:10, background: backupOverdue ? "rgba(245,166,35,0.25)" : "rgba(255,255,255,0.12)", border:`1px solid ${backupOverdue ? "rgba(245,166,35,0.6)" : "rgba(255,255,255,0.25)"}`, borderRadius:12, padding:10 }}>
             <div style={{ fontSize:11, fontWeight:700, color:"#ffffff", marginBottom:2 }}>🛡️ Резервные копии</div>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.75)", marginBottom:8, lineHeight:1.4 }}>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.92)", marginBottom:8, lineHeight:1.4 }}>
               {lastBackup ? `Последняя: ${new Date(lastBackup).toLocaleDateString("ru-RU")}` : "Ещё ни разу не делали"}
               {backupOverdue && " · пора сохранить"}
             </div>
