@@ -2315,7 +2315,7 @@ ${contextSummary}`;
       {/* Mobile overlay — tap outside sidebar to close it */}
       <div className={`sidebar-overlay ${sidebarOpen ? "open" : ""}`} onClick={()=>setSidebarOpen(false)} />
 
-      <div className={`app-sidebar ${sidebarOpen ? "open" : ""}`} style={{ width:300, background:"linear-gradient(165deg, #29a3dc 0%, #2a9d8f 58%, #5cb531 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh", overflow:"hidden" }}>
+      <div className={`app-sidebar ${sidebarOpen ? "open" : ""}`} style={{ width:252, background:"linear-gradient(165deg, #29a3dc 0%, #2a9d8f 58%, #5cb531 100%)", borderRight:"1px solid #dbe6f0", padding:"20px 0 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh", overflowY:"auto", overflowX:"hidden" }}>
         {/* Декоративные круги и фирменная полоса — мотив логотипа */}
         <div style={{ position:"absolute", width:180, height:180, borderRadius:"50%", background:"rgba(255,255,255,.10)", top:-60, right:-70, pointerEvents:"none" }} />
         <div style={{ position:"absolute", width:120, height:120, borderRadius:"50%", background:"rgba(245,184,0,.16)", bottom:170, left:-50, pointerEvents:"none" }} />
@@ -2326,30 +2326,30 @@ ${contextSummary}`;
           <div style={{ flex:1, background:"#29a3dc" }} />
           <div style={{ flex:1, background:"#1a5490" }} />
         </div>
-        <div style={{ padding:"0 16px 30px", display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:12 }}>
-          <div style={{ position:"relative", width:140, height:140, display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ padding:"0 16px 18px", display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:9, position:"relative", zIndex:1 }}>
+          <div style={{ position:"relative", width:104, height:104, display:"flex", alignItems:"center", justifyContent:"center" }}>
             {/* Decorative geometric accents around the logo, echoing the brand's diamond/circle motif */}
             <div style={{ position:"absolute", width:20, height:20, background:"#f5b800", borderRadius:5, transform:"rotate(45deg)", top:-2, left:14, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
             <div style={{ position:"absolute", width:16, height:16, background:"#ffffff", borderRadius:"50%", bottom:2, left:-4, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
             <div style={{ position:"absolute", width:22, height:22, background:"#5cb531", borderRadius:6, transform:"rotate(45deg)", bottom:-4, right:10, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
             <div style={{ position:"absolute", inset:0, borderRadius:"50%", border:"3px solid rgba(255,255,255,0.35)" }} />
-            <img src="/logo.jpg" alt="Гений" style={{ width:126, height:126, borderRadius:"50%", boxShadow:"0 6px 20px rgba(18,40,61,.35)", flexShrink:0, position:"relative", zIndex:1 }} />
+            <img src="/logo.jpg" alt="Гений" style={{ width:94, height:94, borderRadius:"50%", boxShadow:"0 6px 20px rgba(18,40,61,.35)", flexShrink:0, position:"relative", zIndex:1 }} />
           </div>
           <div>
-            <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:34, fontWeight:400, color:"#ffffff", lineHeight:1.15 }}>Гений</div>
-            <div style={{ fontSize:13, color:"rgba(255,255,255,0.9)", marginTop:5, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>Образовательный центр</div>
+            <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:27, fontWeight:400, color:"#ffffff", lineHeight:1.15 }}>Гений</div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.9)", marginTop:4, textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:600 }}>Образовательный центр</div>
           </div>
         </div>
                       {nav.filter(n => (n.id !== "users" && n.id !== "portal") || isAdmin).map(n=>(
           <button key={n.id} className={`nb ${view===n.id?"on":""}`} onClick={()=>goView(n.id)}
-            style={{ display:"flex", alignItems:"center", gap:13, padding:"14px 24px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"rgba(255,255,255,0.92)", fontSize:17, fontWeight:500, cursor:"pointer", width:"100%", textAlign:"left", position:"relative", zIndex:1 }}>
-            <n.icon size={21} strokeWidth={2} style={{ flexShrink:0 }} />{n.label}
+            style={{ display:"flex", alignItems:"center", gap:11, padding:"10px 22px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"rgba(255,255,255,0.92)", fontSize:15, fontWeight:500, cursor:"pointer", width:"100%", textAlign:"left", position:"relative", zIndex:1 }}>
+            <n.icon size={18} strokeWidth={2} style={{ flexShrink:0 }} />{n.label}
             {n.id==="requests" && requests.filter(r=>r.status==="new").length>0 && (
               <span style={{ marginLeft:"auto", background:"#e2574c", color:"white", fontSize:11, fontWeight:700, borderRadius:10, padding:"2px 7px" }}>{requests.filter(r=>r.status==="new").length}</span>
             )}
           </button>
         ))}
-        <div style={{ marginTop:"auto", padding:16 }}>
+        <div style={{ marginTop:18, padding:"0 16px 16px", position:"relative", zIndex:1 }}>
           {/* Save / cloud sync indicator */}
           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10, padding:"6px 10px", background:"#ffffff", boxShadow:"0 1px 3px rgba(18,40,61,.15)", borderRadius:8, transition:"all .3s" }}>
             <div style={{ width:7, height:7, borderRadius:"50%", background:(saveIndicator||cloudSyncing)?"#5cb85c":"#a9b8c6", transition:"all .3s", flexShrink:0 }} />
