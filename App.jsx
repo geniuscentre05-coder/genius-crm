@@ -555,7 +555,7 @@ function ParentPortal({ token }) {
 
   const wrap = (children) => (
     <div style={{ fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif", background:"#eef4f8", minHeight:"100vh", padding:"0 0 40px" }}>
-      <div style={{ background:"linear-gradient(135deg,#1da0d4,#5cb85c)", padding:"20px 16px 26px", color:"#fff" }}>
+      <div style={{ background:"linear-gradient(165deg,#29a3dc 0%,#2a9d8f 58%,#5cb531 100%)", padding:"20px 16px 26px", color:"#fff" }}>
         <div style={{ maxWidth:640, margin:"0 auto", display:"flex", alignItems:"center", gap:12 }}>
           <img src="/logo.jpg" alt="Гений" style={{ width:44, height:44, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
           <div>
@@ -1931,19 +1931,6 @@ ${contextSummary}`;
   }
 
   // ===== ССЫЛКИ ДЛЯ РОДИТЕЛЕЙ =====
-  // ===== ТЁМНАЯ ТЕМА =====
-  // Реализована фильтром на корне: инвертирует светлые поверхности и
-  // возвращает исходный оттенок цветным элементам. Не требует правки
-  // тысячи инлайновых цветов по всему файлу.
-  const [darkMode, setDarkMode] = useState(() => {
-    try { return localStorage.getItem("darkMode") === "1"; } catch { return false; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem("darkMode", darkMode ? "1" : "0"); } catch {}
-    document.documentElement.classList.toggle("dark-mode", darkMode);
-    document.body.style.background = darkMode ? "#12181d" : "#f4f6f9";
-  }, [darkMode]);
-
   const [parentLinks, setParentLinks] = useState([]);
   const [portalSearch, setPortalSearch] = useState("");
 
@@ -2242,11 +2229,11 @@ ${contextSummary}`;
   const portalToken = useMemo(() => {
     try { return new URLSearchParams(window.location.search).get("p"); } catch { return null; }
   }, []);
-  if (portalToken) { document.documentElement.classList.remove("dark-mode"); return <ParentPortal token={portalToken} />; }
+  if (portalToken) return <ParentPortal token={portalToken} />;
 
   if (!currentUser) {
     return (
-      <div style={{ fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif", background:"linear-gradient(135deg,#1da0d4,#5cb85c)", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif", background:"linear-gradient(165deg,#29a3dc 0%,#2a9d8f 58%,#5cb531 100%)", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
         <div style={{ background:"#ffffff", borderRadius:24, padding:"48px 44px", width:460, boxShadow:"0 24px 64px rgba(18,40,61,.3)", textAlign:"center" }}>
           <img src="/logo.jpg" alt="Гений" style={{ width:96, height:96, borderRadius:"50%", margin:"0 auto 20px", objectFit:"cover" }} />
           <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:30, color:"#12283d", marginBottom:6 }}>Гений CRM</div>
@@ -2297,9 +2284,9 @@ ${contextSummary}`;
         *{box-sizing:border-box}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#e9eef3}::-webkit-scrollbar-thumb{background:#a9b8c6;border-radius:2px}
         .nb{transition:all .2s}.nb:hover{background:rgba(255,255,255,.15)!important;color:#ffffff!important}
-        .nb.on{background:rgba(255,255,255,.22)!important;color:#ffffff!important;border-left:3px solid #ffffff!important}
+        .nb.on{background:rgba(255,255,255,.24)!important;color:#ffffff!important;border-left:3px solid #f5b800!important}
         .card{box-shadow:0 1px 3px rgba(18,40,61,.06),0 1px 2px rgba(18,40,61,.04);transition:transform .18s ease,box-shadow .18s ease}.card:hover{transform:translateY(-3px);box-shadow:0 12px 24px rgba(29,160,212,.12),0 4px 8px rgba(18,40,61,.06)!important}
-        .bp{background:linear-gradient(135deg,#1da0d4,#5cb85c);border:none;color:#fff;padding:9px 20px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;transition:all .2s;box-shadow:0 2px 6px rgba(29,160,212,.25),0 1px 2px rgba(18,40,61,.06)}
+        .bp{background:linear-gradient(135deg,#29a3dc,#5cb531);border:none;color:#fff;padding:9px 20px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;transition:all .2s;box-shadow:0 2px 6px rgba(29,160,212,.25),0 1px 2px rgba(18,40,61,.06)}
         .bp:hover{opacity:.95;transform:translateY(-1px);box-shadow:0 4px 12px rgba(29,160,212,.35),0 2px 4px rgba(18,40,61,.08)}.bp:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
         .bg{background:rgba(29,160,212,.08);border:1px solid rgba(29,160,212,.18);color:#1da0d4;padding:7px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;transition:all .18s;display:inline-flex;align-items:center;gap:6px}
         .bg:hover{background:rgba(29,160,212,.16);transform:translateY(-1px)}
@@ -2311,16 +2298,6 @@ ${contextSummary}`;
         .rh{transition:background .15s;cursor:pointer}.rh:hover{background:rgba(29,160,212,.05)!important}
         .notif{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:500;z-index:999;animation:si .3s ease}
         @keyframes si{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
-
-        /* ===== ТЁМНАЯ ТЕМА ===== */
-        html.dark-mode { filter: invert(1) hue-rotate(180deg); background:#12181d; }
-        /* возвращаем нормальный вид тому, что инвертировать не нужно */
-        html.dark-mode img,
-        html.dark-mode video,
-        html.dark-mode canvas,
-        html.dark-mode svg.keep-color { filter: invert(1) hue-rotate(180deg); }
-        html.dark-mode ::-webkit-scrollbar-track{background:#d6dde3}
-        html.dark-mode ::-webkit-scrollbar-thumb{background:#5a6570}
         @keyframes reqShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         .stab{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all .2s}
         .hamburger-btn{display:none}
@@ -2338,13 +2315,23 @@ ${contextSummary}`;
       {/* Mobile overlay — tap outside sidebar to close it */}
       <div className={`sidebar-overlay ${sidebarOpen ? "open" : ""}`} onClick={()=>setSidebarOpen(false)} />
 
-      <div className={`app-sidebar ${sidebarOpen ? "open" : ""}`} style={{ width:300, background:"linear-gradient(180deg, #1da0d4 0%, #17a6c9 45%, #5cb85c 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
+      <div className={`app-sidebar ${sidebarOpen ? "open" : ""}`} style={{ width:300, background:"linear-gradient(165deg, #29a3dc 0%, #2a9d8f 58%, #5cb531 100%)", borderRight:"1px solid #dbe6f0", padding:"28px 0", display:"flex", flexDirection:"column", flexShrink:0, position:"sticky", top:0, height:"100vh", overflow:"hidden" }}>
+        {/* Декоративные круги и фирменная полоса — мотив логотипа */}
+        <div style={{ position:"absolute", width:180, height:180, borderRadius:"50%", background:"rgba(255,255,255,.10)", top:-60, right:-70, pointerEvents:"none" }} />
+        <div style={{ position:"absolute", width:120, height:120, borderRadius:"50%", background:"rgba(245,184,0,.16)", bottom:170, left:-50, pointerEvents:"none" }} />
+        <div style={{ position:"absolute", width:150, height:150, borderRadius:"50%", background:"rgba(255,255,255,.07)", bottom:-50, right:-40, pointerEvents:"none" }} />
+        <div style={{ position:"absolute", bottom:0, left:0, right:0, height:5, display:"flex", pointerEvents:"none" }}>
+          <div style={{ flex:1, background:"#f5b800" }} />
+          <div style={{ flex:1, background:"#5cb531" }} />
+          <div style={{ flex:1, background:"#29a3dc" }} />
+          <div style={{ flex:1, background:"#1a5490" }} />
+        </div>
         <div style={{ padding:"0 16px 30px", display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:12 }}>
           <div style={{ position:"relative", width:140, height:140, display:"flex", alignItems:"center", justifyContent:"center" }}>
             {/* Decorative geometric accents around the logo, echoing the brand's diamond/circle motif */}
-            <div style={{ position:"absolute", width:20, height:20, background:"#f5a623", borderRadius:5, transform:"rotate(45deg)", top:-2, left:14, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
+            <div style={{ position:"absolute", width:20, height:20, background:"#f5b800", borderRadius:5, transform:"rotate(45deg)", top:-2, left:14, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
             <div style={{ position:"absolute", width:16, height:16, background:"#ffffff", borderRadius:"50%", bottom:2, left:-4, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
-            <div style={{ position:"absolute", width:22, height:22, background:"#5cb85c", borderRadius:6, transform:"rotate(45deg)", bottom:-4, right:10, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
+            <div style={{ position:"absolute", width:22, height:22, background:"#5cb531", borderRadius:6, transform:"rotate(45deg)", bottom:-4, right:10, boxShadow:"0 2px 6px rgba(18,40,61,.2)" }} />
             <div style={{ position:"absolute", inset:0, borderRadius:"50%", border:"3px solid rgba(255,255,255,0.35)" }} />
             <img src="/logo.jpg" alt="Гений" style={{ width:126, height:126, borderRadius:"50%", boxShadow:"0 6px 20px rgba(18,40,61,.35)", flexShrink:0, position:"relative", zIndex:1 }} />
           </div>
@@ -2355,7 +2342,7 @@ ${contextSummary}`;
         </div>
                       {nav.filter(n => (n.id !== "users" && n.id !== "portal") || isAdmin).map(n=>(
           <button key={n.id} className={`nb ${view===n.id?"on":""}`} onClick={()=>goView(n.id)}
-            style={{ display:"flex", alignItems:"center", gap:13, padding:"14px 24px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"rgba(255,255,255,0.9)", fontSize:17, fontWeight:500, cursor:"pointer", width:"100%", textAlign:"left" }}>
+            style={{ display:"flex", alignItems:"center", gap:13, padding:"14px 24px", background:"transparent", border:"none", borderLeft:"3px solid transparent", color:"rgba(255,255,255,0.92)", fontSize:17, fontWeight:500, cursor:"pointer", width:"100%", textAlign:"left", position:"relative", zIndex:1 }}>
             <n.icon size={21} strokeWidth={2} style={{ flexShrink:0 }} />{n.label}
             {n.id==="requests" && requests.filter(r=>r.status==="new").length>0 && (
               <span style={{ marginLeft:"auto", background:"#e2574c", color:"white", fontSize:11, fontWeight:700, borderRadius:10, padding:"2px 7px" }}>{requests.filter(r=>r.status==="new").length}</span>
@@ -2368,23 +2355,11 @@ ${contextSummary}`;
             <div style={{ width:7, height:7, borderRadius:"50%", background:(saveIndicator||cloudSyncing)?"#5cb85c":"#a9b8c6", transition:"all .3s", flexShrink:0 }} />
             <span style={{ fontSize:11, color:(saveIndicator||cloudSyncing)?"#5cb85c":"#55677a", fontWeight:600 }}>{cloudSyncing?"Синхронизация...":saveIndicator?"Сохранено ✓":"Облако · синхронизировано"}</span>
           </div>
-          {/* Переключатель темы */}
-          <button onClick={()=>setDarkMode(!darkMode)}
-            style={{ width:"100%", background:"rgba(255,255,255,0.12)", border:"none", borderRadius:10, padding:"8px 12px", marginBottom:8,
-              display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", fontFamily:"inherit" }}>
-            <span style={{ fontSize:11, fontWeight:600, color:"#ffffff" }}>
-              {darkMode ? "🌙 Тёмная тема" : "☀️ Светлая тема"}
-            </span>
-            <span style={{ width:32, height:18, borderRadius:9, background: darkMode ? "#5cb85c" : "rgba(255,255,255,0.3)", position:"relative", transition:"background .2s", flexShrink:0 }}>
-              <span style={{ position:"absolute", top:2, left: darkMode ? 16 : 2, width:14, height:14, borderRadius:"50%", background:"#fff", transition:"left .2s" }} />
-            </span>
-          </button>
-
           {/* Текущий пользователь + выход */}
           <div style={{ background:"rgba(255,255,255,0.12)", borderRadius:10, padding:"8px 12px", marginBottom:8, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:"#ffffff" }}>{currentUser.name || currentUser.login}</div>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.92)" }}>{isAdmin ? "Администратор" : "Преподаватель"}</div>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.7)" }}>{isAdmin ? "Администратор" : "Преподаватель"}</div>
             </div>
             <button onClick={doLogout} style={{ background:"rgba(255,255,255,0.2)", border:"none", borderRadius:7, color:"#ffffff", fontSize:10, fontWeight:600, cursor:"pointer", padding:"5px 8px", fontFamily:"inherit" }}>Выйти</button>
           </div>
@@ -2398,7 +2373,7 @@ ${contextSummary}`;
             <div style={{ fontSize:20, fontWeight:700, color:"#e2574c" }}>{students.filter(s=>s.balance<0).length}</div>
             <div style={{ fontSize:10, color:"#7a8a9c" }}>учеников</div>
           </div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.92)", textAlign:"center", marginTop:8 }}>Занятий в базе: {lessons.length}</div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.7)", textAlign:"center", marginTop:8 }}>Занятий в базе: {lessons.length}</div>
           <button onClick={cleanupDuplicateLessons} style={{ width:"100%", marginTop:6, padding:"7px", background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.3)", borderRadius:8, color:"#ffffff", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
             🧹 Убрать дубликаты занятий
           </button>
@@ -2406,7 +2381,7 @@ ${contextSummary}`;
           {/* ── ОБЛАЧНЫЕ РЕЗЕРВНЫЕ КОПИИ ── */}
           <div style={{ marginTop:10, background: backupOverdue ? "rgba(245,166,35,0.25)" : "rgba(255,255,255,0.12)", border:`1px solid ${backupOverdue ? "rgba(245,166,35,0.6)" : "rgba(255,255,255,0.25)"}`, borderRadius:12, padding:10 }}>
             <div style={{ fontSize:11, fontWeight:700, color:"#ffffff", marginBottom:2 }}>🛡️ Резервные копии</div>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.92)", marginBottom:8, lineHeight:1.4 }}>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.75)", marginBottom:8, lineHeight:1.4 }}>
               {lastBackup ? `Последняя: ${new Date(lastBackup).toLocaleDateString("ru-RU")}` : "Ещё ни разу не делали"}
               {backupOverdue && " · пора сохранить"}
             </div>
@@ -3694,13 +3669,13 @@ ${contextSummary}`;
               {schedView==="week" && (
                 <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, overflow:"hidden" }}>
                   <div style={{ display:"grid", gridTemplateColumns:"64px repeat(7,1fr)", borderBottom:"1px solid #dbe6f0" }}>
-                    <div style={{ background:"#1b6f8c" }} />
+                    <div style={{ background:"#eaf2f6" }} />
                     {weekDates.map((d,i)=>{
                       const isToday = fmt(d)===fmt(today);
                       const dayCount = weekLessons.filter(l=>l.date===fmt(d)).length;
                       return (
-                        <div key={i} style={{ padding:"12px 6px", textAlign:"center", background:"#1b6f8c", borderLeft:"1px solid #dbe6f0" }}>
-                          <div style={{ fontSize:11, color:"#7a8a9c", marginBottom:3 }}>{DAYS[i]}</div>
+                        <div key={i} style={{ padding:"12px 6px", textAlign:"center", background:"#eaf2f6", borderLeft:"1px solid #dbe6f0" }}>
+                          <div style={{ fontSize:11, color:"#55677a", marginBottom:3, fontWeight:600 }}>{DAYS[i]}</div>
                           <div style={{ fontSize:17, fontWeight:700, color:isToday?"#1da0d4":"#22344a", background:isToday?"rgba(99,102,241,0.18)":"transparent", borderRadius:8, padding:"2px 6px", display:"inline-block" }}>{d.getDate()}</div>
                           {dayCount>0 && <div style={{ fontSize:10, color:"#1da0d4", marginTop:2, fontWeight:600 }}>{dayCount} занят.</div>}
                         </div>
@@ -3710,7 +3685,7 @@ ${contextSummary}`;
                   <div style={{ overflowY:"auto", maxHeight:"72vh" }}>
                     {SLOTS.map(slot=>(
                       <div key={slot} style={{ display:"grid", gridTemplateColumns:"64px repeat(7,1fr)", borderBottom: slot.endsWith(":30") ? "1px dashed #f2f6fa" : "1px solid #dbe6f0", minHeight:44 }}>
-                        <div style={{ padding:"4px 8px", fontSize:12, fontWeight:600, color:"#a9b8c6", textAlign:"right", borderRight:"1px solid #dbe6f0", background:"#1b6f8c" }}>{slot.endsWith(":00") ? slot : ""}</div>
+                        <div style={{ padding:"4px 8px", fontSize:12, fontWeight:600, color:"#55677a", textAlign:"right", borderRight:"1px solid #dbe6f0", background:"#eaf2f6" }}>{slot.endsWith(":00") ? slot : ""}</div>
                         {weekDates.map((d,di)=>{
                           const dateStr = fmt(d);
                           const cellAll = lessonsByDateTime[`${dateStr}|${slot}`] || [];
@@ -3868,7 +3843,7 @@ ${contextSummary}`;
                       <table style={{ borderCollapse:"collapse", minWidth:"100%", fontSize:11 }}>
                         <thead>
                           <tr>
-                            <th style={{ width:56, padding:"10px 4px", border:"1px solid #dbe6f0", background:"#1b6f8c", position:"sticky", left:0, zIndex:2 }}></th>
+                            <th style={{ width:56, padding:"10px 4px", border:"1px solid #dbe6f0", background:"#eaf2f6", position:"sticky", left:0, zIndex:2 }}></th>
                             {activeTutors.map(t=>(
                               <th key={t.id} style={{ padding:"10px 8px", textAlign:"center", border:"1px solid #dbe6f0", background:`${t.color}18`, borderTop:`3px solid ${t.color}`, minWidth:130 }}>
                                 <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
@@ -3883,7 +3858,7 @@ ${contextSummary}`;
                         <tbody>
                           {SLOTS.map(slot=>(
                             <tr key={slot} style={{ borderBottom: slot.endsWith(":30") ? "1px dashed #f2f6fa" : "1px solid #dbe6f0" }}>
-                              <td style={{ padding:"3px 6px", fontSize:10, color:"#a9b8c6", textAlign:"right", background:"#1b6f8c", border:"1px solid #dbe6f0", fontWeight:600, whiteSpace:"nowrap", position:"sticky", left:0, zIndex:1 }}>{slot.endsWith(":00") ? slot : ""}</td>
+                              <td style={{ padding:"3px 6px", fontSize:10, color:"#55677a", textAlign:"right", background:"#eaf2f6", border:"1px solid #dbe6f0", fontWeight:600, whiteSpace:"nowrap", position:"sticky", left:0, zIndex:1 }}>{slot.endsWith(":00") ? slot : ""}</td>
                               {activeTutors.map(t=>{
                                 const cellLessons = lessonsByTutorDateTime[`${t.id}|${selectedDate}|${slot}`] || [];
                                 return (
@@ -3978,7 +3953,7 @@ ${contextSummary}`;
                   <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, overflow:"hidden" }}>
                     <table style={{ width:"100%", borderCollapse:"collapse" }}>
                       <thead>
-                        <tr style={{ background:"#1b6f8c" }}>
+                        <tr style={{ background:"#eaf2f6" }}>
                           {["Курс / направление","45 мин","60 мин","90 мин","120 мин","Групп.","Примечание",""].map(h=>(
                             <th key={h} style={{ padding:"12px 14px", textAlign:h==="Курс / направление"||h===""?"left":"center", fontSize:11, color:"#7a8a9c", fontWeight:600, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
                           ))}
