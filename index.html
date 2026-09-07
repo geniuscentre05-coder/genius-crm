@@ -347,7 +347,14 @@ const audIcons  = { all:"👥", active:"✅", debtors:"💸", zeroblance:"⚠️
 
 function calcEarning(lesson, tutor) {
   if (!tutor) return 0;
-  return tutor.rateType === "percent" ? Math.round(lesson.price * tutor.rateValue / 100) : tutor.rateValue;
+  // Групповые занятия могут оплачиваться по своей ставке (например 45% против 50%
+  // за индивидуальные). Если отдельная ставка не задана — берём основную.
+  const isGroup = !!lesson.isGroup;
+  const rate = isGroup && tutor.groupRateValue !== null && tutor.groupRateValue !== undefined && tutor.groupRateValue !== ""
+    ? Number(tutor.groupRateValue)
+    : Number(tutor.rateValue);
+  if (!Number.isFinite(rate)) return 0;
+  return tutor.rateType === "percent" ? Math.round((lesson.price || 0) * rate / 100) : rate;
 }
 
 // Requests used to store a plain "course" string, then a "courses" array; now they
@@ -777,6 +784,9 @@ export default function App() {
   const [reportTab, setReportTab] = useState("finance");
   const [reqSearch, setReqSearch] = useState("");
   const [reqFilter, setReqFilter] = useState("all");
+  const [reqPeriod, setReqPeriod] = useState("all"); // all | today | 7d | 30d | custom
+  const [reqDateFrom, setReqDateFrom] = useState("");
+  const [reqDateTo, setReqDateTo] = useState("");
   const [reqSearchInput, setReqSearchInput] = useState(""); // raw typed value, debounced into reqSearch
   const [reqSearching, setReqSearching] = useState(false);  // true during the debounce window (drives skeleton rows)
   const [reqViewMode, setReqViewMode] = useState("table");  // "table" | "kanban"
@@ -800,10 +810,22 @@ export default function App() {
   const reqFiltered = useMemo(() => {
     const q = reqSearch.toLowerCase();
     const qDigits = reqSearch.replace(/\D/g,"");
+    // Границы периода считаем один раз, а не для каждой записи
+    const today = new Date().toISOString().split("T")[0];
+    let from = "", to = "";
+    if (reqPeriod === "today") { from = today; to = today; }
+    else if (reqPeriod === "7d" || reqPeriod === "30d") {
+      const d = new Date();
+      d.setDate(d.getDate() - (reqPeriod === "7d" ? 6 : 29));
+      from = d.toISOString().split("T")[0]; to = today;
+    } else if (reqPeriod === "custom") { from = reqDateFrom; to = reqDateTo; }
+
     let list = requests.filter(r=>{
       const matchQ = !q || r.parentName.toLowerCase().includes(q) || r.studentName.toLowerCase().includes(q) || getReqCourses(r).some(c=>c.toLowerCase().includes(q)) || (qDigits && r.phone.replace(/\D/g,"").includes(qDigits));
       const matchF = reqFilter==="all" || r.status===reqFilter;
-      return matchQ && matchF;
+      const d = r.date || "";
+      const matchD = (!from || (d && d >= from)) && (!to || (d && d <= to));
+      return matchQ && matchF && matchD;
     });
     list = [...list].sort((a,b)=>{
       let av = a[reqSortKey], bv = b[reqSortKey];
@@ -813,7 +835,7 @@ export default function App() {
       return reqSortDir==="asc" ? cmp : -cmp;
     });
     return list;
-  }, [requests, reqSearch, reqFilter, reqSortKey, reqSortDir, tutors]);
+  }, [requests, reqSearch, reqFilter, reqPeriod, reqDateFrom, reqDateTo, reqSortKey, reqSortDir, tutors]);
   const reqTotalPages = Math.max(1, Math.ceil(reqFiltered.length / REQ_PAGE_SIZE));
   const reqPageSafe = Math.min(reqPage, reqTotalPages);
   const reqPageItems = useMemo(() => reqFiltered.slice((reqPageSafe-1)*REQ_PAGE_SIZE, reqPageSafe*REQ_PAGE_SIZE), [reqFiltered, reqPageSafe]);
@@ -1196,7 +1218,7 @@ export default function App() {
     setModal(null); setEditingStudentId(null); setNStudentEdit(null);
     notify(siblingCount>0 ? `Данные ученика обновлены, контакты семьи синхронизированы у ${siblingCount} братьев/сестёр` : "Данные ученика обновлены");
   }
-  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, groupRateValue:45, status:"active", color:"#1da0d4" });
   const [editingTutorId, setEditingTutorId] = useState(null);
   const [editingCatalogId, setEditingCatalogId] = useState(null);
   const [nLesson,   setNLesson]   = useState({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
@@ -1851,23 +1873,23 @@ ${contextSummary}`;
     const parts = nTutor.name.trim().split(" ");
     const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
     if (editingTutorId) {
-      const patch = { ...nTutor, short, rateValue:Number(nTutor.rateValue) };
+      const patch = { ...nTutor, short, rateValue:Number(nTutor.rateValue), groupRateValue: nTutor.groupRateValue === "" ? null : Number(nTutor.groupRateValue) };
       setTutors(tutors.map(t => t.id===editingTutorId ? { ...t, ...patch } : t));
       updateRow("tutors", editingTutorId, patch);
-      setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+      setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, groupRateValue:45, status:"active", color:"#1da0d4" });
       setEditingTutorId(null);
       setModal(null); notify("Данные преподавателя обновлены");
       return;
     }
-    const newTutor = { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue), files:[] };
+    const newTutor = { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue), groupRateValue: nTutor.groupRateValue === "" ? null : Number(nTutor.groupRateValue), files:[] };
     setTutors([...tutors, newTutor]);
     insertRow("tutors", newTutor);
-    setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+    setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, groupRateValue:45, status:"active", color:"#1da0d4" });
     setModal(null); notify("Преподаватель добавлен — прикрепите документы в его карточке");
     setView("tutors"); setSelStudent(null); setTTab("overview"); setSelTutor(newTutor);
   };
   const startEditTutor = (t) => {
-    setNTutor({ name:t.name, phone:t.phone, email:t.email||"", address:t.address||"", notes:t.notes||"", subjects:t.subjects||[], rateType:t.rateType, rateValue:t.rateValue, status:t.status, color:t.color });
+    setNTutor({ name:t.name, phone:t.phone, email:t.email||"", address:t.address||"", notes:t.notes||"", subjects:t.subjects||[], rateType:t.rateType, rateValue:t.rateValue, groupRateValue:t.groupRateValue ?? "", status:t.status, color:t.color });
     setEditingTutorId(t.id);
     setModal("addTutor");
   };
@@ -4745,8 +4767,34 @@ ${contextSummary}`;
               </div>
 
               {/* search — debounced 350ms, shows a subtle skeleton while waiting */}
-              <div style={{ marginBottom:16, position:"relative" }}>
+              <div style={{ marginBottom:12, position:"relative" }}>
                 <input placeholder="🔍 Поиск по имени, телефону, курсу..." value={reqSearchInput} onChange={e=>setReqSearchInput(e.target.value)} />
+              </div>
+
+              {/* Фильтр по дате поступления запроса */}
+              <div style={{ marginBottom:16, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                <span style={{ fontSize:12, color:"#7a8a9c", fontWeight:600 }}>Период:</span>
+                {[["all","Все"],["today","Сегодня"],["7d","7 дней"],["30d","30 дней"],["custom","Свой период"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>{ setReqPeriod(k); setReqPage(1); }}
+                    style={{ padding:"6px 13px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+                      border: reqPeriod===k ? "1px solid transparent" : "1px solid #dbe6f0",
+                      background: reqPeriod===k ? "linear-gradient(135deg,#29a3dc,#5cb531)" : "#ffffff",
+                      color: reqPeriod===k ? "#ffffff" : "#55677a" }}>{l}</button>
+                ))}
+                {reqPeriod==="custom" && (
+                  <>
+                    <input type="date" value={reqDateFrom} onChange={e=>{ setReqDateFrom(e.target.value); setReqPage(1); }}
+                      style={{ width:"auto", fontSize:12, padding:"6px 10px" }} />
+                    <span style={{ fontSize:12, color:"#7a8a9c" }}>—</span>
+                    <input type="date" value={reqDateTo} onChange={e=>{ setReqDateTo(e.target.value); setReqPage(1); }}
+                      style={{ width:"auto", fontSize:12, padding:"6px 10px" }} />
+                  </>
+                )}
+                {reqPeriod!=="all" && (
+                  <span style={{ fontSize:12, color:"#1da0d4", fontWeight:600, marginLeft:4 }}>
+                    найдено: {reqFiltered.length}
+                  </span>
+                )}
               </div>
 
               {reqViewMode==="table" ? (
@@ -5037,7 +5085,7 @@ ${contextSummary}`;
       {/* ══ MODALS ══ */}
 
       {modal==="addTutor" && (
-        <div className="ov" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" }); }}>
+        <div className="ov" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, groupRateValue:45, status:"active", color:"#1da0d4" }); }}>
           <div className="mo" onClick={e=>e.stopPropagation()}>
             <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>{editingTutorId ? "Редактирование преподавателя" : "Новый преподаватель"}</h2>
             <div style={{ display:"grid", gap:14 }}>
@@ -5076,9 +5124,21 @@ ${contextSummary}`;
                   </select>
                 </div>
                 <div>
-                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>{nTutor.rateType==="percent"?"Процент (%)":"Сумма (₽)"}</div>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>
+                    {nTutor.rateType==="percent"?"Индивидуальные (%)":"Индивидуальные (₽)"}
+                  </div>
                   <input type="number" value={nTutor.rateValue} onChange={e=>setNTutor({...nTutor,rateValue:e.target.value})} />
                 </div>
+                <div>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>
+                    {nTutor.rateType==="percent"?"Групповые (%)":"Групповые (₽)"}
+                  </div>
+                  <input type="number" value={nTutor.groupRateValue ?? ""} placeholder="как индивид."
+                    onChange={e=>setNTutor({...nTutor,groupRateValue:e.target.value})} />
+                </div>
+              </div>
+              <div style={{ fontSize:11, color:"#7a8a9c", marginTop:-8, marginBottom:4 }}>
+                Если ставка за групповые не указана, применяется ставка за индивидуальные
               </div>
               <div>
                 <div style={{ fontSize:12, color:"#55677a", marginBottom:8 }}>Цвет</div>
@@ -5091,7 +5151,7 @@ ${contextSummary}`;
               </div>
               <div style={{ display:"flex", gap:10, marginTop:8 }}>
                 <button className="bp" style={{ flex:1 }} onClick={addTutor}>{editingTutorId ? "Сохранить" : "Добавить"}</button>
-                <button className="bg" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" }); }}>Отмена</button>
+                <button className="bg" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, groupRateValue:45, status:"active", color:"#1da0d4" }); }}>Отмена</button>
               </div>
             </div>
           </div>
