@@ -264,6 +264,27 @@ const allSubjects = courseCategories.flatMap(c => c.courses);
 const subjectColor = s => courseCategories.find(c=>c.courses.includes(s))?.color || "#1da0d4";
 const subjectCategory = s => courseCategories.find(c=>c.courses.includes(s)) || {};
 const COLORS = ["#1da0d4","#d6539a","#5cb85c","#f5a623","#17a6c9","#8a5cc9","#e2574c","#84cc16"];
+// Правила НОУ «Гений» — те же, что на бумажном бланке анкеты.
+// Используются в разделе «Цены и правила» и в подсказках при смене статуса занятия.
+const CENTER_RULES = [
+  "Опоздание учащегося сокращает занятие на время задержки.",
+  "Предоплата абонемента производится за текущий месяц, в полном размере, со дня начала занятий.",
+  "Занятия проводятся строго по расписанию.",
+  "Занятия, не состоявшиеся по вине Образовательного Центра, восстанавливаются.",
+  "Индивидуальные занятия, пропущенные по вине ученика, восстанавливаются только при уведомлении администратора не позднее чем за 3 часа до начала урока.",
+  "Отменённые индивидуальные занятия восстанавливаются в текущем месяце и перерасчёту не подлежат.",
+  "Пропущенные групповые занятия сгорают и перерасчёту не подлежат.",
+];
+
+// Что означает статус по правилам центра — показываем при выборе,
+// чтобы администратор не держал регламент в голове.
+const STATUS_RULE_HINT = {
+  cancelled:     { ind:"Восстанавливается в текущем месяце, перерасчёт не делается", grp:"Сгорает, перерасчёту не подлежит" },
+  noshow_burned: { ind:"Сгорает: уведомления за 3 часа не было",                     grp:"Сгорает, перерасчёту не подлежит" },
+  sick_valid:    { ind:"Восстанавливается: уведомили заранее",                        grp:"Сгорает: групповые не восстанавливаются" },
+  sick_invalid:  { ind:"Сгорает: уведомления за 3 часа не было",                      grp:"Сгорает, перерасчёту не подлежит" },
+};
+
 const initialPricing = [
   { id:1, category:"📐 Математика и IT",          course:"Математика (базовая)",            price45:600,  price60:800,  price90:1100, price120:1450, groupPrice:400,  note:"" },
   { id:2, category:"📐 Математика и IT",          course:"Профильная математика",           price45:700,  price60:900,  price90:1200, price120:1550, groupPrice:500,  note:"" },
@@ -795,6 +816,104 @@ export default function App() {
   const [reportTab, setReportTab] = useState("finance");
   const [reqSearch, setReqSearch] = useState("");
   const [reqFilter, setReqFilter] = useState("all");
+  // ===== ТАРИФЫ И СКИДКИ (редактируются из интерфейса) =====
+  const [tariffs, setTariffs] = useState([]);
+  const [discountCfg, setDiscountCfg] = useState({ perHour:50, percents:[5,10,15], subjects3:2000, subjects4:3000, subjectDiscountMonthly:true });
+  const [editTariffId, setEditTariffId] = useState(null);
+  const [tariffDraft, setTariffDraft] = useState({ label:"", note:"", price1:"", price15:"", price2:"" });
+
+  function printCenterRules() {
+    const w = window.open("", "_blank");
+    if (!w) return;
+    const items = CENTER_RULES.map(function(r){ return "<li>" + r + "</li>"; }).join("");
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Правила НОУ «Гений»</title>'
+      + '<style>body{font-family:Georgia,serif;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.65;color:#1a1a1a}'
+      + 'h1{font-size:22px;text-align:center;margin-bottom:28px}li{margin-bottom:12px}'
+      + '.sign{margin-top:44px;font-size:15px}</style></head><body>'
+      + '<h1>Правила Образовательного Центра</h1><ol>' + items + '</ol>'
+      + '<div class="sign">С правилами НОУ «Гений» ознакомлен(а) _______________________</div>'
+      + '</body></html>';
+    w.document.write(html);
+    w.document.close();
+    w.print();
+  }
+
+  async function loadTariffs() {
+    const [tRes, dRes] = await Promise.all([
+      supabase.from("tariffs").select("*").order("sort_order"),
+      supabase.from("discount_settings").select("*").limit(1).maybeSingle(),
+    ]);
+    if (tRes.data) setTariffs(tRes.data);
+    if (dRes.data) setDiscountCfg({
+      perHour: Number(dRes.data.per_hour) || 0,
+      percents: Array.isArray(dRes.data.percents) ? dRes.data.percents : [5,10,15],
+      subjects3: Number(dRes.data.subjects_3) || 0,
+      subjects4: Number(dRes.data.subjects_4) || 0,
+      subjectDiscountMonthly: dRes.data.subject_discount_monthly !== false,
+      _id: dRes.data.id,
+    });
+  }
+
+  function startEditTariff(t) {
+    setTariffDraft({
+      label: t.label || "", note: t.note || "",
+      price1: t.price_1 ?? "", price15: t.price_15 ?? "", price2: t.price_2 ?? "",
+    });
+    setEditTariffId(t.id);
+    setModal("editTariff");
+  }
+
+  async function saveTariff() {
+    if (!tariffDraft.label.trim()) { notify("Укажите название формата", "error"); return; }
+    const row = {
+      label: tariffDraft.label.trim(),
+      note: tariffDraft.note || null,
+      price_1:  tariffDraft.price1  === "" ? null : Number(tariffDraft.price1),
+      price_15: tariffDraft.price15 === "" ? null : Number(tariffDraft.price15),
+      price_2:  tariffDraft.price2  === "" ? null : Number(tariffDraft.price2),
+    };
+    if (editTariffId) {
+      const { error } = await supabase.from("tariffs").update(row).eq("id", editTariffId);
+      if (error) { notify("Ошибка: " + error.message, "error"); return; }
+    } else {
+      const maxOrder = tariffs.reduce((m,t)=>Math.max(m, t.sort_order||0), 0);
+      const { error } = await supabase.from("tariffs").insert({ ...row, sort_order: maxOrder + 1 });
+      if (error) { notify("Ошибка: " + error.message, "error"); return; }
+    }
+    await loadTariffs();
+    setModal(null); setEditTariffId(null);
+    notify(editTariffId ? "Тариф обновлён" : "Формат добавлен");
+  }
+
+  async function deleteTariff(id, label) {
+    if (!window.confirm(`Удалить формат «${label}»?`)) return;
+    const { error } = await supabase.from("tariffs").delete().eq("id", id);
+    if (error) { notify("Ошибка: " + error.message, "error"); return; }
+    setTariffs(prev => prev.filter(t => t.id !== id));
+    notify("Формат удалён");
+  }
+
+  async function saveDiscountCfg(patch) {
+    const next = { ...discountCfg, ...patch };
+    setDiscountCfg(next);
+    if (!next._id) return;
+    const { error } = await supabase.from("discount_settings").update({
+      per_hour: next.perHour,
+      percents: next.percents,
+      subjects_3: next.subjects3,
+      subjects_4: next.subjects4,
+      subject_discount_monthly: next.subjectDiscountMonthly,
+      updated_at: new Date().toISOString(),
+    }).eq("id", next._id);
+    if (error) notify("Не удалось сохранить настройки скидок", "error");
+  }
+
+  const [calcTariff, setCalcTariff] = useState(null);
+  const [calcDuration, setCalcDuration] = useState(1);
+  const [calcLessons, setCalcLessons] = useState(8);
+  const [calcSubscription, setCalcSubscription] = useState(false);
+  const [calcPercent, setCalcPercent] = useState(0);
+  const [calcSubjects, setCalcSubjects] = useState(0);
   const [reqPeriod, setReqPeriod] = useState("all"); // all | today | 7d | 30d | custom
   const [reqDateFrom, setReqDateFrom] = useState("");
   const [reqDateTo, setReqDateTo] = useState("");
@@ -1068,7 +1187,7 @@ export default function App() {
   }, [mailings, requests, pricing, rules, courseCatalog, candidates]);
 
   function emptyChild() { return { name:"", birthDate:"", school:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }], status:"trial", tuitionNote:"" }; }
-  const [familyForm, setFamilyForm] = useState({ parentName:"", phone:"", extraPhones:[], address:"", notes:"", children:[emptyChild()] });
+  const [familyForm, setFamilyForm] = useState({ parentName:"", phone:"", extraPhones:[], parentEmail:"", source:"", address:"", notes:"", children:[emptyChild()] });
   // ===== РАСПОЗНАВАНИЕ БУМАЖНОЙ АНКЕТЫ =====
   // Фото анкеты уходит в Claude, оттуда возвращается JSON, которым
   // заполняется форма нового ученика. Данные всегда показываются на
@@ -1091,16 +1210,22 @@ export default function App() {
       const mediaType = file.type === "image/png" ? "image/png"
         : file.type === "image/webp" ? "image/webp" : "image/jpeg";
 
-      const prompt = `Это фотография бумажной анкеты ученика образовательного центра.
-Извлеки данные и верни ТОЛЬКО JSON, без пояснений и markdown-разметки.
+      const prompt = `Это фотография бумажной анкеты ученика образовательного центра «Гений».
 
-Формат:
+Структура бланка:
+— «ДАННЫЕ РОДИТЕЛЯ»: ФИО, электронная почта, два контактных телефона (1. и 2.), адрес проживания.
+— «ДАННЫЕ ДЕТЕЙ»: до трёх блоков, в каждом ФИО, дата рождения, класс, школа, предметы.
+— «Как Вы узнали о нас?»: галочки — Инстаграм / Веб сайт / Наружная реклама / Вывеска.
+
+Верни ТОЛЬКО JSON, без пояснений и markdown-разметки:
 {
   "parentName": "ФИО родителя",
+  "parentEmail": "почта или пустая строка",
   "phone": "+7XXXXXXXXXX",
-  "extraPhones": ["доп. телефоны, если есть"],
-  "address": "адрес",
-  "notes": "прочие пометки со сканера",
+  "extraPhones": ["второй телефон, если заполнен"],
+  "address": "адрес проживания",
+  "source": "instagram | website | outdoor | signboard | пустая строка",
+  "notes": "",
   "children": [
     { "name": "ФИО ребёнка", "birthDate": "ГГГГ-ММ-ДД", "school": "школа", "grade": "класс", "subjects": ["предметы"] }
   ]
@@ -1108,9 +1233,13 @@ export default function App() {
 
 Правила:
 - Телефоны приводи к виду +7XXXXXXXXXX.
-- Дату рождения — строго ГГГГ-ММ-ДД. Если в анкете только возраст, оставь birthDate пустым.
-- Класс — только число ("7", а не "7 класс").
-- Если поле неразборчиво или отсутствует — пустая строка "" (или [] для списков).
+- Дату рождения — строго ГГГГ-ММ-ДД. Если указан только возраст, оставь birthDate пустым.
+- Класс — только число ("7", а не "7 класс"). Для дошкольников — пустая строка.
+- Школа — только номер или название, без слова «школа».
+- Предметы — списком, как перечислены через запятую в бланке.
+- В children включай только заполненные блоки детей. Пустые бланки пропускай.
+- source — по отмеченной галочке; если ни одна не отмечена, пустая строка.
+- Если поле неразборчиво или пустое — пустая строка "" (или [] для списков).
 - Ничего не выдумывай: пустое поле лучше, чем догадка.`;
 
       const response = await fetch("/api/ai-proxy", {
@@ -1143,6 +1272,8 @@ export default function App() {
         parentName: parsed.parentName || "",
         phone: parsed.phone || "",
         extraPhones: Array.isArray(parsed.extraPhones) ? parsed.extraPhones.filter(Boolean) : [],
+        parentEmail: parsed.parentEmail || "",
+        source: parsed.source || "",
         address: parsed.address || "",
         notes: parsed.notes || "",
         children: kids.map(k => ({
@@ -1883,6 +2014,8 @@ ${contextSummary}`;
       extraPhones: (familyForm.extraPhones||[]).filter(Boolean),
       parentName: familyForm.parentName,
       parentPhone: familyForm.phone,
+      parentEmail: familyForm.parentEmail || null,
+      source: familyForm.source || null,
       address: familyForm.address,
       notes: familyForm.notes,
       school: c.school,
@@ -1898,7 +2031,7 @@ ${contextSummary}`;
     }));
     setStudents([...students, ...newStudents]);
     insertRows("students", newStudents);
-    setFamilyForm({ parentName:"", phone:"", extraPhones:[], address:"", notes:"", children:[emptyChild()] });
+    setFamilyForm({ parentName:"", phone:"", extraPhones:[], parentEmail:"", source:"", address:"", notes:"", children:[emptyChild()] });
     setModal(null); notify(newStudents.length>1 ? `Добавлено детей: ${newStudents.length} — прикрепите документы в карточке` : "Ученик добавлен — прикрепите документы в его карточке");
     setView("students"); setSelTutor(null); setSelStudent(newStudents[0]);
   };
@@ -2003,6 +2136,7 @@ ${contextSummary}`;
   }
   useEffect(() => { if (view === "users" && isAdmin) loadUsers(); }, [view]);
   useEffect(() => { if (view === "portal" && isAdmin) loadParentLinks(); }, [view]);
+  useEffect(() => { if (view === "pricing") loadTariffs(); }, [view]);
      // ===== ДОМАШНИЕ ЗАДАНИЯ =====
   const [homework, setHomework] = useState([]);
   const [hwDraft, setHwDraft] = useState({ text:"", dueDate:"" });
@@ -3792,6 +3926,19 @@ ${contextSummary}`;
                         <select value={editLesson.status} onChange={e=>setEditLesson({...editLesson,status:e.target.value})}>
                           {Object.entries(lsnCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                         </select>
+                        {(() => {
+                          const hint = STATUS_RULE_HINT[editLesson.status];
+                          if (!hint) return null;
+                          const text = editLesson.isGroup ? hint.grp : hint.ind;
+                          const restores = text.startsWith("Восстанавливается");
+                          return (
+                            <div style={{ marginTop:7, padding:"7px 10px", borderRadius:8, fontSize:11, lineHeight:1.4,
+                              background: restores ? "rgba(92,184,92,.1)" : "rgba(245,158,11,.1)",
+                              color: restores ? "#3f8f3f" : "#a06a10" }}>
+                              По правилам центра: {text}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div><div style={{ fontSize:13, color:"#55677a", marginBottom:6, fontWeight:600 }}>Дата</div>
                         <input type="date" value={editLesson.date} onChange={e=>setEditLesson({...editLesson,date:e.target.value})} />
@@ -4146,6 +4293,31 @@ ${contextSummary}`;
           const pricingCategories = [...new Set(pricing.map(p=>p.category))];
           const rulesSections = [...new Set(rules.map(r=>r.section))];
 
+          // ── ТАРИФЫ И КАЛЬКУЛЯТОР ───────────────────────────────────
+          // Тарифы и размеры скидок хранятся в базе и правятся из интерфейса.
+          const TARIFFS = tariffs.map(t => {
+            const prices = {};
+            if (t.price_1 != null)  prices[1]   = Number(t.price_1);
+            if (t.price_15 != null) prices[1.5] = Number(t.price_15);
+            if (t.price_2 != null)  prices[2]   = Number(t.price_2);
+            return { id:t.id, label:t.label, note:t.note, prices, raw:t };
+          });
+
+          const t = TARIFFS.find(x => x.id === calcTariff) || TARIFFS[0];
+          const durations = t ? Object.keys(t.prices).map(Number) : [];
+          const dur = durations.includes(calcDuration) ? calcDuration : (durations[0] || 1);
+          const perLesson = t ? (t.prices[dur] || 0) : 0;
+
+          const base = perLesson * calcLessons;
+          const subDiscount = calcSubscription ? discountCfg.perHour * dur * calcLessons : 0;
+          const afterSub = base - subDiscount;
+          const pctDiscount = Math.round(afterSub * calcPercent / 100);
+          const afterPct = afterSub - pctDiscount;
+          const subjDiscount = calcSubjects === 3 ? discountCfg.subjects3 : calcSubjects === 4 ? discountCfg.subjects4 : 0;
+          const total = Math.max(afterPct - subjDiscount, 0);
+          const saved = base - total;
+
+
           const printPricing = () => {
             const w = window.open("","_blank");
             const cats = [...new Set(pricing.map(p=>p.category))];
@@ -4194,6 +4366,195 @@ ${contextSummary}`;
               {/* PRICES TAB */}
               {pricingTab==="prices" && (
                 <div>
+              {/* ── ТАРИФЫ И КАЛЬКУЛЯТОР ─────────────────────────── */}
+              <div style={{ background:"#ffffff", border:"1px solid rgba(18,40,61,.05)", borderRadius:14, padding:20, marginBottom:20 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:16, flexWrap:"wrap" }}>
+                  <div>
+                    <h3 style={{ margin:"0 0 4px", fontSize:17, fontWeight:700, color:"#12283d" }}>Тарифы центра</h3>
+                    <div style={{ fontSize:12, color:"#7a8a9c" }}>Стоимость зависит от возраста и формата занятия</div>
+                  </div>
+                  <button className="bp" style={{ fontSize:12, padding:"8px 14px" }}
+                    onClick={()=>{ setTariffDraft({ label:"", note:"", price1:"", price15:"", price2:"" }); setEditTariffId(null); setModal("editTariff"); }}>
+                    <Plus size={14} /> Формат
+                  </button>
+                </div>
+
+                <div style={{ overflowX:"auto", marginBottom:22 }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", minWidth:520 }}>
+                    <thead>
+                      <tr style={{ background:"#f2f6fa" }}>
+                        {["Формат","1 час","1,5 часа","2 часа",""].map((h,i)=>(
+                          <th key={i} style={{ padding:"9px 12px", textAlign:i&&i<4?"center":"left", fontSize:11, color:"#55677a", fontWeight:600, textTransform:"uppercase" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {TARIFFS.length === 0 && (
+                        <tr><td colSpan={5} style={{ padding:24, textAlign:"center", color:"#a9b8c6", fontSize:13 }}>
+                          Тарифы не заданы — нажмите «Формат», чтобы добавить первый
+                        </td></tr>
+                      )}
+                      {TARIFFS.map(tf=>(
+                        <tr key={tf.id} style={{ borderTop:"1px solid #f2f6fa" }}>
+                          <td style={{ padding:"10px 12px" }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:"#12283d" }}>{tf.label}</div>
+                            <div style={{ fontSize:11, color:"#7a8a9c" }}>{tf.note}</div>
+                          </td>
+                          {[1,1.5,2].map(d=>(
+                            <td key={d} style={{ padding:"10px 12px", textAlign:"center", fontSize:14, fontWeight:tf.prices[d]?700:400, color:tf.prices[d]?"#12283d":"#c8d3de" }}>
+                              {tf.prices[d] ? tf.prices[d] + " ₽" : "—"}
+                            </td>
+                          ))}
+                          <td style={{ padding:"10px 12px", whiteSpace:"nowrap" }}>
+                            <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
+                              <button className="bg" style={{ fontSize:11, padding:"5px 8px" }} onClick={()=>startEditTariff(tf.raw)}><Pencil size={12} /></button>
+                              <button style={{ background:"rgba(226,87,76,.08)", border:"1px solid rgba(226,87,76,.2)", color:"#e2574c", padding:"5px 8px", borderRadius:7, cursor:"pointer" }}
+                                onClick={()=>deleteTariff(tf.id, tf.label)}><Trash2 size={12} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <h3 style={{ margin:"0 0 4px", fontSize:17, fontWeight:700, color:"#12283d" }}>Расчёт стоимости</h3>
+                <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:14 }}>Скидки можно сочетать — выберите те, что даёте этому ученику</div>
+
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14 }}>
+                  <div>
+                    <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Формат</div>
+                    <select value={calcTariff} onChange={e=>setCalcTariff(e.target.value)}>
+                      {TARIFFS.map(tf=><option key={tf.id} value={tf.id}>{tf.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Длительность</div>
+                    {durations.length === 1 ? (
+                      <div style={{ padding:"10px 12px", background:"#f2f6fa", borderRadius:10, fontSize:13, color:"#55677a" }}>
+                        {durations[0]} ч · фиксировано
+                      </div>
+                    ) : (
+                      <div style={{ display:"flex", gap:6 }}>
+                        {durations.map(d=>(
+                          <button key={d} onClick={()=>setCalcDuration(d)}
+                            style={{ flex:1, padding:"9px", borderRadius:9, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+                              border: dur===d ? "1px solid transparent" : "1px solid #dbe6f0",
+                              background: dur===d ? "linear-gradient(135deg,#29a3dc,#5cb531)" : "#ffffff",
+                              color: dur===d ? "#ffffff" : "#55677a" }}>
+                            {d} ч
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Занятий в месяц</div>
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                    {[4,8,12,16].map(n=>(
+                      <button key={n} onClick={()=>setCalcLessons(n)}
+                        style={{ padding:"8px 16px", borderRadius:9, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+                          border: calcLessons===n ? "1px solid transparent" : "1px solid #dbe6f0",
+                          background: calcLessons===n ? "linear-gradient(135deg,#29a3dc,#5cb531)" : "#ffffff",
+                          color: calcLessons===n ? "#ffffff" : "#55677a" }}>{n}</button>
+                    ))}
+                    <input type="number" value={calcLessons} min={1}
+                      onChange={e=>setCalcLessons(Math.max(1, Number(e.target.value)||1))}
+                      style={{ width:80, fontSize:13, padding:"8px 10px" }} />
+                  </div>
+                </div>
+
+                <div style={{ padding:14, background:"#f8fbfd", border:"1px solid #dbe6f0", borderRadius:12, marginBottom:14 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:"#12283d", marginBottom:10 }}>Скидки</div>
+
+                  <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:10, flexWrap:"wrap" }}>
+                    <label style={{ display:"flex", alignItems:"center", gap:9, cursor:"pointer" }}>
+                      <input type="checkbox" checked={calcSubscription} onChange={e=>setCalcSubscription(e.target.checked)}
+                        style={{ width:16, height:16, cursor:"pointer" }} />
+                      <span style={{ fontSize:13, color:"#22344a" }}>Абонемент — минус</span>
+                    </label>
+                    <input type="number" value={discountCfg.perHour}
+                      onChange={e=>saveDiscountCfg({ perHour: Number(e.target.value) || 0 })}
+                      style={{ width:70, fontSize:13, padding:"5px 8px" }} />
+                    <span style={{ fontSize:13, color:"#22344a" }}>₽ с каждого часа</span>
+                  </div>
+
+                  <div style={{ marginBottom:10 }}>
+                    <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Процентная скидка</div>
+                    <div style={{ display:"flex", gap:6 }}>
+                      {[0, ...discountCfg.percents].map(p=>(
+                        <button key={p} onClick={()=>setCalcPercent(p)}
+                          style={{ flex:1, padding:"8px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+                            border: calcPercent===p ? "1px solid transparent" : "1px solid #dbe6f0",
+                            background: calcPercent===p ? "linear-gradient(135deg,#29a3dc,#5cb531)" : "#ffffff",
+                            color: calcPercent===p ? "#ffffff" : "#55677a" }}>
+                          {p ? "−" + p + "%" : "нет"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Несколько предметов</div>
+                    <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+                      {[[0,"нет"],[3,"3 предмета"],[4,"4 предмета"]].map(([v,l])=>(
+                        <button key={v} onClick={()=>setCalcSubjects(v)}
+                          style={{ padding:"8px 12px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+                            border: calcSubjects===v ? "1px solid transparent" : "1px solid #dbe6f0",
+                            background: calcSubjects===v ? "linear-gradient(135deg,#29a3dc,#5cb531)" : "#ffffff",
+                            color: calcSubjects===v ? "#ffffff" : "#55677a" }}>{l}</button>
+                      ))}
+                      <span style={{ fontSize:12, color:"#7a8a9c" }}>−</span>
+                      <input type="number" value={discountCfg.subjects3}
+                        onChange={e=>saveDiscountCfg({ subjects3: Number(e.target.value) || 0 })}
+                        style={{ width:74, fontSize:12, padding:"5px 8px" }} title="скидка за 3 предмета" />
+                      <span style={{ fontSize:12, color:"#7a8a9c" }}>/</span>
+                      <input type="number" value={discountCfg.subjects4}
+                        onChange={e=>saveDiscountCfg({ subjects4: Number(e.target.value) || 0 })}
+                        style={{ width:74, fontSize:12, padding:"5px 8px" }} title="скидка за 4 предмета" />
+                      <span style={{ fontSize:12, color:"#7a8a9c" }}>₽</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding:16, background:"linear-gradient(135deg, rgba(41,163,220,.08), rgba(92,181,49,.08))", border:"1px solid rgba(41,163,220,.25)", borderRadius:12 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, color:"#55677a", marginBottom:6 }}>
+                    <span>{perLesson} ₽ × {calcLessons} занятий</span>
+                    <span>{base.toLocaleString("ru-RU")} ₽</span>
+                  </div>
+                  {subDiscount > 0 && (
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, color:"#5cb85c", marginBottom:6 }}>
+                      <span>Абонемент (−50 ₽/час × {dur} ч × {calcLessons})</span>
+                      <span>−{subDiscount.toLocaleString("ru-RU")} ₽</span>
+                    </div>
+                  )}
+                  {pctDiscount > 0 && (
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, color:"#5cb85c", marginBottom:6 }}>
+                      <span>Скидка {calcPercent}%</span>
+                      <span>−{pctDiscount.toLocaleString("ru-RU")} ₽</span>
+                    </div>
+                  )}
+                  {subjDiscount > 0 && (
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, color:"#5cb85c", marginBottom:6 }}>
+                      <span>За {calcSubjects} предмета</span>
+                      <span>−{subjDiscount.toLocaleString("ru-RU")} ₽</span>
+                    </div>
+                  )}
+                  <div style={{ height:1, background:"rgba(18,40,61,.1)", margin:"10px 0" }} />
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+                    <span style={{ fontSize:15, fontWeight:700, color:"#12283d" }}>Итого за месяц</span>
+                    <span style={{ fontSize:26, fontWeight:700, color:"#12283d" }}>{total.toLocaleString("ru-RU")} ₽</span>
+                  </div>
+                  {saved > 0 && (
+                    <div style={{ textAlign:"right", fontSize:12, color:"#5cb85c", fontWeight:600, marginTop:4 }}>
+                      выгода {saved.toLocaleString("ru-RU")} ₽
+                    </div>
+                  )}
+                </div>
+              </div>
+
                   <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, overflow:"hidden" }}>
                     <table style={{ width:"100%", borderCollapse:"collapse" }}>
                       <thead>
@@ -4255,6 +4616,20 @@ ${contextSummary}`;
               {/* RULES TAB */}
               {pricingTab==="rules" && (
                 <div>
+                  {/* Официальные правила НОУ «Гений» — те же, что на бланке анкеты */}
+                  <div style={{ background:"#ffffff", border:"1px solid rgba(41,163,220,.3)", borderRadius:16, padding:20, marginBottom:14 }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:6, flexWrap:"wrap" }}>
+                      <div style={{ fontSize:15, fontWeight:700, color:"#12283d" }}>📋 Правила Образовательного Центра</div>
+                      <button className="bg" style={{ fontSize:11, padding:"6px 12px" }} onClick={printCenterRules}>🖨 Распечатать</button>
+                    </div>
+                    <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:14 }}>Родитель подписывает их при заполнении анкеты</div>
+                    <ol style={{ margin:0, paddingLeft:20 }}>
+                      {CENTER_RULES.map((r,i)=>(
+                        <li key={i} style={{ fontSize:13, color:"#22344a", lineHeight:1.55, marginBottom:9 }}>{r}</li>
+                      ))}
+                    </ol>
+                  </div>
+
                   {rulesSections.map(sec=>(
                     <div key={sec} style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, padding:20, marginBottom:14 }}>
                       <div style={{ fontSize:15, fontWeight:700, color:"#1da0d4", marginBottom:14 }}>{sec}</div>
@@ -5241,6 +5616,24 @@ ${contextSummary}`;
               ))}
               <button className="bg" style={{ width:"fit-content", fontSize:12 }} onClick={()=>setFamilyForm({...familyForm,extraPhones:[...familyForm.extraPhones,""]})}><Plus size={13} /> Ещё телефон</button>
               <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em", display:"flex", alignItems:"center", gap:4 }}><MapPin size={11} /> Адрес</div><input placeholder="ул. Ленина, д. 12, кв. 34" value={familyForm.address} onChange={e=>setFamilyForm({...familyForm,address:e.target.value})} /></div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Электронная почта</div>
+                  <input type="email" placeholder="parent@mail.ru" value={familyForm.parentEmail} onChange={e=>setFamilyForm({...familyForm,parentEmail:e.target.value})} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Как узнали о нас</div>
+                  <select value={familyForm.source} onChange={e=>setFamilyForm({...familyForm,source:e.target.value})}>
+                    <option value="">—</option>
+                    <option value="instagram">Инстаграм</option>
+                    <option value="website">Веб-сайт</option>
+                    <option value="outdoor">Наружная реклама</option>
+                    <option value="signboard">Вывеска</option>
+                    <option value="referral">Порекомендовали</option>
+                    <option value="other">Другое</option>
+                  </select>
+                </div>
+              </div>
               <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Примечания</div><textarea rows={2} placeholder="Любая дополнительная информация" value={familyForm.notes} onChange={e=>setFamilyForm({...familyForm,notes:e.target.value})} /></div>
 
               <div style={{ height:1, background:"#dbe6f0", margin:"8px 0" }} />
@@ -5905,6 +6298,45 @@ ${contextSummary}`;
               </div>
               <div style={{ display:"flex", gap:10, marginTop:8 }}>
                 <button className="bp" style={{ flex:1 }} onClick={addTrialLesson}>Создать</button>
+                <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal==="editTariff" && (
+        <div className="ov" onClick={()=>setModal(null)}>
+          <div className="mo" style={{ width:480 }} onClick={e=>e.stopPropagation()}>
+            <h2 style={{ margin:"0 0 6px", fontSize:20, fontWeight:700 }}>{editTariffId ? "Изменить формат" : "Новый формат"}</h2>
+            <div style={{ fontSize:12, color:"#7a8a9c", marginBottom:16 }}>Оставьте цену пустой, если такой длительности нет</div>
+            <div style={{ display:"grid", gap:14 }}>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Название *</div>
+                <input value={tariffDraft.label} onChange={e=>setTariffDraft({...tariffDraft, label:e.target.value})}
+                  placeholder="Например: Мини-группа 2–3 человека" />
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Пояснение</div>
+                <input value={tariffDraft.note} onChange={e=>setTariffDraft({...tariffDraft, note:e.target.value})}
+                  placeholder="Например: 1–8 классы" />
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>1 час (₽)</div>
+                  <input type="number" value={tariffDraft.price1} onChange={e=>setTariffDraft({...tariffDraft, price1:e.target.value})} placeholder="—" />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>1,5 часа (₽)</div>
+                  <input type="number" value={tariffDraft.price15} onChange={e=>setTariffDraft({...tariffDraft, price15:e.target.value})} placeholder="—" />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>2 часа (₽)</div>
+                  <input type="number" value={tariffDraft.price2} onChange={e=>setTariffDraft({...tariffDraft, price2:e.target.value})} placeholder="—" />
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                <button className="bp" style={{ flex:1 }} onClick={saveTariff}>Сохранить</button>
                 <button className="bg" onClick={()=>setModal(null)}>Отмена</button>
               </div>
             </div>
