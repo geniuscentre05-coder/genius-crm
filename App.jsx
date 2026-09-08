@@ -832,7 +832,7 @@ export default function App() {
     } else if (reqPeriod === "custom") { from = reqDateFrom; to = reqDateTo; }
 
     let list = requests.filter(r=>{
-      const matchQ = !q || r.parentName.toLowerCase().includes(q) || r.studentName.toLowerCase().includes(q) || getReqCourses(r).some(c=>c.toLowerCase().includes(q)) || (qDigits && r.phone.replace(/\D/g,"").includes(qDigits));
+      const matchQ = !q || (r.parentName||"").toLowerCase().includes(q) || (r.studentName||"").toLowerCase().includes(q) || getReqCourses(r).some(c=>(c||"").toLowerCase().includes(q)) || (qDigits && (r.phone||"").replace(/\D/g,"").includes(qDigits));
       const matchF = reqFilter==="all" || r.status===reqFilter;
       const d = r.date || "";
       const matchD = (!from || (d && d >= from)) && (!to || (d && d <= to));
@@ -1380,7 +1380,7 @@ export default function App() {
           const q = String(input.query||"").toLowerCase();
           const qDigits = String(input.query||"").replace(/\D/g,"");
           const matches = localState.students.filter(s =>
-            s.name.toLowerCase().includes(q) ||
+            (s.name||"").toLowerCase().includes(q) ||
             (qDigits && (s.phone||"").replace(/\D/g,"").includes(qDigits)) ||
             (qDigits && (s.parentPhone||"").replace(/\D/g,"").includes(qDigits))
           );
@@ -1389,7 +1389,7 @@ export default function App() {
         }
         case "find_tutor": {
           const q = String(input.query||"").toLowerCase();
-          const matches = localState.tutors.filter(t => t.name.toLowerCase().includes(q) || (t.subjects||[]).some(s=>s.toLowerCase().includes(q)));
+          const matches = localState.tutors.filter(t => (t.name||"").toLowerCase().includes(q) || (t.subjects||[]).some(s=>(s||"").toLowerCase().includes(q)));
           if (matches.length===0) return "Преподаватели не найдены.";
           return matches.map(t=>`id=${t.id}, ${t.short}, предметы: ${(t.subjects||[]).join(", ")}`).join("\n");
         }
@@ -1406,8 +1406,8 @@ export default function App() {
           return `Ученик добавлен: id=${newStudent.id}, ${newStudent.name}`;
         }
         case "add_lesson": {
-          const st = localState.students.find(s=>s.name.toLowerCase().includes(String(input.studentQuery||"").toLowerCase()));
-          const tu = localState.tutors.find(t=>t.name.toLowerCase().includes(String(input.tutorQuery||"").toLowerCase()));
+          const st = localState.students.find(s=>(s.name||"").toLowerCase().includes(String(input.studentQuery||"").toLowerCase()));
+          const tu = localState.tutors.find(t=>(t.name||"").toLowerCase().includes(String(input.tutorQuery||"").toLowerCase()));
           if (!st) return `Ошибка: ученик "${input.studentQuery}" не найден. Сначала найдите или создайте его.`;
           if (!tu) return `Ошибка: преподаватель "${input.tutorQuery}" не найден.`;
           const newLesson = {
@@ -1421,7 +1421,7 @@ export default function App() {
           return `Занятие создано: ${st.name} с ${tu.short}, ${input.subject}, ${input.date} ${input.time}`;
         }
         case "record_payment": {
-          const st = localState.students.find(s=>s.name.toLowerCase().includes(String(input.studentQuery||"").toLowerCase()));
+          const st = localState.students.find(s=>(s.name||"").toLowerCase().includes(String(input.studentQuery||"").toLowerCase()));
           if (!st) return `Ошибка: ученик "${input.studentQuery}" не найден.`;
           const newPayment = { id: Date.now(), studentId: st.id, studentName: st.name, amount: Number(input.amount), date: new Date().toISOString().split("T")[0], method: input.method||"cash", comment: input.comment||"" };
           localState.payments = [...localState.payments, newPayment];
@@ -1433,7 +1433,7 @@ export default function App() {
           return `Оплата записана: ${input.amount}₽ от ${st.name}. Новый баланс: ${localState.students.find(s=>s.id===st.id).balance}₽`;
         }
         case "update_student_status": {
-          const st = localState.students.find(s=>s.name.toLowerCase().includes(String(input.studentQuery||"").toLowerCase()));
+          const st = localState.students.find(s=>(s.name||"").toLowerCase().includes(String(input.studentQuery||"").toLowerCase()));
           if (!st) return `Ошибка: ученик "${input.studentQuery}" не найден.`;
           localState.students = localState.students.map(s=>s.id===st.id?{...s,status:input.status}:s);
           setStudents(localState.students);
@@ -2311,10 +2311,16 @@ ${contextSummary}`;
   const renderText = (text, s) => text.replace(/{{parentName}}/g,s.parentName||"Родитель").replace(/{{studentName}}/g,s.name).replace(/{{balance}}/g,Math.abs(s.balance)+"₽").replace(/{{phone}}/g,s.phone);
 
   const filteredStudents = students.filter(s => {
+    // Любое пустое поле (name/subjects могут быть null после импорта) роняло
+    // весь фильтр — поиск переставал находить кого-либо вообще.
     const q = search.toLowerCase();
     const qDigits = search.replace(/\D/g, "");
     const phoneMatch = qDigits.length>0 && [s.phone, s.parentPhone, ...(s.extraPhones||[])].some(p => p && p.replace(/\D/g,"").includes(qDigits));
-    return (s.name.toLowerCase().includes(q) || s.subjects.some(x=>x.toLowerCase().includes(q)) || phoneMatch) && (fStatus==="all"||s.status===fStatus);
+    const nameMatch = (s.name || "").toLowerCase().includes(q);
+    const subjMatch = (s.subjects || []).some(x => (x || "").toLowerCase().includes(q));
+    const schoolMatch = (s.school || "").toLowerCase().includes(q);
+    const parentMatch = (s.parentName || "").toLowerCase().includes(q);
+    return (nameMatch || subjMatch || schoolMatch || parentMatch || phoneMatch) && (fStatus==="all"||s.status===fStatus);
   });
 
  const nav = [
@@ -4974,7 +4980,7 @@ ${contextSummary}`;
           };
           const filtered = candidates.filter(c=>{
             const q = candSearch.toLowerCase();
-            const matchQ = !q || c.name.toLowerCase().includes(q) || c.phone.includes(q) || (c.subjects||[]).some(s=>s.toLowerCase().includes(q));
+            const matchQ = !q || (c.name||"").toLowerCase().includes(q) || (c.phone||"").includes(q) || (c.subjects||[]).some(s=>(s||"").toLowerCase().includes(q));
             const matchF = candFilter==="all" || c.status===candFilter;
             return matchQ && matchF;
           });
