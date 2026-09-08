@@ -39,6 +39,17 @@ function snakeToCamelObj(obj) {
   }
   return out;
 }
+// Локально сгенерированные id: Date.now() при нескольких вызовах в одну
+// миллисекунду даёт одинаковые значения, а арифметика вида id+i в двух местах
+// может пересечься — при создании серии занятий это ломало вставку.
+// Здесь id всегда строго возрастает и остаётся в том же формате, что раньше.
+let __lastId = 0;
+function newId() {
+  const now = Date.now();
+  __lastId = now > __lastId ? now : __lastId + 1;
+  return __lastId;
+}
+
 async function fetchTable(table) {
   // Supabase отдаёт максимум 1000 строк за запрос. Читаем страницами,
   // иначе часть записей молча теряется (у центра >1900 учеников).
@@ -347,7 +358,14 @@ const audIcons  = { all:"👥", active:"✅", debtors:"💸", zeroblance:"⚠️
 
 function calcEarning(lesson, tutor) {
   if (!tutor) return 0;
-  return tutor.rateType === "percent" ? Math.round(lesson.price * tutor.rateValue / 100) : tutor.rateValue;
+  // Групповые занятия могут оплачиваться по своей ставке (например 45% против 50%
+  // за индивидуальные). Если отдельная ставка не задана — берём основную.
+  const isGroup = !!lesson.isGroup;
+  const rate = isGroup && tutor.groupRateValue !== null && tutor.groupRateValue !== undefined && tutor.groupRateValue !== ""
+    ? Number(tutor.groupRateValue)
+    : Number(tutor.rateValue);
+  if (!Number.isFinite(rate)) return 0;
+  return tutor.rateType === "percent" ? Math.round((lesson.price || 0) * rate / 100) : rate;
 }
 
 // Requests used to store a plain "course" string, then a "courses" array; now they
@@ -777,6 +795,9 @@ export default function App() {
   const [reportTab, setReportTab] = useState("finance");
   const [reqSearch, setReqSearch] = useState("");
   const [reqFilter, setReqFilter] = useState("all");
+  const [reqPeriod, setReqPeriod] = useState("all"); // all | today | 7d | 30d | custom
+  const [reqDateFrom, setReqDateFrom] = useState("");
+  const [reqDateTo, setReqDateTo] = useState("");
   const [reqSearchInput, setReqSearchInput] = useState(""); // raw typed value, debounced into reqSearch
   const [reqSearching, setReqSearching] = useState(false);  // true during the debounce window (drives skeleton rows)
   const [reqViewMode, setReqViewMode] = useState("table");  // "table" | "kanban"
@@ -800,10 +821,22 @@ export default function App() {
   const reqFiltered = useMemo(() => {
     const q = reqSearch.toLowerCase();
     const qDigits = reqSearch.replace(/\D/g,"");
+    // Границы периода считаем один раз, а не для каждой записи
+    const today = new Date().toISOString().split("T")[0];
+    let from = "", to = "";
+    if (reqPeriod === "today") { from = today; to = today; }
+    else if (reqPeriod === "7d" || reqPeriod === "30d") {
+      const d = new Date();
+      d.setDate(d.getDate() - (reqPeriod === "7d" ? 6 : 29));
+      from = d.toISOString().split("T")[0]; to = today;
+    } else if (reqPeriod === "custom") { from = reqDateFrom; to = reqDateTo; }
+
     let list = requests.filter(r=>{
       const matchQ = !q || r.parentName.toLowerCase().includes(q) || r.studentName.toLowerCase().includes(q) || getReqCourses(r).some(c=>c.toLowerCase().includes(q)) || (qDigits && r.phone.replace(/\D/g,"").includes(qDigits));
       const matchF = reqFilter==="all" || r.status===reqFilter;
-      return matchQ && matchF;
+      const d = r.date || "";
+      const matchD = (!from || (d && d >= from)) && (!to || (d && d <= to));
+      return matchQ && matchF && matchD;
     });
     list = [...list].sort((a,b)=>{
       let av = a[reqSortKey], bv = b[reqSortKey];
@@ -813,7 +846,7 @@ export default function App() {
       return reqSortDir==="asc" ? cmp : -cmp;
     });
     return list;
-  }, [requests, reqSearch, reqFilter, reqSortKey, reqSortDir, tutors]);
+  }, [requests, reqSearch, reqFilter, reqPeriod, reqDateFrom, reqDateTo, reqSortKey, reqSortDir, tutors]);
   const reqTotalPages = Math.max(1, Math.ceil(reqFiltered.length / REQ_PAGE_SIZE));
   const reqPageSafe = Math.min(reqPage, reqTotalPages);
   const reqPageItems = useMemo(() => reqFiltered.slice((reqPageSafe-1)*REQ_PAGE_SIZE, reqPageSafe*REQ_PAGE_SIZE), [reqFiltered, reqPageSafe]);
@@ -1163,7 +1196,7 @@ export default function App() {
       parentName: nStudentEdit.parentName,
       parentPhone: nStudentEdit.parentPhone,
       phone: nStudentEdit.phone,
-      extraPhones: nStudentEdit.extraPhones.filter(Boolean),
+      extraPhones: (nStudentEdit.extraPhones||[]).filter(Boolean),
       address: nStudentEdit.address,
     };
     const siblingCount = editedStudent?.familyId ? students.filter(s => s.familyId===editedStudent.familyId && s.id!==editingStudentId).length : 0;
@@ -1196,12 +1229,14 @@ export default function App() {
     setModal(null); setEditingStudentId(null); setNStudentEdit(null);
     notify(siblingCount>0 ? `Данные ученика обновлены, контакты семьи синхронизированы у ${siblingCount} братьев/сестёр` : "Данные ученика обновлены");
   }
-  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+  const [nTutor,    setNTutor]    = useState({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, groupRateValue:45, status:"active", color:"#1da0d4" });
   const [editingTutorId, setEditingTutorId] = useState(null);
   const [editingCatalogId, setEditingCatalogId] = useState(null);
   const [nLesson,   setNLesson]   = useState({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
   const [lessonType,  setLessonType]  = useState("individual"); // individual | group
   const [groupStudents, setGroupStudents] = useState([]); // [{studentId, price}]
+  const [groupSearch, setGroupSearch] = useState("");
+  const [lessonStudentSearch, setLessonStudentSearch] = useState("");
   const [groupName,   setGroupName]   = useState("");
   const [lessonStudentLocked, setLessonStudentLocked] = useState(false); // true when opened from a student's own profile — no need to search for them again
   const [nPayment,  setNPayment]  = useState({ studentId:"", amount:"", method:"card", comment:"" });
@@ -1715,16 +1750,39 @@ ${contextSummary}`;
     if (!window.confirm(`Восстановить данные из копии:\n«${label}»?\n\nТекущие данные будут заменены.`)) return;
     setBackupBusy(true);
     try {
-      const { data: row } = await supabase.from("backups").select("data").eq("id", backupId).single();
+      const { data: row, error: readErr } = await supabase.from("backups").select("data").eq("id", backupId).single();
+      if (readErr) throw new Error("Не удалось прочитать копию: " + readErr.message);
       if (!row?.data) throw new Error("Копия не найдена");
       const b = row.data;
-      await replaceTable("tutors", b.tutors || []);
-      await replaceTable("students", b.students || []);
-      await replaceTable("lessons", b.lessons || []);
+
+      // Восстановление стирает таблицы целиком, поэтому сначала убеждаемся,
+      // что копия действительно содержит данные. Пустой массив здесь означал
+      // бы «удалить всех учеников» — раньше это проходило молча.
+      const required = [
+        ["tutors", b.tutors, tutors.length],
+        ["students", b.students, students.length],
+        ["lessons", b.lessons, lessons.length],
+      ];
+      const broken = required.filter(([, arr]) => !Array.isArray(arr));
+      if (broken.length) {
+        throw new Error("Копия повреждена: нет данных (" + broken.map(x => x[0]).join(", ") + ")");
+      }
+      const shrink = required.filter(([, arr, now]) => now > 0 && arr.length < now * 0.5);
+      if (shrink.length) {
+        const детали = shrink.map(([t, arr, now]) => `${t}: ${arr.length} вместо ${now}`).join("\n");
+        if (!window.confirm(
+          "В копии заметно меньше записей, чем сейчас:\n\n" + детали +
+          "\n\nЭто нормально, если копия старая. Но если копия неполная, данные будут потеряны.\n\nВсё равно восстановить?"
+        )) { setBackupBusy(false); return; }
+      }
+
+      await replaceTable("tutors", b.tutors);
+      await replaceTable("students", b.students);
+      await replaceTable("lessons", b.lessons);
       await replaceTable("payments", b.payments || []);
       await replaceTable("salaries", b.salaries || []);
-      setTutors(b.tutors || []); setStudents(b.students || []);
-      setLessons(b.lessons || []); setPayments(b.payments || []);
+      setTutors(b.tutors); setStudents(b.students);
+      setLessons(b.lessons); setPayments(b.payments || []);
       setSalaries(b.salaries || []);
       if (b.mailings) setMailings(b.mailings);
       if (b.requests) setRequests(b.requests);
@@ -1822,7 +1880,7 @@ ${contextSummary}`;
       birthDate: c.birthDate,
       age: calcAge(c.birthDate) ?? 0,
       phone: familyForm.phone,
-      extraPhones: familyForm.extraPhones.filter(Boolean),
+      extraPhones: (familyForm.extraPhones||[]).filter(Boolean),
       parentName: familyForm.parentName,
       parentPhone: familyForm.phone,
       address: familyForm.address,
@@ -1849,23 +1907,23 @@ ${contextSummary}`;
     const parts = nTutor.name.trim().split(" ");
     const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
     if (editingTutorId) {
-      const patch = { ...nTutor, short, rateValue:Number(nTutor.rateValue) };
+      const patch = { ...nTutor, short, rateValue:Number(nTutor.rateValue), groupRateValue: nTutor.groupRateValue === "" ? null : Number(nTutor.groupRateValue) };
       setTutors(tutors.map(t => t.id===editingTutorId ? { ...t, ...patch } : t));
       updateRow("tutors", editingTutorId, patch);
-      setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+      setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, groupRateValue:45, status:"active", color:"#1da0d4" });
       setEditingTutorId(null);
       setModal(null); notify("Данные преподавателя обновлены");
       return;
     }
-    const newTutor = { ...nTutor, id:Date.now(), short, rateValue:Number(nTutor.rateValue), files:[] };
+    const newTutor = { ...nTutor, id:newId(), short, rateValue:Number(nTutor.rateValue), groupRateValue: nTutor.groupRateValue === "" ? null : Number(nTutor.groupRateValue), files:[] };
     setTutors([...tutors, newTutor]);
     insertRow("tutors", newTutor);
-    setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" });
+    setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, groupRateValue:45, status:"active", color:"#1da0d4" });
     setModal(null); notify("Преподаватель добавлен — прикрепите документы в его карточке");
     setView("tutors"); setSelStudent(null); setTTab("overview"); setSelTutor(newTutor);
   };
   const startEditTutor = (t) => {
-    setNTutor({ name:t.name, phone:t.phone, email:t.email||"", address:t.address||"", notes:t.notes||"", subjects:t.subjects||[], rateType:t.rateType, rateValue:t.rateValue, status:t.status, color:t.color });
+    setNTutor({ name:t.name, phone:t.phone, email:t.email||"", address:t.address||"", notes:t.notes||"", subjects:t.subjects||[], rateType:t.rateType, rateValue:t.rateValue, groupRateValue:t.groupRateValue ?? "", status:t.status, color:t.color });
     setEditingTutorId(t.id);
     setModal("addTutor");
   };
@@ -1873,7 +1931,7 @@ ${contextSummary}`;
   // ── Candidates (job applicants) ──
   const addCandidate = () => {
     if (!nCandidate.name || !nCandidate.phone) return;
-    const newCandidate = { ...nCandidate, id:Date.now(), date:new Date().toISOString().split("T")[0], files:[] };
+    const newCandidate = { ...nCandidate, id:newId(), date:new Date().toISOString().split("T")[0], files:[] };
     setCandidates([newCandidate, ...candidates]);
     setNCandidate({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" });
     setModal(null); notify("Соискатель добавлен — прикрепите резюме в его карточке");
@@ -1883,7 +1941,7 @@ ${contextSummary}`;
     if (!window.confirm(`Принять ${c.name} на работу как преподавателя?`)) return;
     const parts = c.name.trim().split(" ");
     const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
-    const newTutor = { name:c.name, short, phone:c.phone, address:"", notes:c.notes||"", subjects:c.subjects||[], rateType:"percent", rateValue:50, status:"active", color:COLORS[tutors.length % COLORS.length], id:Date.now(), files:c.files||[] };
+    const newTutor = { name:c.name, short, phone:c.phone, address:"", notes:c.notes||"", subjects:c.subjects||[], rateType:"percent", rateValue:50, status:"active", color:COLORS[tutors.length % COLORS.length], id:newId(), files:c.files||[] };
     setTutors([...tutors, newTutor]);
     insertRow("tutors", newTutor);
     setCandidates(candidates.map(x=>x.id===c.id?{...x,status:"hired"}:x));
@@ -1896,14 +1954,14 @@ ${contextSummary}`;
     if (!nLesson.studentId || !nLesson.subject || !nLesson.date || !nLesson.tutorId) return;
     const st = students.find(s=>s.id===Number(nLesson.studentId));
     const tu = tutors.find(t=>t.id===Number(nLesson.tutorId));
-    setLessons([...lessons, { ...nLesson, id:Date.now(), studentName:st?.name||"", tutorShort:tu?.short||"", price:Number(nLesson.price), duration:Number(nLesson.duration), studentId:Number(nLesson.studentId), tutorId:Number(nLesson.tutorId), status:"scheduled" }]);
+    setLessons([...lessons, { ...nLesson, id:newId(), studentName:st?.name||"", tutorShort:tu?.short||"", price:Number(nLesson.price), duration:Number(nLesson.duration), studentId:Number(nLesson.studentId), tutorId:Number(nLesson.tutorId), status:"scheduled" }]);
     setNLesson({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
     setModal(null); notify("Занятие добавлено");
   };
   const addPayment = () => {
     if (!nPayment.studentId || !nPayment.amount) return;
     const st = students.find(s=>s.id===Number(nPayment.studentId));
-    const newPayment = { ...nPayment, id:Date.now(), studentName:st?.name||"", amount:Number(nPayment.amount), date:new Date().toISOString().split("T")[0] };
+    const newPayment = { ...nPayment, id:newId(), studentName:st?.name||"", amount:Number(nPayment.amount), date:new Date().toISOString().split("T")[0] };
     setPayments([...payments, newPayment]);
     insertRow("payments", newPayment);
     const newBalance = st.balance + Number(nPayment.amount);
@@ -1914,16 +1972,24 @@ ${contextSummary}`;
   };
   const addSalary = () => {
     if (!nSalary.tutorId || !nSalary.amount) return;
-    const newSalary = { ...nSalary, id:Date.now(), tutorId:Number(nSalary.tutorId), amount:Number(nSalary.amount), date:new Date().toISOString().split("T")[0] };
+    const newSalary = { ...nSalary, id:newId(), tutorId:Number(nSalary.tutorId), amount:Number(nSalary.amount), date:new Date().toISOString().split("T")[0] };
     setSalaries([...salaries, newSalary]);
     insertRow("salaries", newSalary);
     setNSalary({ tutorId:"", amount:"", comment:"", month:new Date().toISOString().slice(0,7) });
     setModal(null); notify("Выплата записана");
   };
-  const completeLesson = id => { const lsn = lessons.find(l=>l.id===id); setLessons(lessons.map(l=>l.id===id?{...l,status:"completed"}:l)); updateRow("lessons", id, { status:"completed" }); if (lsn) chargeSubscriptionForLesson(lsn); notify("Занятие проведено"); };
+  const completeLesson = id => {
+    const lsn = lessons.find(l=>l.id===id);
+    // Повторный клик не должен списывать второе занятие с абонемента
+    if (!lsn || lsn.status === "completed") return;
+    setLessons(lessons.map(l=>l.id===id?{...l,status:"completed"}:l));
+    updateRow("lessons", id, { status:"completed" });
+    chargeSubscriptionForLesson(lsn);
+    notify("Занятие проведено");
+  };
   const sendMailing = () => {
     const cnt = audMap[mDraft.audience]?.length||0;
-    setMailings([{ ...mDraft, id:Date.now(), status:"sent", sentAt:new Date().toISOString().split("T")[0], sentCount:cnt }, ...mailings]);
+    setMailings([{ ...mDraft, id:newId(), status:"sent", sentAt:new Date().toISOString().split("T")[0], sentCount:cnt }, ...mailings]);
     setMDraft({ title:"", channel:"whatsapp", audience:"all", text:"" });
     setModal(null); setMStep(1); notify(`Отправлено ${cnt} получателям`);
   };
@@ -2238,7 +2304,7 @@ ${contextSummary}`;
     );
     if (!candidates.length) return;
     const exact =
-    setMailings([{ ...mDraft, id:Date.now(), status:"sent", sentAt:new Date().toISOString().split("T")[0], sentCount:cnt }, ...mailings]);
+    setMailings([{ ...mDraft, id:newId(), status:"sent", sentAt:new Date().toISOString().split("T")[0], sentCount:cnt }, ...mailings]);
     setMDraft({ title:"", channel:"whatsapp", audience:"all", text:"" });
     setModal(null); setMStep(1); notify(`Отправлено ${cnt} получателям`);
   };
@@ -2773,7 +2839,7 @@ ${contextSummary}`;
                     {t.email && <div style={{ fontSize:14, color:"#55677a", marginTop:4, display:"flex", alignItems:"center", gap:6 }}><Mail size={14} color="#1da0d4" /> {t.email}</div>}
                     {t.address && <div style={{ fontSize:14, color:"#55677a", marginTop:4, display:"flex", alignItems:"center", gap:6 }}><MapPin size={14} color="#1da0d4" /> {t.address}</div>}
                     <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8 }}>
-                      {t.subjects.map(s=><Tag key={s} c="#1da0d4" bg="rgba(99,102,241,0.15)">{s}</Tag>)}
+                      {(t.subjects||[]).map(s=><Tag key={s} c="#1da0d4" bg="rgba(99,102,241,0.15)">{s}</Tag>)}
                       <Tag c={statusCfg[t.status]?.color} bg={statusCfg[t.status]?.bg}>{statusCfg[t.status]?.label}</Tag>
                     </div>
                   </div>
@@ -2782,7 +2848,7 @@ ${contextSummary}`;
                     <button className="bg" onClick={()=>printSchedule(myL, tutors, students, `Преподаватель: ${t.short}`)}>🖨️ Расписание преподавателя</button>
                     <button className="bg" onClick={()=>startEditTutor(t)}>✏️ Редактировать</button>
                     <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
-                      onClick={()=>{ if(window.confirm(`Удалить преподавателя "${t.name}"?\n\nЗанятия и история останутся. Запись попадёт в Корзину — её можно вернуть в течение 30 дней.`)){ moveToTrash("tutors", t, `Преподаватель: ${t.name}`); setTutors(vTutors.filter(x=>x.id!==t.id)); deleteRow("tutors", t.id); setSelTutor(null); notify("Преподаватель удалён — можно вернуть из Корзины"); } }}><Trash2 size={13} /> Удалить</button>
+                      onClick={()=>{ if(window.confirm(`Удалить преподавателя "${t.name}"?\n\nЗанятия и история останутся. Запись попадёт в Корзину — её можно вернуть в течение 30 дней.`)){ moveToTrash("tutors", t, `Преподаватель: ${t.name}`); setTutors(prev=>prev.filter(x=>x.id!==t.id)); deleteRow("tutors", t.id); setSelTutor(null); notify("Преподаватель удалён — можно вернуть из Корзины"); } }}><Trash2 size={13} /> Удалить</button>
                   </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
@@ -2909,7 +2975,7 @@ ${contextSummary}`;
                                   </a>
                                 ) : <span style={{ fontSize:12, color:"#a9b8c6" }}>—</span>}
                               </td>
-                              <td style={{ padding:"12px 16px" }}>{s.subjects.map(sub=><Tag key={sub} c="#1da0d4" bg="rgba(29,160,212,0.12)">{sub}</Tag>)}</td>
+                              <td style={{ padding:"12px 16px" }}>{(s.subjects||[]).map(sub=><Tag key={sub} c="#1da0d4" bg="rgba(29,160,212,0.12)">{sub}</Tag>)}</td>
                               <td style={{ padding:"12px 16px" }}><Tag c={statusCfg[s.status]?.color} bg={statusCfg[s.status]?.bg}>{statusCfg[s.status]?.label}</Tag></td>
                               <td style={{ padding:"12px 16px", fontWeight:700, color:s.balance>=0?"#5cb85c":"#e2574c" }}>{s.balance}₽</td>
                               <td style={{ padding:"12px 16px", color:"#6d7f92", fontWeight:600 }}>{cnt}</td>
@@ -3329,7 +3395,7 @@ ${contextSummary}`;
                       <button className="bg" onClick={()=>printSchedule(vLessons.filter(l=>l.studentId===selStudentLive.id), tutors, students, `Ученик: ${selStudentLive.name}`)}>🖨️ Расписание ученика</button>
                       <button className="bg" onClick={()=>startEditStudent(selStudentLive)}>✏️ Редактировать</button>
                       <button style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}
-                        onClick={()=>{ if(window.confirm(`Удалить ученика "${selStudentLive.name}"?\n\nЗанятия и история останутся. Запись попадёт в Корзину — её можно вернуть в течение 30 дней.`)){ moveToTrash("students", selStudentLive, `Ученик: ${selStudentLive.name}`); setStudents(vStudents.filter(x=>x.id!==selStudentLive.id)); deleteRow("students", selStudentLive.id); setSelStudent(null); notify("Ученик удалён — можно вернуть из Корзины"); } }}><Trash2 size={13} /> Удалить</button>
+                        onClick={()=>{ if(window.confirm(`Удалить ученика "${selStudentLive.name}"?\n\nЗанятия и история останутся. Запись попадёт в Корзину — её можно вернуть в течение 30 дней.`)){ moveToTrash("students", selStudentLive, `Ученик: ${selStudentLive.name}`); setStudents(prev=>prev.filter(x=>x.id!==selStudentLive.id)); deleteRow("students", selStudentLive.id); setSelStudent(null); notify("Ученик удалён — можно вернуть из Корзины"); } }}><Trash2 size={13} /> Удалить</button>
                     </div>
                   </div>
                   {/* АБОНЕМЕНТЫ УЧЕНИКА */}
@@ -3560,7 +3626,7 @@ ${contextSummary}`;
             } else {
               const st = vStudents.find(s=>s.id===Number(editLesson.studentId));
               const updated = { ...shared, id:editLesson.id, studentId:Number(editLesson.studentId), studentName:st?.name||editLesson.studentName, price:Number(editLesson.price), isGroup:false };
-              const extraRows = extraDates.map((dateStr,di)=>({ ...updated, id:Date.now()+di+1, date:dateStr }));
+              const extraRows = extraDates.map((dateStr,di)=>({ ...updated, id:newId()+di+1, date:dateStr }));
               let base = vLessons.filter(l => l.id!==editLesson.id);
               let all = [...base, updated, ...extraRows];
               setLessons(all);
@@ -3571,7 +3637,7 @@ ${contextSummary}`;
             notify(extraDates.length>0 ? `Занятие обновлено, создано ещё ${extraDates.length} по расписанию` : "Занятие обновлено");
           };
           const deleteLesson = id => {
-            setLessons(vLessons.filter(l=>l.id!==id));
+            setLessons(prev=>prev.filter(l=>l.id!==id));
             deleteRow("lessons", id);
             setEditLesson(null);
             notify("Занятие удалено");
@@ -3579,7 +3645,7 @@ ${contextSummary}`;
           const deleteGroup = groupId => {
             const groupLessonIds = vLessons.filter(l=>l.groupId===groupId).map(l=>l.id);
             if (!window.confirm(`Удалить всю группу целиком (${groupLessonIds.length} записей)?`)) return;
-            setLessons(vLessons.filter(l=>l.groupId!==groupId));
+            setLessons(prev=>prev.filter(l=>l.groupId!==groupId));
             deleteRows("lessons", groupLessonIds);
             setEditLesson(null);
             notify("Группа удалена");
@@ -3926,7 +3992,7 @@ ${contextSummary}`;
                         <div style={{ display:"flex", gap:6, flexShrink:0 }}>
                           {l.status==="scheduled" && <button className="bg" style={{ fontSize:11, padding:"5px 10px" }} onClick={()=>completeLesson(l.id)}>✓</button>}
                           <button className="bg" style={{ fontSize:11, padding:"5px 10px", background:isEditing?"rgba(99,102,241,0.25)":"" }} onClick={()=>openEditLesson(isEditing?null:l)}>✏️</button>
-                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>{ moveToTrash("lessons", l, `Занятие: ${l.subject}, ${l.date} — ${l.studentName||l.groupName||""}`); setLessons(vLessons.filter(x=>x.id!==l.id)); deleteRow("lessons", l.id); notify("Занятие удалено — можно вернуть из Корзины"); }}>🗑</button>
+                          <button style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#e2574c", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontFamily:"inherit" }} onClick={()=>{ moveToTrash("lessons", l, `Занятие: ${l.subject}, ${l.date} — ${l.studentName||l.groupName||""}`); setLessons(prev=>prev.filter(x=>x.id!==l.id)); deleteRow("lessons", l.id); notify("Занятие удалено — можно вернуть из Корзины"); }}>🗑</button>
                         </div>
                       </div>
                     );
@@ -4175,7 +4241,7 @@ ${contextSummary}`;
                     </table>
                   </div>
                   <div style={{ display:"flex", gap:10, marginTop:14 }}>
-                    <button className="bp" onClick={()=>{ const newRow={id:Date.now(),category:pricingCategories[0],course:"Новый курс",price45:null,price60:600,price90:null,price120:null,groupPrice:null,note:""}; setPricing([...pricing,newRow]); setEditPricing(newRow); }}>+ Добавить курс</button>
+                    <button className="bp" onClick={()=>{ const newRow={id:newId(),category:pricingCategories[0],course:"Новый курс",price45:null,price60:600,price90:null,price120:null,groupPrice:null,note:""}; setPricing([...pricing,newRow]); setEditPricing(newRow); }}>+ Добавить курс</button>
                   </div>
                 </div>
               )}
@@ -4208,10 +4274,10 @@ ${contextSummary}`;
                           )}
                         </div>
                       ))}
-                      <button className="bg" style={{ marginTop:10, fontSize:11 }} onClick={()=>{ const nr={id:Date.now(),section:sec,text:"Новое правило"}; setRules([...rules,nr]); setEditRule(nr); }}>+ Добавить правило</button>
+                      <button className="bg" style={{ marginTop:10, fontSize:11 }} onClick={()=>{ const nr={id:newId(),section:sec,text:"Новое правило"}; setRules([...rules,nr]); setEditRule(nr); }}>+ Добавить правило</button>
                     </div>
                   ))}
-                  <button className="bp" onClick={()=>{ const sec="📌 Новый раздел"; const nr={id:Date.now(),section:sec,text:"Первое правило"}; setRules([...rules,nr]); }}>+ Добавить раздел</button>
+                  <button className="bp" onClick={()=>{ const sec="📌 Новый раздел"; const nr={id:newId(),section:sec,text:"Первое правило"}; setRules([...rules,nr]); }}>+ Добавить раздел</button>
                 </div>
               )}
             </div>
@@ -4292,7 +4358,7 @@ ${contextSummary}`;
           const tutorStats = vTutors.map(t=>{
             const tLsns = mCompleted.filter(l=>l.tutorId===t.id);
             const earned = tLsns.reduce((s,l)=>s+calcEarning(l,t),0);
-            const revenue = tLsns.reduce((s,l)=>s+l.price,0);
+            const revenue = tLsns.reduce((s,l)=>s+(Number(l.price)||0),0);
             return { ...t, lessons:tLsns.length, earned, revenue, students:[...new Set(tLsns.map(l=>l.studentId))].length };
           }).filter(t=>t.lessons>0).sort((a,b)=>b.lessons-a.lessons);
 
@@ -4704,7 +4770,7 @@ ${contextSummary}`;
         {view==="requests" && canSee("requests") && (()=>{
           const addRequest = () => {
             if (!nRequest.parentName || !nRequest.phone) return;
-            setRequests([{ ...nRequest, id:Date.now(), date:new Date().toISOString().split("T")[0], assignedTutorId:null }, ...requests]);
+            setRequests([{ ...nRequest, id:newId(), date:new Date().toISOString().split("T")[0], assignedTutorId:null }, ...requests]);
             setNRequest({ parentName:"", phone:"", comment:"", status:"new", children:[{ studentName:"", grade:"", subjectTeachers:[{ subject:"", tutorId:"" }] }] });
             setModal(null); notify("Запрос добавлен");
           };
@@ -4743,8 +4809,34 @@ ${contextSummary}`;
               </div>
 
               {/* search — debounced 350ms, shows a subtle skeleton while waiting */}
-              <div style={{ marginBottom:16, position:"relative" }}>
+              <div style={{ marginBottom:12, position:"relative" }}>
                 <input placeholder="🔍 Поиск по имени, телефону, курсу..." value={reqSearchInput} onChange={e=>setReqSearchInput(e.target.value)} />
+              </div>
+
+              {/* Фильтр по дате поступления запроса */}
+              <div style={{ marginBottom:16, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                <span style={{ fontSize:12, color:"#7a8a9c", fontWeight:600 }}>Период:</span>
+                {[["all","Все"],["today","Сегодня"],["7d","7 дней"],["30d","30 дней"],["custom","Свой период"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>{ setReqPeriod(k); setReqPage(1); }}
+                    style={{ padding:"6px 13px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+                      border: reqPeriod===k ? "1px solid transparent" : "1px solid #dbe6f0",
+                      background: reqPeriod===k ? "linear-gradient(135deg,#29a3dc,#5cb531)" : "#ffffff",
+                      color: reqPeriod===k ? "#ffffff" : "#55677a" }}>{l}</button>
+                ))}
+                {reqPeriod==="custom" && (
+                  <>
+                    <input type="date" value={reqDateFrom} onChange={e=>{ setReqDateFrom(e.target.value); setReqPage(1); }}
+                      style={{ width:"auto", fontSize:12, padding:"6px 10px" }} />
+                    <span style={{ fontSize:12, color:"#7a8a9c" }}>—</span>
+                    <input type="date" value={reqDateTo} onChange={e=>{ setReqDateTo(e.target.value); setReqPage(1); }}
+                      style={{ width:"auto", fontSize:12, padding:"6px 10px" }} />
+                  </>
+                )}
+                {reqPeriod!=="all" && (
+                  <span style={{ fontSize:12, color:"#1da0d4", fontWeight:600, marginLeft:4 }}>
+                    найдено: {reqFiltered.length}
+                  </span>
+                )}
               </div>
 
               {reqViewMode==="table" ? (
@@ -4902,7 +4994,7 @@ ${contextSummary}`;
                     <Tag c={candCfg[c.status]?.color} bg={candCfg[c.status]?.bg}>{candCfg[c.status]?.label}</Tag>
                   </div>
                   {c.subjects?.length>0 && (
-                    <div style={{ marginBottom:16 }}>{c.subjects.map(s=><Tag key={s} c="#1da0d4" bg="rgba(29,160,212,0.12)">{s}</Tag>)}</div>
+                    <div style={{ marginBottom:16 }}>{(c.subjects||[]).map(s=><Tag key={s} c="#1da0d4" bg="rgba(29,160,212,0.12)">{s}</Tag>)}</div>
                   )}
                   {c.notes && (
                     <div style={{ background:"#f2f6fa", borderRadius:10, padding:"12px 14px", marginBottom:16, fontSize:13, color:"#22344a", lineHeight:1.6 }}>
@@ -5035,7 +5127,7 @@ ${contextSummary}`;
       {/* ══ MODALS ══ */}
 
       {modal==="addTutor" && (
-        <div className="ov" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" }); }}>
+        <div className="ov" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, groupRateValue:45, status:"active", color:"#1da0d4" }); }}>
           <div className="mo" onClick={e=>e.stopPropagation()}>
             <h2 style={{ margin:"0 0 22px", fontSize:20, fontWeight:700 }}>{editingTutorId ? "Редактирование преподавателя" : "Новый преподаватель"}</h2>
             <div style={{ display:"grid", gap:14 }}>
@@ -5074,9 +5166,21 @@ ${contextSummary}`;
                   </select>
                 </div>
                 <div>
-                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>{nTutor.rateType==="percent"?"Процент (%)":"Сумма (₽)"}</div>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>
+                    {nTutor.rateType==="percent"?"Индивидуальные (%)":"Индивидуальные (₽)"}
+                  </div>
                   <input type="number" value={nTutor.rateValue} onChange={e=>setNTutor({...nTutor,rateValue:e.target.value})} />
                 </div>
+                <div>
+                  <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>
+                    {nTutor.rateType==="percent"?"Групповые (%)":"Групповые (₽)"}
+                  </div>
+                  <input type="number" value={nTutor.groupRateValue ?? ""} placeholder="как индивид."
+                    onChange={e=>setNTutor({...nTutor,groupRateValue:e.target.value})} />
+                </div>
+              </div>
+              <div style={{ fontSize:11, color:"#7a8a9c", marginTop:-8, marginBottom:4 }}>
+                Если ставка за групповые не указана, применяется ставка за индивидуальные
               </div>
               <div>
                 <div style={{ fontSize:12, color:"#55677a", marginBottom:8 }}>Цвет</div>
@@ -5089,7 +5193,7 @@ ${contextSummary}`;
               </div>
               <div style={{ display:"flex", gap:10, marginTop:8 }}>
                 <button className="bp" style={{ flex:1 }} onClick={addTutor}>{editingTutorId ? "Сохранить" : "Добавить"}</button>
-                <button className="bg" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, status:"active", color:"#1da0d4" }); }}>Отмена</button>
+                <button className="bg" onClick={()=>{ setModal(null); setEditingTutorId(null); setNTutor({ name:"", phone:"", email:"", address:"", notes:"", subjects:[], rateType:"percent", rateValue:50, groupRateValue:45, status:"active", color:"#1da0d4" }); }}>Отмена</button>
               </div>
             </div>
           </div>
@@ -5163,7 +5267,7 @@ ${contextSummary}`;
                   </div>
                   <div>
                     <div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Предметы и педагоги</div>
-                    {child.subjectTeachers.map((st,si)=>(
+                    {(child.subjectTeachers||[]).map((st,si)=>(
                       <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
                         <select value={st.subject} onChange={e=>{ const arr=[...familyForm.children]; const sts=[...arr[ci].subjectTeachers]; sts[si]={...sts[si],subject:e.target.value}; arr[ci]={...arr[ci],subjectTeachers:sts}; setFamilyForm({...familyForm,children:arr}); }}>
                           <option value="">Предмет...</option>
@@ -5240,7 +5344,7 @@ ${contextSummary}`;
 
               <div>
                 <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы и педагоги</div>
-                {nStudentEdit.subjectTeachers.map((st,si)=>(
+                {(nStudentEdit.subjectTeachers||[]).map((st,si)=>(
                   <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
                     <select value={st.subject} onChange={e=>{ const arr=[...nStudentEdit.subjectTeachers]; arr[si]={...arr[si],subject:e.target.value}; setNStudentEdit({...nStudentEdit,subjectTeachers:arr}); }}>
                       <option value="">Предмет...</option>
@@ -5408,10 +5512,50 @@ ${contextSummary}`;
                       );
                     })()
                   ) : (
-                    <select value={nLesson.studentId} onChange={e=>setNLesson({...nLesson,studentId:e.target.value})}>
-                      <option value="">Выберите ученика</option>
-                      {vStudents.map(s=><option key={s.id} value={s.id}>{s.name} {s.school?`· ${s.school}`:""}</option>)}
-                    </select>
+                    (() => {
+                      const chosen = vStudents.find(s => String(s.id) === String(nLesson.studentId));
+                      if (chosen) return (
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8,
+                          padding:"9px 12px", background:"rgba(92,184,92,.09)", border:"1px solid rgba(92,184,92,.3)", borderRadius:10 }}>
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:"#12283d" }}>{chosen.name}</div>
+                            <div style={{ fontSize:11, color:"#7a8a9c" }}>{[chosen.school, chosen.grade ? chosen.grade + " кл." : ""].filter(Boolean).join(" · ") || "—"}</div>
+                          </div>
+                          <button className="bg" style={{ fontSize:11, padding:"5px 9px", flexShrink:0 }}
+                            onClick={()=>{ setNLesson({...nLesson, studentId:""}); setLessonStudentSearch(""); }}>Изменить</button>
+                        </div>
+                      );
+                      return (
+                        <div>
+                          <input placeholder="🔎 Имя, школа или телефон ученика..." value={lessonStudentSearch}
+                            onChange={e=>setLessonStudentSearch(e.target.value)} />
+                          {lessonStudentSearch.trim().length >= 2 && (() => {
+                            const q = lessonStudentSearch.trim().toLowerCase();
+                            const qd = q.replace(/\D/g, "");
+                            const found = vStudents.filter(s =>
+                              (s.name||"").toLowerCase().includes(q) ||
+                              (s.school||"").toLowerCase().includes(q) ||
+                              (qd.length >= 3 && (s.phone||"").replace(/\D/g,"").includes(qd)) ||
+                              (qd.length >= 3 && (s.parentPhone||"").replace(/\D/g,"").includes(qd))
+                            ).slice(0, 8);
+                            if (!found.length) return <div style={{ fontSize:12, color:"#a9b8c6", marginTop:8 }}>Никого не найдено</div>;
+                            return (
+                              <div style={{ marginTop:8, display:"grid", gap:5, maxHeight:230, overflowY:"auto" }}>
+                                {found.map(s => (
+                                  <div key={s.id} onClick={()=>{ setNLesson({...nLesson, studentId:String(s.id)}); setLessonStudentSearch(""); }}
+                                    style={{ padding:"8px 11px", background:"#f8fbfd", border:"1px solid #dbe6f0", borderRadius:8, cursor:"pointer" }}>
+                                    <div style={{ fontSize:13, fontWeight:600, color:"#12283d" }}>{s.name}</div>
+                                    <div style={{ fontSize:11, color:"#7a8a9c", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                      {[s.school, s.grade ? s.grade + " кл." : "", s.phone].filter(Boolean).join(" · ") || "—"}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      );
+                    })()
                   )}
                   {nLesson.studentId && (()=>{
                     const st = vStudents.find(s=>s.id===Number(nLesson.studentId));
@@ -5454,15 +5598,52 @@ ${contextSummary}`;
                       </div>
                     );
                   })}
-                  {/* add student selector */}
-                  <div style={{ display:"flex", gap:8 }}>
-                    <select onChange={e=>{ if(!e.target.value) return; const sid=e.target.value; if(groupStudents.find(g=>g.studentId===sid)) return; const p=pricing.find(pr=>pr.course===nLesson.subject); setGroupStudents([...groupStudents,{studentId:sid,price:p?.groupPrice||400}]); e.target.value=""; }}
-                      style={{ flex:1, fontSize:13 }}>
-                      <option value="">+ Добавить ученика в группу...</option>
-                      {vStudents.filter(s=>!groupStudents.find(g=>g.studentId===String(s.id))).map(s=>(
-                        <option key={s.id} value={s.id}>{s.name} {s.school?`· ${s.school}`:""}</option>
-                      ))}
-                    </select>
+                  {/* Поиск ученика: список из ~2000 человек листать невозможно,
+                      поэтому ищем по имени, школе или телефону и добавляем кликом */}
+                  <div>
+                    <input
+                      placeholder="🔎 Начните вводить имя, школу или телефон..."
+                      value={groupSearch}
+                      onChange={e=>setGroupSearch(e.target.value)}
+                      style={{ fontSize:13 }} />
+                    {groupSearch.trim().length >= 2 && (() => {
+                      const q = groupSearch.trim().toLowerCase();
+                      const qd = q.replace(/\D/g, "");
+                      const found = vStudents
+                        .filter(s => !groupStudents.find(g => g.studentId === String(s.id)))
+                        .filter(s =>
+                          (s.name||"").toLowerCase().includes(q) ||
+                          (s.school||"").toLowerCase().includes(q) ||
+                          (qd.length >= 3 && (s.phone||"").replace(/\D/g,"").includes(qd)) ||
+                          (qd.length >= 3 && (s.parentPhone||"").replace(/\D/g,"").includes(qd))
+                        )
+                        .slice(0, 8);
+                      if (!found.length) return (
+                        <div style={{ fontSize:12, color:"#a9b8c6", marginTop:8, padding:"6px 2px" }}>Никого не найдено</div>
+                      );
+                      return (
+                        <div style={{ marginTop:8, display:"grid", gap:5, maxHeight:230, overflowY:"auto" }}>
+                          {found.map(s => (
+                            <div key={s.id}
+                              onClick={()=>{
+                                const p = pricing.find(pr => pr.course === nLesson.subject);
+                                setGroupStudents(prev => [...prev, { studentId:String(s.id), price: p?.groupPrice || 400 }]);
+                                setGroupSearch("");
+                              }}
+                              style={{ padding:"8px 11px", background:"#f8fbfd", border:"1px solid #dbe6f0", borderRadius:8,
+                                cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                              <div style={{ minWidth:0 }}>
+                                <div style={{ fontSize:13, fontWeight:600, color:"#12283d" }}>{s.name}</div>
+                                <div style={{ fontSize:11, color:"#7a8a9c", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                  {[s.school, s.grade ? s.grade + " кл." : "", s.phone].filter(Boolean).join(" · ") || "—"}
+                                </div>
+                              </div>
+                              <span style={{ fontSize:18, color:"#5cb85c", flexShrink:0, lineHeight:1 }}>+</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div style={{ fontSize:11, color:"#7a8a9c", marginTop:6 }}>
                     💡 Цена берётся автоматически из прайса. Можно изменить для каждого ученика отдельно.
@@ -5548,18 +5729,18 @@ ${contextSummary}`;
 
                   if (lessonType==="group") {
                     if (groupStudents.length===0) return;
-                    const groupId = Date.now();
+                    const groupId = newId();
                     const name = groupName || `Группа ${nLesson.subject} ${nLesson.time}`;
                     const newLessons = groupStudents.map((gs,i) => {
                       const st = vStudents.find(s=>s.id===Number(gs.studentId));
-                      return { ...baseLesson, id:groupId+i, studentId:Number(gs.studentId), studentName:st?.name||"", price:Number(gs.price||0), isGroup:true, groupId, groupName:name };
+                      return { ...baseLesson, id:newId(), studentId:Number(gs.studentId), studentName:st?.name||"", price:Number(gs.price||0), isGroup:true, groupId, groupName:name };
                     });
                     if (recurModal) {
                       const recurDates = getRecurDates();
                       const all = [];
-                      recurDates.forEach((dateStr,ri)=>{
-                        const gid = groupId + ri*1000;
-                        newLessons.forEach((l,li)=>{ all.push({...l, id:gid+li, date:dateStr, groupId:gid}); });
+                      recurDates.forEach(dateStr=>{
+                        const gid = newId();
+                        newLessons.forEach(l=>{ all.push({...l, id:newId(), date:dateStr, groupId:gid}); });
                       });
                       setLessons(prev=>[...prev,...all]);
                       insertRows("lessons", all);
@@ -5572,10 +5753,10 @@ ${contextSummary}`;
                   } else {
                     if (!nLesson.studentId) return;
                     const st = vStudents.find(s=>s.id===Number(nLesson.studentId));
-                    const lesson = { ...baseLesson, id:Date.now(), studentId:Number(nLesson.studentId), studentName:st?.name||"", price:Number(nLesson.price), isGroup:false };
+                    const lesson = { ...baseLesson, id:newId(), studentId:Number(nLesson.studentId), studentName:st?.name||"", price:Number(nLesson.price), isGroup:false };
                     if (recurModal) {
                       const recurDates = getRecurDates();
-                      const all = recurDates.map((dateStr,i)=>({ ...lesson, id:Date.now()+i, date:dateStr }));
+                      const all = recurDates.map((dateStr,i)=>({ ...lesson, id:newId()+i, date:dateStr }));
                       setLessons(prev=>[...prev,...all]);
                       insertRows("lessons", all);
                       notify(`Создано ${recurDates.length} занятий`);
@@ -6075,7 +6256,7 @@ ${contextSummary}`;
                     </div>
                   </div>
                   <div style={{ fontSize:12, color:"#55677a", marginBottom:6 }}>Предметы и педагоги</div>
-                  {child.subjectTeachers.map((st,si)=>(
+                  {(child.subjectTeachers||[]).map((st,si)=>(
                     <div key={si} style={{ display:"flex", gap:8, marginBottom:6 }}>
                       <select value={st.subject} onChange={e=>{ const arr=[...nRequest.children]; const sts=[...arr[ci].subjectTeachers]; sts[si]={...sts[si],subject:e.target.value}; arr[ci]={...arr[ci],subjectTeachers:sts}; setNRequest({...nRequest,children:arr}); }}>
                         <option value="">Предмет...</option>
