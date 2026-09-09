@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from "react";
-import { supabase } from "./supabaseClient";
+import { supabase } from "./lib/supabase";
 import {
   LayoutGrid, GraduationCap, Users, BookOpen, Calendar, Wallet, CreditCard,
   BarChart3, Inbox, Send, Sparkles, Plus, Trash2, Printer, Pencil, Paperclip,
