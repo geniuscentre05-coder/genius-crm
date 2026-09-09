@@ -79,7 +79,14 @@ async function insertRow(table, obj) {
 async function insertRows(table, objs) {
   if (!objs || !objs.length) return true;
   const { error } = await supabase.from(table).insert(objs.map(camelToSnakeObj));
-  if (error) console.error(`Bulk insert into ${table} failed:`, error);
+  if (error) {
+    console.error(`Bulk insert into ${table} failed:`, error);
+    // Без этого записи появлялись на экране и молча исчезали после обновления:
+    // в память их клали, а в базу — нет.
+    if (typeof window !== "undefined" && window.__crmNotify) {
+      window.__crmNotify(`Не удалось сохранить (${table}): ${error.message}`, "error");
+    }
+  }
   return !error;
 }
 async function updateRow(table, id, patch) {
@@ -2083,14 +2090,6 @@ ${contextSummary}`;
     setView("tutors"); setSelTutor(newTutor); setTTab("overview");
   };
 
-  const addLesson = () => {
-    if (!nLesson.studentId || !nLesson.subject || !nLesson.date || !nLesson.tutorId) return;
-    const st = students.find(s=>s.id===Number(nLesson.studentId));
-    const tu = tutors.find(t=>t.id===Number(nLesson.tutorId));
-    setLessons([...lessons, { ...nLesson, id:newId(), studentName:st?.name||"", tutorShort:tu?.short||"", price:Number(nLesson.price), duration:Number(nLesson.duration), studentId:Number(nLesson.studentId), tutorId:Number(nLesson.tutorId), status:"scheduled" }]);
-    setNLesson({ studentId:"", subject:"", tutorId:"", date:"", time:"", duration:60, price:1200 });
-    setModal(null); notify("Занятие добавлено");
-  };
   const addPayment = () => {
     if (!nPayment.studentId || !nPayment.amount) return;
     const st = students.find(s=>s.id===Number(nPayment.studentId));
@@ -3694,7 +3693,7 @@ ${contextSummary}`;
             const newLessons = Array.from({length:recurCount}, (_,i) => {
               const d = new Date(nLesson.date);
               d.setDate(d.getDate() + i * recurInterval);
-              return { ...base, id: Date.now() + i, date: fmt(d) };
+              return { ...base, id: newId(), date: fmt(d) };
             });
             setLessons(prev => [...prev, ...newLessons]);
             insertRows("lessons", newLessons);
@@ -6110,7 +6109,10 @@ ${contextSummary}`;
               {/* ACTION BUTTONS */}
               <div style={{ display:"flex", gap:10, marginTop:4 }}>
                 <button className="bp" style={{ flex:1 }} onClick={()=>{
-                  if (!nLesson.subject || !nLesson.date || !nLesson.tutorId) return;
+                  if (!nLesson.subject)  { notify("Выберите предмет", "error"); return; }
+                  if (!nLesson.date)     { notify("Укажите дату занятия", "error"); return; }
+                  if (!nLesson.tutorId)  { notify("Выберите преподавателя", "error"); return; }
+                  if (!nLesson.time)     { notify("Укажите время занятия", "error"); return; }
                   const tu = tutors.find(t=>t.id===Number(nLesson.tutorId));
                   const baseLesson = { subject:nLesson.subject, tutorId:Number(nLesson.tutorId), tutorShort:tu?.short||"", date:nLesson.date, time:nLesson.time, duration:Number(nLesson.duration), status:"scheduled" };
 
@@ -6127,7 +6129,7 @@ ${contextSummary}`;
                   };
 
                   if (lessonType==="group") {
-                    if (groupStudents.length===0) return;
+                    if (groupStudents.length===0) { notify("Добавьте хотя бы одного ученика в группу", "error"); return; }
                     const groupId = newId();
                     const name = groupName || `Группа ${nLesson.subject} ${nLesson.time}`;
                     const newLessons = groupStudents.map((gs,i) => {
@@ -6150,12 +6152,12 @@ ${contextSummary}`;
                       notify(`Группа "${name}" добавлена (${groupStudents.length} чел.)`);
                     }
                   } else {
-                    if (!nLesson.studentId) return;
+                    if (!nLesson.studentId) { notify("Выберите ученика", "error"); return; }
                     const st = vStudents.find(s=>s.id===Number(nLesson.studentId));
                     const lesson = { ...baseLesson, id:newId(), studentId:Number(nLesson.studentId), studentName:st?.name||"", price:Number(nLesson.price), isGroup:false };
                     if (recurModal) {
                       const recurDates = getRecurDates();
-                      const all = recurDates.map((dateStr,i)=>({ ...lesson, id:newId()+i, date:dateStr }));
+                      const all = recurDates.map(dateStr=>({ ...lesson, id:newId(), date:dateStr }));
                       setLessons(prev=>[...prev,...all]);
                       insertRows("lessons", all);
                       notify(`Создано ${recurDates.length} занятий`);
