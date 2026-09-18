@@ -2601,6 +2601,43 @@ ${contextSummary}`;
     setLoginInput(""); setPassInput("");
   };
 
+  // Роль и фильтры считаются ДО любых ранних return: хуки React должны
+  // вызываться при каждой отрисовке в одном и том же порядке, иначе после
+  // входа (currentUser: null → профиль) приложение падает в белый экран.
+  const isAdmin = currentUser?.role === "admin";
+  const isManager = currentUser?.role === "manager";
+  const isTutor = currentUser?.role === "tutor";
+  const myTutorId = currentUser?.tutor_id;
+
+  // ===== ОГРАНИЧЕНИЕ ДОСТУПА ПО РОЛИ =====
+  // Преподаватель видит только свои занятия и только тех учеников,
+  // с которыми у него есть занятия. Фильтруем данные один раз здесь,
+  // чтобы ни один раздел не смог случайно показать чужое.
+  const vLessons = useMemo(() =>
+    isTutor && myTutorId ? lessons.filter(l => l.tutorId === myTutorId) : lessons,
+    [lessons, isTutor, myTutorId]);
+
+  const vStudents = useMemo(() => {
+    if (!isTutor || !myTutorId) return students;
+    const mine = new Set(lessons.filter(l => l.tutorId === myTutorId).map(l => l.studentId));
+    return students.filter(s => mine.has(s.id));
+  }, [students, lessons, isTutor, myTutorId]);
+
+  const vTutors = useMemo(() =>
+    isTutor && myTutorId ? tutors.filter(t => t.id === myTutorId) : tutors,
+    [tutors, isTutor, myTutorId]);
+
+  const vPayments = useMemo(() => isTutor ? [] : payments, [payments, isTutor]);
+  const vSalaries = useMemo(() =>
+    isTutor && myTutorId ? salaries.filter(s => s.tutorId === myTutorId) : salaries,
+    [salaries, isTutor, myTutorId]);
+
+  const vSubscriptions = useMemo(() => {
+    if (!isTutor || !myTutorId) return subscriptions;
+    const mine = new Set(lessons.filter(l => l.tutorId === myTutorId).map(l => l.studentId));
+    return subscriptions.filter(s => mine.has(s.student_id));
+  }, [subscriptions, lessons, isTutor, myTutorId]);
+
   // Кабинет родителя по ссылке ?p=ТОКЕН — открывается вместо входа в CRM
   const portalToken = useMemo(() => {
     try { return new URLSearchParams(window.location.search).get("p"); } catch { return null; }
@@ -2645,40 +2682,6 @@ ${contextSummary}`;
       </div>
     );
   }
-
-  const isAdmin = currentUser.role === "admin";
-  const isManager = currentUser.role === "manager";
-  const isTutor = currentUser.role === "tutor";
-  const myTutorId = currentUser.tutor_id;
-
-  // ===== ОГРАНИЧЕНИЕ ДОСТУПА ПО РОЛИ =====
-  // Преподаватель видит только свои занятия и только тех учеников,
-  // с которыми у него есть занятия. Фильтруем данные один раз здесь,
-  // чтобы ни один раздел не смог случайно показать чужое.
-  const vLessons = useMemo(() =>
-    isTutor && myTutorId ? lessons.filter(l => l.tutorId === myTutorId) : lessons,
-    [lessons, isTutor, myTutorId]);
-
-  const vStudents = useMemo(() => {
-    if (!isTutor || !myTutorId) return students;
-    const mine = new Set(lessons.filter(l => l.tutorId === myTutorId).map(l => l.studentId));
-    return students.filter(s => mine.has(s.id));
-  }, [students, lessons, isTutor, myTutorId]);
-
-  const vTutors = useMemo(() =>
-    isTutor && myTutorId ? tutors.filter(t => t.id === myTutorId) : tutors,
-    [tutors, isTutor, myTutorId]);
-
-  const vPayments = useMemo(() => isTutor ? [] : payments, [payments, isTutor]);
-  const vSalaries = useMemo(() =>
-    isTutor && myTutorId ? salaries.filter(s => s.tutorId === myTutorId) : salaries,
-    [salaries, isTutor, myTutorId]);
-
-  const vSubscriptions = useMemo(() => {
-    if (!isTutor || !myTutorId) return subscriptions;
-    const mine = new Set(lessons.filter(l => l.tutorId === myTutorId).map(l => l.studentId));
-    return subscriptions.filter(s => mine.has(s.student_id));
-  }, [subscriptions, lessons, isTutor, myTutorId]);
 
   // Разделы, недоступные преподавателю: финансы, цены, отчёты по центру,
   // запросы родителей, рассылки, соискатели, пользователи, кабинет.
