@@ -10,6 +10,9 @@
 -- Таблицы с рабочими данными: доступны любому ВОШЕДШЕМУ сотруднику.
 -- (Тонкое разделение «преподаватель видит только своих» добавим позже,
 --  когда у преподавателей появятся учётные записи.)
+-- Таблицы перечислены с запасом: которых в базе нет, пропускаются.
+-- Без этой проверки блок падал целиком на отсутствующей attachments,
+-- и защита не включалась ни на одной таблице.
 do $$
 declare t text;
 begin
@@ -18,6 +21,10 @@ begin
     'tasks','homework','tariffs','discount_settings','attachments',
     'backups','crm_state'
   ] loop
+    if to_regclass('public.' || quote_ident(t)) is null then
+      raise notice 'таблицы % нет — пропускаю', t;
+      continue;
+    end if;
     execute format('alter table public.%I enable row level security;', t);
     execute format('drop policy if exists %I on public.%I;', t||'_all_auth', t);
     execute format(
