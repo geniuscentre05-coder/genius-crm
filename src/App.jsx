@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from "react";
-import { supabase } from "./supabaseClient";
+import { supabase } from "./lib/supabase";
 import {
   LayoutGrid, GraduationCap, Users, BookOpen, Calendar, Wallet, CreditCard,
   BarChart3, Inbox, Send, Sparkles, Plus, Trash2, Printer, Pencil, Paperclip,
@@ -2125,13 +2125,27 @@ ${contextSummary}`;
     setMDraft({ title:"", channel:"whatsapp", audience:"all", text:"" });
     setModal(null); setMStep(1); notify(`Отправлено ${cnt} получателям`);
   };
+  // Управление сотрудниками идёт через серверную функцию /api/admin-users:
+  // создавать учётки и менять пароли можно только секретным ключом,
+  // которого в браузере нет и не должно быть.
+  async function adminApi(action, payload) {
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    const res = await fetch("/api/admin-users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || "Ошибка сервера");
+    return json;
+  }
+
   async function loadUsers() {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, login, role, name, tutor_id, created_at")
-      .order("created_at", { ascending: false });
-    if (error) { console.error("Load users error:", error); return; }
-    setAllUsers(data || []);
+    try {
+      const { users } = await adminApi("list", {});
+      setAllUsers(users || []);
+    } catch (e) { console.error("Load users error:", e); notify("Не удалось загрузить пользователей: " + e.message, "error"); }
   }
   useEffect(() => { if (view === "users" && isAdmin) loadUsers(); }, [view]);
   useEffect(() => { if (view === "portal" && isAdmin) loadParentLinks(); }, [view]);
@@ -2306,42 +2320,44 @@ ${contextSummary}`;
     if (!isAdmin) return;
     if (!nUser.login || !nUser.password) { notify("Укажите логин и пароль"); return; }
     const login = nUser.login.trim().toLowerCase();
-    const { data: exists } = await supabase.rpc("login_exists", { p_login: login });
-    if (exists) { notify("Такой логин уже занят"); return; }
-    const { error } = await supabase.from("users").insert({
-      login, password_hash: "pending", role: nUser.role,
-      tutor_id: nUser.role === "tutor" && nUser.tutorId ? Number(nUser.tutorId) : null,
-      name: nUser.name || null,
-    });
-    if (error) { notify("Ошибка: " + error.message); return; }
-    await supabase.rpc("set_user_password", { p_login: login, p_new_password: nUser.password });
-    notify("Пользователь " + login + " создан");
-    setModal(null);
-    setNUser({ login:"", password:"", role:"tutor", tutorId:"", name:"" });
-    loadUsers();
+    try {
+      await adminApi("create", {
+        login, password: nUser.password, role: nUser.role,
+        name: nUser.name || null,
+        tutor_id: nUser.role === "tutor" && nUser.tutorId ? Number(nUser.tutorId) : null,
+      });
+      notify("Пользователь " + login + " создан");
+      setModal(null);
+      setNUser({ login:"", password:"", role:"tutor", tutorId:"", name:"" });
+      loadUsers();
+    } catch (e) { notify("Ошибка: " + e.message, "error"); }
   }
 
   async function resetUserPassword(login) {
     const newPass = window.prompt("Новый пароль для «" + login + "»:");
     if (!newPass) return;
-    const { error } = await supabase.rpc("set_user_password", { p_login: login, p_new_password: newPass });
-    notify(error ? "Ошибка: " + error.message : "Пароль обновлён");
+    try {
+      await adminApi("resetPassword", { login, password: newPass });
+      notify("Пароль обновлён");
+    } catch (e) { notify("Ошибка: " + e.message, "error"); }
   }
 
   async function changeUserRole(userId, role) {
-    const { error } = await supabase.from("users").update({ role }).eq("id", userId);
-    if (error) { notify("Ошибка: " + error.message); return; }
-    setAllUsers(allUsers.map(u => u.id === userId ? { ...u, role } : u));
-    notify("Роль изменена");
+    try {
+      await adminApi("changeRole", { id: userId, role });
+      setAllUsers(allUsers.map(u => u.id === userId ? { ...u, role } : u));
+      notify("Роль изменена");
+    } catch (e) { notify("Ошибка: " + e.message, "error"); }
   }
 
   async function deleteUser(userId, login) {
     if (login === currentUser.login) { notify("Нельзя удалить свою учётную запись"); return; }
     if (!window.confirm("Удалить пользователя «" + login + "»?")) return;
-    const { error } = await supabase.from("users").delete().eq("id", userId);
-    if (error) { notify("Ошибка: " + error.message); return; }
-    setAllUsers(allUsers.filter(u => u.id !== userId));
-    notify("Пользователь удалён");
+    try {
+      await adminApi("delete", { id: userId });
+      setAllUsers(allUsers.filter(u => u.id !== userId));
+      notify("Пользователь удалён");
+    } catch (e) { notify("Ошибка: " + e.message, "error"); }
   }
 
   const [nSubscription, setNSubscription] = useState({
@@ -2521,50 +2537,121 @@ ${contextSummary}`;
   const selStudentLive = selStudent ? (students.find(x=>x.id===selStudent.id) || selStudent) : null;
   const totalSalPaid = salaries.reduce((s,p)=>s+p.amount,0);
 
-  // ── Система входа по логину и паролю ──────────────────────────────────
-  const [currentUser, setCurrentUser] = useState(() => {
-    try { const u = sessionStorage.getItem("genius_crm_user"); return u ? JSON.parse(u) : null; } catch { return null; }
-  });
+  // ── Система входа через Supabase Auth ─────────────────────────────────
+  // Пароли лежат в защищённой зоне Supabase, а не в открытой таблице.
+  // Роль и привязка к преподавателю берутся из таблицы profiles.
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [loginInput, setLoginInput] = useState("");
   const [passInput, setPassInput] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
 
+  // По auth-пользователю подгружаем его профиль (роль, имя, tutor_id).
+  async function loadProfile(authUser) {
+    if (!authUser) return null;
+    const { data } = await supabase
+      .from("profiles")
+      .select("login, role, name, tutor_id")
+      .eq("id", authUser.id)
+      .maybeSingle();
+    if (!data) return null;
+    return { id: authUser.id, login: data.login, role: data.role, name: data.name, tutor_id: data.tutor_id };
+  }
+
+  // При загрузке страницы восстанавливаем вход, если сессия ещё жива.
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(async ({ data }) => {
+      const prof = await loadProfile(data.session?.user);
+      if (active) { setCurrentUser(prof); setAuthLoading(false); }
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_e, session) => {
+      const prof = await loadProfile(session?.user);
+      if (active) setCurrentUser(prof);
+    });
+    return () => { active = false; sub.subscription.unsubscribe(); };
+  }, []);
+
   const doLogin = async () => {
     if (!loginInput || !passInput) { setLoginError("Введите логин и пароль"); return; }
     setLoginBusy(true); setLoginError("");
     try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("id, login, role, name, tutor_id")
-        .eq("login", loginInput.trim().toLowerCase())
-        .maybeSingle();
-      if (!data) { setLoginError("Неверный логин или пароль"); setLoginBusy(false); return; }
-      // Проверяем пароль: сравниваем md5(пароль) через базу
-      const { data: ok } = await supabase.rpc("check_password", {
-        p_login: loginInput.trim().toLowerCase(),
-        p_password: passInput,
-      });
-      if (!ok) { setLoginError("Неверный логин или пароль"); setLoginBusy(false); return; }
-      sessionStorage.setItem("genius_crm_user", JSON.stringify(data));
-      setCurrentUser(data);
+      // Сотрудник вводит логин; для Supabase Auth превращаем его в адрес.
+      const login = loginInput.trim().toLowerCase();
+      const email = login.includes("@") ? login : `${login}@genius.local`;
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: passInput });
+      if (error) { setLoginError("Неверный логин или пароль"); setLoginBusy(false); return; }
+      const prof = await loadProfile(data.user);
+      if (!prof) {
+        await supabase.auth.signOut();
+        setLoginError("Профиль не найден. Обратитесь к администратору.");
+        setLoginBusy(false); return;
+      }
+      setCurrentUser(prof);
     } catch (e) {
       setLoginError("Ошибка входа: " + e.message);
     }
     setLoginBusy(false);
   };
 
-  const doLogout = () => {
-    sessionStorage.removeItem("genius_crm_user");
+  const doLogout = async () => {
+    await supabase.auth.signOut();
     setCurrentUser(null);
     setLoginInput(""); setPassInput("");
   };
+
+  // Роль и фильтры считаются ДО любых ранних return: хуки React должны
+  // вызываться при каждой отрисовке в одном и том же порядке, иначе после
+  // входа (currentUser: null → профиль) приложение падает в белый экран.
+  const isAdmin = currentUser?.role === "admin";
+  const isManager = currentUser?.role === "manager";
+  const isTutor = currentUser?.role === "tutor";
+  const myTutorId = currentUser?.tutor_id;
+
+  // ===== ОГРАНИЧЕНИЕ ДОСТУПА ПО РОЛИ =====
+  // Преподаватель видит только свои занятия и только тех учеников,
+  // с которыми у него есть занятия. Фильтруем данные один раз здесь,
+  // чтобы ни один раздел не смог случайно показать чужое.
+  const vLessons = useMemo(() =>
+    isTutor && myTutorId ? lessons.filter(l => l.tutorId === myTutorId) : lessons,
+    [lessons, isTutor, myTutorId]);
+
+  const vStudents = useMemo(() => {
+    if (!isTutor || !myTutorId) return students;
+    const mine = new Set(lessons.filter(l => l.tutorId === myTutorId).map(l => l.studentId));
+    return students.filter(s => mine.has(s.id));
+  }, [students, lessons, isTutor, myTutorId]);
+
+  const vTutors = useMemo(() =>
+    isTutor && myTutorId ? tutors.filter(t => t.id === myTutorId) : tutors,
+    [tutors, isTutor, myTutorId]);
+
+  const vPayments = useMemo(() => isTutor ? [] : payments, [payments, isTutor]);
+  const vSalaries = useMemo(() =>
+    isTutor && myTutorId ? salaries.filter(s => s.tutorId === myTutorId) : salaries,
+    [salaries, isTutor, myTutorId]);
+
+  const vSubscriptions = useMemo(() => {
+    if (!isTutor || !myTutorId) return subscriptions;
+    const mine = new Set(lessons.filter(l => l.tutorId === myTutorId).map(l => l.studentId));
+    return subscriptions.filter(s => mine.has(s.student_id));
+  }, [subscriptions, lessons, isTutor, myTutorId]);
 
   // Кабинет родителя по ссылке ?p=ТОКЕН — открывается вместо входа в CRM
   const portalToken = useMemo(() => {
     try { return new URLSearchParams(window.location.search).get("p"); } catch { return null; }
   }, []);
   if (portalToken) return <ParentPortal token={portalToken} />;
+
+  // Пока проверяем сессию — не мигаем формой входа.
+  if (authLoading) {
+    return (
+      <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", color:"#7a8a9c" }}>
+        Загрузка…
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return (
@@ -2595,40 +2682,6 @@ ${contextSummary}`;
       </div>
     );
   }
-
-  const isAdmin = currentUser.role === "admin";
-  const isManager = currentUser.role === "manager";
-  const isTutor = currentUser.role === "tutor";
-  const myTutorId = currentUser.tutor_id;
-
-  // ===== ОГРАНИЧЕНИЕ ДОСТУПА ПО РОЛИ =====
-  // Преподаватель видит только свои занятия и только тех учеников,
-  // с которыми у него есть занятия. Фильтруем данные один раз здесь,
-  // чтобы ни один раздел не смог случайно показать чужое.
-  const vLessons = useMemo(() =>
-    isTutor && myTutorId ? lessons.filter(l => l.tutorId === myTutorId) : lessons,
-    [lessons, isTutor, myTutorId]);
-
-  const vStudents = useMemo(() => {
-    if (!isTutor || !myTutorId) return students;
-    const mine = new Set(lessons.filter(l => l.tutorId === myTutorId).map(l => l.studentId));
-    return students.filter(s => mine.has(s.id));
-  }, [students, lessons, isTutor, myTutorId]);
-
-  const vTutors = useMemo(() =>
-    isTutor && myTutorId ? tutors.filter(t => t.id === myTutorId) : tutors,
-    [tutors, isTutor, myTutorId]);
-
-  const vPayments = useMemo(() => isTutor ? [] : payments, [payments, isTutor]);
-  const vSalaries = useMemo(() =>
-    isTutor && myTutorId ? salaries.filter(s => s.tutorId === myTutorId) : salaries,
-    [salaries, isTutor, myTutorId]);
-
-  const vSubscriptions = useMemo(() => {
-    if (!isTutor || !myTutorId) return subscriptions;
-    const mine = new Set(lessons.filter(l => l.tutorId === myTutorId).map(l => l.studentId));
-    return subscriptions.filter(s => mine.has(s.student_id));
-  }, [subscriptions, lessons, isTutor, myTutorId]);
 
   // Разделы, недоступные преподавателю: финансы, цены, отчёты по центру,
   // запросы родителей, рассылки, соискатели, пользователи, кабинет.
