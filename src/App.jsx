@@ -793,16 +793,19 @@ function ParentPortal({ token }) {
 }
 
 // Пустая анкета соискателя — для формы добавления и её сброса.
-const EMPTY_CANDIDATE = { name:"", phone:"", email:"", birthYear:"", university:"", subjects:[], notes:"", status:"new" };
+const EMPTY_CANDIDATE = { name:"", phone:"", email:"", birthDate:"", university:"", subjects:[], notes:"", status:"new" };
 
-// Год рождения из анкеты → «1995 (31 год)». Пустая строка, если год не задан.
-function formatBirthYear(year) {
-  const y = Number(year);
-  if (!y) return "";
-  const age = new Date().getFullYear() - y;
-  const n = age % 100, d = age % 10;
-  const word = n >= 11 && n <= 14 ? "лет" : d === 1 ? "год" : d >= 2 && d <= 4 ? "года" : "лет";
-  return `${y} (${age} ${word})`;
+// Дата рождения «ГГГГ-ММ-ДД» → «15.03.1995 (31 год)». Пустая строка, если даты нет.
+function formatBirthDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  if (!m) return "";
+  const [, y, mo, d] = m.map(Number);
+  const now = new Date();
+  // Полных лет: если день рождения в этом году ещё не наступил — на год меньше.
+  const age = now.getFullYear() - y - ((now.getMonth() + 1 < mo || (now.getMonth() + 1 === mo && now.getDate() < d)) ? 1 : 0);
+  const n = age % 100, r = age % 10;
+  const word = n >= 11 && n <= 14 ? "лет" : r === 1 ? "год" : r >= 2 && r <= 4 ? "года" : "лет";
+  return `${m[3]}.${m[2]}.${m[1]} (${age} ${word})`;
 }
 
 export default function App() {
@@ -2114,12 +2117,14 @@ ${contextSummary}`;
   // Одна форма и для новой анкеты, и для правки существующей.
   const saveCandidate = () => {
     if (!nCandidate.name.trim() || !nCandidate.phone.trim()) { notify("Заполните ФИО и телефон"); return; }
-    const year = String(nCandidate.birthYear || "").trim();
-    const thisYear = new Date().getFullYear();
-    if (year && !(/^\d{4}$/.test(year) && +year >= 1930 && +year <= thisYear - 14)) {
-      notify(`Год рождения — четыре цифры, от 1930 до ${thisYear - 14}`); return;
+    const birthDate = nCandidate.birthDate || "";
+    const maxYear = new Date().getFullYear() - 14;
+    if (birthDate && !(birthDate >= "1930-01-01" && birthDate <= `${maxYear}-12-31`)) {
+      notify(`Дата рождения — с 1930 по ${maxYear} год`, "error"); return;
     }
-    const fields = { ...nCandidate, name:nCandidate.name.trim(), phone:nCandidate.phone.trim(), birthYear:year, university:(nCandidate.university||"").trim() };
+    const fields = { ...nCandidate, name:nCandidate.name.trim(), phone:nCandidate.phone.trim(), birthDate, university:(nCandidate.university||"").trim() };
+    // Год из первой версии анкеты больше не нужен, когда указана полная дата.
+    if (birthDate) delete fields.birthYear;
     if (editCandId) {
       // id, дата анкеты, файлы и статус не редактируются формой — берём их из исходной записи.
       setCandidates(candidates.map(x => x.id===editCandId ? { ...fields, id:x.id, date:x.date, files:x.files||[], status:x.status } : x));
@@ -2138,7 +2143,7 @@ ${contextSummary}`;
     // У таблицы tutors нет колонок под год рождения и вуз — переносим их в
     // примечания, чтобы данные анкеты не потерялись при найме.
     const notes = [
-      c.birthYear && `Год рождения: ${c.birthYear}`,
+      c.birthDate ? `Дата рождения: ${c.birthDate.split("-").reverse().join(".")}` : c.birthYear && `Год рождения: ${c.birthYear}`,
       c.university && `Вуз: ${c.university}`,
       c.notes,
     ].filter(Boolean).join("\n");
@@ -5495,7 +5500,9 @@ ${contextSummary}`;
                       <div style={{ fontSize:20, fontWeight:700, color:"#12283d" }}>{c.name}</div>
                       <div style={{ fontSize:13, color:"#7a8a9c", marginTop:4, display:"flex", alignItems:"center", gap:6 }}><Phone size={12} /> {c.phone}</div>
                       {c.email && <div style={{ fontSize:13, color:"#7a8a9c", marginTop:2, display:"flex", alignItems:"center", gap:6 }}><Mail size={12} /> {c.email}</div>}
-                      {c.birthYear && <div style={{ fontSize:13, color:"#7a8a9c", marginTop:2 }}>Год рождения: <span style={{ color:"#22344a" }}>{formatBirthYear(c.birthYear)}</span></div>}
+                      {c.birthDate
+                        ? <div style={{ fontSize:13, color:"#7a8a9c", marginTop:2 }}>Дата рождения: <span style={{ color:"#22344a" }}>{formatBirthDate(c.birthDate)}</span></div>
+                        : c.birthYear && <div style={{ fontSize:13, color:"#7a8a9c", marginTop:2 }}>Год рождения: <span style={{ color:"#22344a" }}>{c.birthYear}</span> <span style={{ fontSize:11 }}>— уточните дату в «Редактировать»</span></div>}
                       {c.university && <div style={{ fontSize:13, color:"#7a8a9c", marginTop:2 }}>Вуз: <span style={{ color:"#22344a" }}>{c.university}</span></div>}
                     </div>
                     <Tag c={candCfg[c.status]?.color} bg={candCfg[c.status]?.bg}>{candCfg[c.status]?.label}</Tag>
@@ -5563,7 +5570,7 @@ ${contextSummary}`;
                     <Av name={c.name} color="#f5a623" size={40} />
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:700, color:"#12283d" }}>{c.name}</div>
-                      <div style={{ fontSize:12, color:"#7a8a9c" }}>{[c.phone, c.birthYear && `${c.birthYear} г.р.`, c.university, c.subjects?.length && c.subjects.join(", ")].filter(Boolean).join(" · ")}</div>
+                      <div style={{ fontSize:12, color:"#7a8a9c" }}>{[c.phone, (c.birthDate ? c.birthDate.slice(0,4) : c.birthYear) && `${c.birthDate ? c.birthDate.slice(0,4) : c.birthYear} г.р.`, c.university, c.subjects?.length && c.subjects.join(", ")].filter(Boolean).join(" · ")}</div>
                     </div>
                     {c.files?.length>0 && <span style={{ fontSize:11, color:"#7a8a9c", display:"flex", alignItems:"center", gap:4 }}><Paperclip size={12} /> {c.files.length}</span>}
                     <Tag c={candCfg[c.status]?.color} bg={candCfg[c.status]?.bg}>{candCfg[c.status]?.label}</Tag>
@@ -7050,7 +7057,7 @@ ${contextSummary}`;
                 <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Email</div><input placeholder="mail@example.com" value={nCandidate.email} onChange={e=>setNCandidate({...nCandidate,email:e.target.value})} /></div>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:10 }}>
-                <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Год рождения</div><input inputMode="numeric" maxLength={4} placeholder="1995" value={nCandidate.birthYear} onChange={e=>setNCandidate({...nCandidate,birthYear:e.target.value.replace(/\D/g,"")})} /></div>
+                <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Дата рождения</div><input type="date" min="1930-01-01" max={`${new Date().getFullYear()-14}-12-31`} value={nCandidate.birthDate} onChange={e=>setNCandidate({...nCandidate,birthDate:e.target.value})} /></div>
                 <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Вуз</div><input placeholder="ДГУ, филологический факультет" value={nCandidate.university} onChange={e=>setNCandidate({...nCandidate,university:e.target.value})} /></div>
               </div>
               <div>
