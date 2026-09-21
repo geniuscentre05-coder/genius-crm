@@ -792,6 +792,19 @@ function ParentPortal({ token }) {
   );
 }
 
+// Пустая анкета соискателя — для формы добавления и её сброса.
+const EMPTY_CANDIDATE = { name:"", phone:"", email:"", birthYear:"", university:"", subjects:[], notes:"", status:"new" };
+
+// Год рождения из анкеты → «1995 (31 год)». Пустая строка, если год не задан.
+function formatBirthYear(year) {
+  const y = Number(year);
+  if (!y) return "";
+  const age = new Date().getFullYear() - y;
+  const n = age % 100, d = age % 10;
+  const word = n >= 11 && n <= 14 ? "лет" : d === 1 ? "год" : d >= 2 && d <= 4 ? "года" : "лет";
+  return `${y} (${age} ${word})`;
+}
+
 export default function App() {
   // ── Load from localStorage or use defaults (instant local cache) ──
   const saved = loadFromLS();
@@ -1000,7 +1013,9 @@ export default function App() {
   const [candSearch, setCandSearch] = useState("");
   const [candFilter, setCandFilter] = useState("all");
   const [selCandidate, setSelCandidate] = useState(null);
-  const [nCandidate, setNCandidate] = useState({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" });
+  const [nCandidate, setNCandidate] = useState(EMPTY_CANDIDATE);
+  // id анкеты, которую редактируем в форме; null — форма добавляет новую.
+  const [editCandId, setEditCandId] = useState(null);
 
   const [selTutor,  setSelTutor]   = useState(null);
   const [selStudent,setSelStudent] = useState(null);
@@ -1032,10 +1047,20 @@ export default function App() {
   const fileInputRef = useRef(null);
 
   // ── Cloud sync state ──
+  // Вошедший сотрудник (профиль из таблицы profiles). Объявлен здесь, до
+  // загрузки данных: без входа база ничего не отдаёт, поэтому загрузка ждёт входа.
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const userId = currentUser?.id || null;
+
   const [cloudLoading, setCloudLoading] = useState(true);
   const [cloudSyncing, setCloudSyncing] = useState(false);
   const isRemoteUpdate = useRef(false);
   const cloudSaveTimeout = useRef(null);
+  // true только после того, как снимок crm_state действительно прочитан из
+  // базы. Пока false, автосохранение не пишет: иначе содержимое браузера
+  // (кэш или демо-данные) затёрло бы в базе соискателей, заявки и рассылки.
+  const blobLoaded = useRef(false);
 
   // ── Helper: apply a snapshot of the REMAINING blob-based data (everything not
   // yet migrated to its own table: mailings, requests, pricing, rules, catalog,
@@ -1053,8 +1078,13 @@ export default function App() {
     saveToLS({ ...loadFromLS(), ...data });
   }
 
-  // ── Initial load from Supabase (runs once on mount) ──
+  // ── Загрузка данных из Supabase — после входа и заново при смене пользователя ──
+  // Раньше запускалась один раз при открытии страницы, ещё до входа: защита
+  // базы отдавала пустые списки, и после входа они так и оставались на экране.
   useEffect(() => {
+    blobLoaded.current = false;
+    setCloudLoading(true);
+    if (!userId) return;
     let cancelled = false;
     async function loadInitial() {
       try {
@@ -1088,15 +1118,17 @@ export default function App() {
         if (cancelled) return;
         if (error) {
           console.error("Supabase load error:", error);
+          notify("Не удалось загрузить соискателей, заявки и рассылки. Обновите страницу — до этого изменения в них не сохранятся.", "error");
         } else if (row?.data) {
           applyCloudSnapshot(row.data);
+          blobLoaded.current = true;
         } else {
-          // No cloud record yet for the remaining fields — push current (demo) data
-          await supabase.from("crm_state").upsert({
-            id: CLOUD_ID,
-            data: { mailings, requests, pricing, rules, courseCatalog, candidates },
-            updated_at: new Date().toISOString(),
-          });
+          // Записи нет. Раньше здесь в базу записывались демо-данные из
+          // браузера — но «записи нет» может означать и «нет доступа», и
+          // тогда настоящие данные были бы затёрты. Сохранение включится,
+          // как только сотрудник сам что-то изменит.
+          console.warn("crm_state: запись не найдена");
+          blobLoaded.current = true;
         }
       } catch (e) {
         console.error("Supabase init error:", e);
@@ -1106,7 +1138,7 @@ export default function App() {
     loadInitial();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userId]);
 
   // ── Realtime: pick up changes to the 5 migrated tables from other devices ──
   useEffect(() => {
@@ -1168,7 +1200,7 @@ export default function App() {
       isRemoteUpdate.current = false;
       return () => clearTimeout(t);
     }
-    if (cloudLoading) return () => clearTimeout(t);
+    if (cloudLoading || !userId || !blobLoaded.current) return () => clearTimeout(t);
 
     if (cloudSaveTimeout.current) clearTimeout(cloudSaveTimeout.current);
     cloudSaveTimeout.current = setTimeout(async () => {
@@ -1830,8 +1862,10 @@ ${contextSummary}`;
   const [backupList, setBackupList] = useState([]);
   const [showBackups, setShowBackups] = useState(false);
 
-  // Автосохранение раз в 24 часа
+  // Автосохранение раз в 24 часа — только когда сотрудник вошёл и данные
+  // загружены. До входа база ничего не отдаёт, и копия получилась бы пустой.
   useEffect(() => {
+    if (!userId || cloudLoading) return;
     const lastTs = localStorage.getItem("lastBackupTs");
     const hoursSince = lastTs ? (Date.now() - Number(lastTs)) / 3600000 : 999;
     if (hoursSince >= 24) {
@@ -1839,7 +1873,8 @@ ${contextSummary}`;
       const t = setTimeout(() => saveCloudBackup("Авто"), 10000);
       return () => clearTimeout(t);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, cloudLoading]);
 
   const saveCloudBackup = async (label = "Ручная") => {
     setBackupBusy(true);
@@ -2069,19 +2104,45 @@ ${contextSummary}`;
   };
 
   // ── Candidates (job applicants) ──
-  const addCandidate = () => {
-    if (!nCandidate.name || !nCandidate.phone) return;
-    const newCandidate = { ...nCandidate, id:newId(), date:new Date().toISOString().split("T")[0], files:[] };
+  const closeCandidateForm = () => {
+    setModal(null); setEditCandId(null); setNCandidate(EMPTY_CANDIDATE);
+  };
+  const openEditCandidate = (c) => {
+    setNCandidate({ ...EMPTY_CANDIDATE, ...c });
+    setEditCandId(c.id); setModal("addCandidate");
+  };
+  // Одна форма и для новой анкеты, и для правки существующей.
+  const saveCandidate = () => {
+    if (!nCandidate.name.trim() || !nCandidate.phone.trim()) { notify("Заполните ФИО и телефон"); return; }
+    const year = String(nCandidate.birthYear || "").trim();
+    const thisYear = new Date().getFullYear();
+    if (year && !(/^\d{4}$/.test(year) && +year >= 1930 && +year <= thisYear - 14)) {
+      notify(`Год рождения — четыре цифры, от 1930 до ${thisYear - 14}`); return;
+    }
+    const fields = { ...nCandidate, name:nCandidate.name.trim(), phone:nCandidate.phone.trim(), birthYear:year, university:(nCandidate.university||"").trim() };
+    if (editCandId) {
+      // id, дата анкеты, файлы и статус не редактируются формой — берём их из исходной записи.
+      setCandidates(candidates.map(x => x.id===editCandId ? { ...fields, id:x.id, date:x.date, files:x.files||[], status:x.status } : x));
+      closeCandidateForm(); notify("Анкета сохранена");
+      return;
+    }
+    const newCandidate = { ...fields, id:newId(), date:new Date().toISOString().split("T")[0], files:[] };
     setCandidates([newCandidate, ...candidates]);
-    setNCandidate({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" });
-    setModal(null); notify("Соискатель добавлен — прикрепите резюме в его карточке");
+    closeCandidateForm(); notify("Соискатель добавлен — прикрепите резюме в его карточке");
     setView("candidates"); setSelCandidate(newCandidate);
   };
   const hireCandidate = (c) => {
     if (!window.confirm(`Принять ${c.name} на работу как преподавателя?`)) return;
     const parts = c.name.trim().split(" ");
     const short = parts[0] + " " + parts.slice(1).map(w=>w[0]+".").join("");
-    const newTutor = { name:c.name, short, phone:c.phone, address:"", notes:c.notes||"", subjects:c.subjects||[], rateType:"percent", rateValue:50, status:"active", color:COLORS[tutors.length % COLORS.length], id:newId(), files:c.files||[] };
+    // У таблицы tutors нет колонок под год рождения и вуз — переносим их в
+    // примечания, чтобы данные анкеты не потерялись при найме.
+    const notes = [
+      c.birthYear && `Год рождения: ${c.birthYear}`,
+      c.university && `Вуз: ${c.university}`,
+      c.notes,
+    ].filter(Boolean).join("\n");
+    const newTutor = { name:c.name, short, phone:c.phone, address:"", notes, subjects:c.subjects||[], rateType:"percent", rateValue:50, status:"active", color:COLORS[tutors.length % COLORS.length], id:newId(), files:c.files||[] };
     setTutors([...tutors, newTutor]);
     insertRow("tutors", newTutor);
     setCandidates(candidates.map(x=>x.id===c.id?{...x,status:"hired"}:x));
@@ -2540,8 +2601,7 @@ ${contextSummary}`;
   // ── Система входа через Supabase Auth ─────────────────────────────────
   // Пароли лежат в защищённой зоне Supabase, а не в открытой таблице.
   // Роль и привязка к преподавателю берутся из таблицы profiles.
-  const [currentUser, setCurrentUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  // currentUser и authLoading объявлены выше — от них зависит загрузка данных.
   const [loginInput, setLoginInput] = useState("");
   const [passInput, setPassInput] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -2622,6 +2682,17 @@ ${contextSummary}`;
     const mine = new Set(lessons.filter(l => l.tutorId === myTutorId).map(l => l.studentId));
     return students.filter(s => mine.has(s.id));
   }, [students, lessons, isTutor, myTutorId]);
+
+  // Запланированные занятия с сегодняшнего дня, по дате и времени. Раньше
+  // дашборд брал первые 5 «запланированных» в порядке из базы — без сортировки
+  // и вместе с прошедшими, поэтому весь список занимал один ученик.
+  const upcomingLessons = useMemo(() => {
+    const d = new Date();
+    const todayLocal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    return vLessons
+      .filter(l => l.status === "scheduled" && (l.date || "") >= todayLocal)
+      .sort((a, b) => `${a.date} ${a.time||""}`.localeCompare(`${b.date} ${b.time||""}`));
+  }, [vLessons]);
 
   const vTutors = useMemo(() =>
     isTutor && myTutorId ? tutors.filter(t => t.id === myTutorId) : tutors,
@@ -2852,7 +2923,7 @@ ${contextSummary}`;
               {[
                 { label:"Активных учеников", value:vStudents.filter(s=>s.status==="active").length, icon:Users, color:"#1da0d4", goTo:"students" },
                 { label:"Преподавателей",    value:vTutors.filter(t=>t.status==="active").length,   icon:GraduationCap, color:"#5cb85c", goTo:"tutors" },
-                { label:"Занятий впереди",   value:vLessons.filter(l=>l.status==="scheduled").length,icon:Calendar,color:"#f5a623", goTo:"schedule" },
+                { label:"Занятий впереди",   value:upcomingLessons.length,icon:Calendar,color:"#f5a623", goTo:"schedule" },
                 { label:`Выручка в ${new Date().toLocaleDateString("ru-RU",{month:"long"})}`, value:`${(vPayments.filter(p=>p.date.slice(0,7)===new Date().toISOString().slice(0,7)).reduce((s,p)=>s+p.amount,0)/1000).toFixed(1)}к`, icon:Wallet, color:"#d6539a", goTo:"payments" },
               ].map((s,i)=>(
                 <div key={i} className="card" onClick={()=>goView(s.goTo)} style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, padding:20, cursor:"pointer" }}>
@@ -2874,7 +2945,8 @@ ${contextSummary}`;
                   <h3 style={{ margin:0, fontSize:15, fontWeight:600 }}>Ближайшие занятия</h3>
                   <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>goView("schedule")}>Все</button>
                 </div>
-                {vLessons.filter(l=>l.status==="scheduled").slice(0,5).map(l=>(
+                {upcomingLessons.length===0 && <div style={{ color:"#7a8a9c", fontSize:13, padding:"10px 0" }}>Запланированных занятий нет</div>}
+                {upcomingLessons.slice(0,5).map(l=>(
                   <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid #f2f6fa" }}>
                     <div style={{ width:38, height:38, borderRadius:10, background:"rgba(99,102,241,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>📖</div>
                     <div style={{ flex:1, minWidth:0 }}>
@@ -5407,7 +5479,7 @@ ${contextSummary}`;
           };
           const filtered = candidates.filter(c=>{
             const q = candSearch.toLowerCase();
-            const matchQ = !q || (c.name||"").toLowerCase().includes(q) || (c.phone||"").includes(q) || (c.subjects||[]).some(s=>(s||"").toLowerCase().includes(q));
+            const matchQ = !q || (c.name||"").toLowerCase().includes(q) || (c.phone||"").includes(q) || (c.university||"").toLowerCase().includes(q) || (c.subjects||[]).some(s=>(s||"").toLowerCase().includes(q));
             const matchF = candFilter==="all" || c.status===candFilter;
             return matchQ && matchF;
           });
@@ -5423,6 +5495,8 @@ ${contextSummary}`;
                       <div style={{ fontSize:20, fontWeight:700, color:"#12283d" }}>{c.name}</div>
                       <div style={{ fontSize:13, color:"#7a8a9c", marginTop:4, display:"flex", alignItems:"center", gap:6 }}><Phone size={12} /> {c.phone}</div>
                       {c.email && <div style={{ fontSize:13, color:"#7a8a9c", marginTop:2, display:"flex", alignItems:"center", gap:6 }}><Mail size={12} /> {c.email}</div>}
+                      {c.birthYear && <div style={{ fontSize:13, color:"#7a8a9c", marginTop:2 }}>Год рождения: <span style={{ color:"#22344a" }}>{formatBirthYear(c.birthYear)}</span></div>}
+                      {c.university && <div style={{ fontSize:13, color:"#7a8a9c", marginTop:2 }}>Вуз: <span style={{ color:"#22344a" }}>{c.university}</span></div>}
                     </div>
                     <Tag c={candCfg[c.status]?.color} bg={candCfg[c.status]?.bg}>{candCfg[c.status]?.label}</Tag>
                   </div>
@@ -5438,6 +5512,7 @@ ${contextSummary}`;
                     <select value={c.status} onChange={e=>setCandidates(candidates.map(x=>x.id===c.id?{...x,status:e.target.value}:x))} style={{ maxWidth:200 }}>
                       {Object.entries(candCfg).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                     </select>
+                    <button className="bg" onClick={()=>openEditCandidate(c)}><Pencil size={14} /> Редактировать</button>
                     {c.status!=="hired" && (
                       <button className="bp" onClick={()=>hireCandidate(c)}><UserPlus size={14} /> Принять на работу</button>
                     )}
@@ -5478,7 +5553,7 @@ ${contextSummary}`;
               </div>
 
               <div style={{ marginBottom:16 }}>
-                <input placeholder="Поиск по имени, телефону, предмету..." value={candSearch} onChange={e=>setCandSearch(e.target.value)} />
+                <input placeholder="Поиск по имени, телефону, предмету, вузу..." value={candSearch} onChange={e=>setCandSearch(e.target.value)} />
               </div>
 
               <div style={{ display:"grid", gap:12 }}>
@@ -5488,7 +5563,7 @@ ${contextSummary}`;
                     <Av name={c.name} color="#f5a623" size={40} />
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:700, color:"#12283d" }}>{c.name}</div>
-                      <div style={{ fontSize:12, color:"#7a8a9c" }}>{c.phone}{c.subjects?.length ? ` · ${c.subjects.join(", ")}` : ""}</div>
+                      <div style={{ fontSize:12, color:"#7a8a9c" }}>{[c.phone, c.birthYear && `${c.birthYear} г.р.`, c.university, c.subjects?.length && c.subjects.join(", ")].filter(Boolean).join(" · ")}</div>
                     </div>
                     {c.files?.length>0 && <span style={{ fontSize:11, color:"#7a8a9c", display:"flex", alignItems:"center", gap:4 }}><Paperclip size={12} /> {c.files.length}</span>}
                     <Tag c={candCfg[c.status]?.color} bg={candCfg[c.status]?.bg}>{candCfg[c.status]?.label}</Tag>
@@ -6963,14 +7038,20 @@ ${contextSummary}`;
 
       {/* ── ADD CANDIDATE MODAL ── */}
       {modal==="addCandidate" && (
-        <div className="ov" onClick={()=>{ setModal(null); setNCandidate({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" }); }}>
+        <div className="ov" onClick={closeCandidateForm}>
           <div className="mo" style={{ width:520 }} onClick={e=>e.stopPropagation()}>
-            <h2 style={{ margin:"0 0 20px", fontSize:20, fontWeight:700, color:"#12283d", display:"flex", alignItems:"center", gap:8 }}><UserPlus size={19} /> Новый соискатель</h2>
+            <h2 style={{ margin:"0 0 20px", fontSize:20, fontWeight:700, color:"#12283d", display:"flex", alignItems:"center", gap:8 }}>
+              {editCandId ? <><Pencil size={19} /> Редактирование анкеты</> : <><UserPlus size={19} /> Новый соискатель</>}
+            </h2>
             <div style={{ display:"grid", gap:14 }}>
               <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>ФИО *</div><input placeholder="Иванова Мария Сергеевна" value={nCandidate.name} onChange={e=>setNCandidate({...nCandidate,name:e.target.value})} /></div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Телефон *</div><input placeholder="+7 900 000-00-00" value={nCandidate.phone} onChange={e=>setNCandidate({...nCandidate,phone:e.target.value})} /></div>
                 <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Email</div><input placeholder="mail@example.com" value={nCandidate.email} onChange={e=>setNCandidate({...nCandidate,email:e.target.value})} /></div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:10 }}>
+                <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Год рождения</div><input inputMode="numeric" maxLength={4} placeholder="1995" value={nCandidate.birthYear} onChange={e=>setNCandidate({...nCandidate,birthYear:e.target.value.replace(/\D/g,"")})} /></div>
+                <div><div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Вуз</div><input placeholder="ДГУ, филологический факультет" value={nCandidate.university} onChange={e=>setNCandidate({...nCandidate,university:e.target.value})} /></div>
               </div>
               <div>
                 <div style={{ fontSize:11, fontWeight:600, color:"#55677a", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.03em" }}>Может преподавать</div>
@@ -6995,8 +7076,8 @@ ${contextSummary}`;
                 <textarea rows={3} placeholder="Опыт работы, впечатление от разговора и т.п." value={nCandidate.notes} onChange={e=>setNCandidate({...nCandidate,notes:e.target.value})} />
               </div>
               <div style={{ display:"flex", gap:10, marginTop:4 }}>
-                <button className="bp" style={{ flex:1 }} onClick={addCandidate}>Добавить</button>
-                <button className="bg" onClick={()=>{ setModal(null); setNCandidate({ name:"", phone:"", email:"", subjects:[], notes:"", status:"new" }); }}>Отмена</button>
+                <button className="bp" style={{ flex:1 }} onClick={saveCandidate}>{editCandId ? "Сохранить" : "Добавить"}</button>
+                <button className="bg" onClick={closeCandidateForm}>Отмена</button>
               </div>
             </div>
           </div>
