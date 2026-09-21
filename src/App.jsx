@@ -2683,6 +2683,17 @@ ${contextSummary}`;
     return students.filter(s => mine.has(s.id));
   }, [students, lessons, isTutor, myTutorId]);
 
+  // Запланированные занятия с сегодняшнего дня, по дате и времени. Раньше
+  // дашборд брал первые 5 «запланированных» в порядке из базы — без сортировки
+  // и вместе с прошедшими, поэтому весь список занимал один ученик.
+  const upcomingLessons = useMemo(() => {
+    const d = new Date();
+    const todayLocal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    return vLessons
+      .filter(l => l.status === "scheduled" && (l.date || "") >= todayLocal)
+      .sort((a, b) => `${a.date} ${a.time||""}`.localeCompare(`${b.date} ${b.time||""}`));
+  }, [vLessons]);
+
   const vTutors = useMemo(() =>
     isTutor && myTutorId ? tutors.filter(t => t.id === myTutorId) : tutors,
     [tutors, isTutor, myTutorId]);
@@ -2912,7 +2923,7 @@ ${contextSummary}`;
               {[
                 { label:"Активных учеников", value:vStudents.filter(s=>s.status==="active").length, icon:Users, color:"#1da0d4", goTo:"students" },
                 { label:"Преподавателей",    value:vTutors.filter(t=>t.status==="active").length,   icon:GraduationCap, color:"#5cb85c", goTo:"tutors" },
-                { label:"Занятий впереди",   value:vLessons.filter(l=>l.status==="scheduled").length,icon:Calendar,color:"#f5a623", goTo:"schedule" },
+                { label:"Занятий впереди",   value:upcomingLessons.length,icon:Calendar,color:"#f5a623", goTo:"schedule" },
                 { label:`Выручка в ${new Date().toLocaleDateString("ru-RU",{month:"long"})}`, value:`${(vPayments.filter(p=>p.date.slice(0,7)===new Date().toISOString().slice(0,7)).reduce((s,p)=>s+p.amount,0)/1000).toFixed(1)}к`, icon:Wallet, color:"#d6539a", goTo:"payments" },
               ].map((s,i)=>(
                 <div key={i} className="card" onClick={()=>goView(s.goTo)} style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:16, padding:20, cursor:"pointer" }}>
@@ -2934,7 +2945,8 @@ ${contextSummary}`;
                   <h3 style={{ margin:0, fontSize:15, fontWeight:600 }}>Ближайшие занятия</h3>
                   <button className="bg" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>goView("schedule")}>Все</button>
                 </div>
-                {vLessons.filter(l=>l.status==="scheduled").slice(0,5).map(l=>(
+                {upcomingLessons.length===0 && <div style={{ color:"#7a8a9c", fontSize:13, padding:"10px 0" }}>Запланированных занятий нет</div>}
+                {upcomingLessons.slice(0,5).map(l=>(
                   <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid #f2f6fa" }}>
                     <div style={{ width:38, height:38, borderRadius:10, background:"rgba(99,102,241,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>📖</div>
                     <div style={{ flex:1, minWidth:0 }}>
