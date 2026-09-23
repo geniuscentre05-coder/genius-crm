@@ -3094,6 +3094,10 @@ ${contextSummary}`;
         {view==="tutors" && selTutor && (()=>{
           const t = tutors.find(x=>x.id===selTutor.id)||selTutor;
           const myL=tLessons(t.id), myC=tCompleted(t.id), myBillable=tBillable(t.id), mySt=tStudents(t.id), myPay=vSalaries.filter(p=>p.tutorId===t.id);
+          // Запросы родителей, назначенные этому педагогу: новые сверху.
+          const myReq = requests
+            .filter(r => r.assignedTutorId === t.id)
+            .sort((a,b) => String(b.date||"").localeCompare(String(a.date||"")));
           const earned=tEarned(t.id), paid=tPaid(t.id), debt=earned-paid;
           return (
             <div>
@@ -3149,7 +3153,8 @@ ${contextSummary}`;
               </div>
               {/* tabs */}
               <div style={{ display:"flex", gap:4, marginBottom:20, background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:12, padding:6, width:"fit-content" }}>
-                {[["overview","📊 Обзор"],["students","👥 Ученики"],["lessons","📚 Занятия"],["salary","💼 Зарплата"]].map(([k,l])=>(
+                {[["overview","📊 Обзор"],["students","👥 Ученики"],["lessons","📚 Занятия"],["salary","💼 Зарплата"],
+                  ["requests",`📨 Запросы${myReq.length?` (${myReq.length})`:""}`]].map(([k,l])=>(
                   <button key={k} className="stab" onClick={()=>setTTab(k)}
                     style={{ background:tTab===k?"rgba(99,102,241,0.25)":"transparent", color:tTab===k?"#1da0d4":"#55677a" }}>{l}</button>
                 ))}
@@ -3354,6 +3359,39 @@ ${contextSummary}`;
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* TAB requests — обращения родителей, назначенные этому педагогу */}
+              {tTab==="requests" && (
+                <div style={{ background:"#ffffff", border:"1px solid #dbe6f0", boxShadow:"0 1px 3px rgba(18,40,61,.05)", borderRadius:14, padding:20 }}>
+                  <h4 style={{ margin:"0 0 14px", fontSize:14, color:"#6d7f92", fontWeight:600 }}>Запросы родителей, назначенные педагогу</h4>
+                  {myReq.length===0 && (
+                    <div style={{ color:"#7a8a9c", fontSize:13 }}>
+                      Запросов нет. Назначить педагога можно в разделе «Запросы родит.» — в столбце «Педагог».
+                    </div>
+                  )}
+                  {myReq.map(r=>(
+                    <div key={r.id} style={{ border:"1px solid #e7eef5", borderRadius:12, padding:"12px 14px", marginBottom:10 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:14, fontWeight:700, color:"#12283d" }}>{r.studentName || r.parentName}</div>
+                          <div style={{ fontSize:12, color:"#7a8a9c" }}>
+                            {[r.parentName, r.phone, getReqCourses(r).join(", ")].filter(Boolean).join(" · ")}
+                          </div>
+                        </div>
+                        <Tag c={reqCfg[r.status]?.color} bg={reqCfg[r.status]?.bg}>{reqCfg[r.status]?.label || r.status}</Tag>
+                        <span style={{ fontSize:12, color:"#7a8a9c" }}>{r.date}</span>
+                      </div>
+                      {r.comment && <div style={{ background:"#f2f6fa", borderRadius:8, padding:"8px 10px", fontSize:12, color:"#22344a", lineHeight:1.5 }}>{r.comment}</div>}
+                      {canSee("requests") && (
+                        <button className="bg" style={{ marginTop:8, fontSize:11, padding:"5px 10px" }}
+                          onClick={()=>{ setSelTutor(null); setView("requests"); setReqSearch(r.parentName||""); }}>
+                          Открыть в запросах
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
