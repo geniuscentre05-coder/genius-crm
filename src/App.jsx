@@ -459,7 +459,7 @@ function BirthDatePicker({ value, onChange }) {
     </div>
   );
 }
-function AttachmentsBlock({ title = "Документы", files = [], onUpload, onDelete, uploading }) {
+function AttachmentsBlock({ title = "Документы", files = [], onUpload, onDelete, onOpen, uploading }) {
   const inputRef = useRef(null);
   return (
     <div style={{ background:"#f2f6fa", borderRadius:12, padding:16, marginTop:16, boxShadow:"inset 0 1px 2px rgba(18,40,61,0.04)" }}>
@@ -477,7 +477,10 @@ function AttachmentsBlock({ title = "Документы", files = [], onUpload, 
           {files.map((f,i)=>(
             <div key={i} style={{ display:"flex", alignItems:"center", gap:8, background:"#ffffff", border:"1px solid #dbe6f0", borderRadius:8, padding:"7px 10px", boxShadow:"0 1px 2px rgba(18,40,61,0.05)", transition:"box-shadow .15s" }}>
               <FileText size={15} color="#1da0d4" style={{ flexShrink:0 }} />
-              <a href={f.url} target="_blank" rel="noopener noreferrer" style={{ flex:1, fontSize:12, color:"#1da0d4", textDecoration:"none", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</a>
+              {/* Ссылка временная и создаётся по клику: хранилище закрыто,
+                  постоянных общедоступных адресов у файлов больше нет. */}
+              <button onClick={()=>onOpen(f)} title="Открыть файл"
+                style={{ flex:1, textAlign:"left", background:"none", border:"none", padding:0, cursor:"pointer", fontFamily:"inherit", fontSize:12, color:"#1da0d4", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</button>
               <span style={{ fontSize:10, color:"#7a8a9c" }}>{f.uploadedAt}</span>
               <button onClick={()=>onDelete(f)} style={{ background:"rgba(226,87,76,0.08)", border:"1px solid rgba(226,87,76,0.2)", color:"#e2574c", padding:"3px 8px", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center" }}><Trash2 size={13} /></button>
             </div>
@@ -1763,8 +1766,9 @@ ${contextSummary}`;
       const path = `${kind}/${entityId}/${Date.now()}_${safeName}`;
       const { error: upErr } = await supabase.storage.from("attachments").upload(path, file);
       if (upErr) { notify("Не удалось загрузить файл: " + upErr.message, "error"); setUploadingFile(false); return; }
-      const { data: urlData } = supabase.storage.from("attachments").getPublicUrl(path);
-      const fileEntry = { name: file.name, url: urlData.publicUrl, path, uploadedAt: new Date().toISOString().split("T")[0] };
+      // Постоянную общедоступную ссылку не сохраняем: хранилище закрыто, файл
+      // открывается временной ссылкой, которую создаёт openAttachment.
+      const fileEntry = { name: file.name, path, uploadedAt: new Date().toISOString().split("T")[0] };
       if (kind === "students") {
         const newFiles = [...(students.find(s=>s.id===entityId)?.files||[]), fileEntry];
         setStudents(prev => prev.map(s => s.id===entityId ? { ...s, files: newFiles } : s));
@@ -1782,6 +1786,26 @@ ${contextSummary}`;
     }
     setUploadingFile(false);
   }
+  // Открытие файла: подписанная ссылка живёт 5 минут и действует только у того,
+  // кто вошёл. Вкладку открываем сразу по клику, иначе браузер сочтёт её
+  // всплывающей и заблокирует, пока мы ждём ответа хранилища.
+  async function openAttachment(f) {
+    if (!f?.path) {
+      if (f?.url) window.open(f.url, "_blank", "noopener");
+      else notify("У файла не сохранён путь — загрузите его заново", "error");
+      return;
+    }
+    const w = window.open("", "_blank");
+    const { data, error } = await supabase.storage.from("attachments").createSignedUrl(f.path, 300);
+    if (error || !data?.signedUrl) {
+      if (w) w.close();
+      notify("Не удалось открыть файл: " + (error?.message || "нет доступа"), "error");
+      return;
+    }
+    if (w) w.location.href = data.signedUrl;
+    else window.open(data.signedUrl, "_blank", "noopener");
+  }
+
   async function deleteAttachment(kind, entityId, fileEntry) {
     if (!window.confirm(`Удалить файл «${fileEntry.name}»?`)) return;
     try {
@@ -3149,6 +3173,7 @@ ${contextSummary}`;
                   uploading={uploadingFile}
                   onUpload={(file)=>uploadAttachment("tutors", t.id, file)}
                   onDelete={(f)=>deleteAttachment("tutors", t.id, f)}
+                  onOpen={openAttachment}
                 />
               </div>
               {/* tabs */}
@@ -3783,6 +3808,7 @@ ${contextSummary}`;
                     uploading={uploadingFile}
                     onUpload={(file)=>uploadAttachment("students", selStudentLive.id, file)}
                     onDelete={(f)=>deleteAttachment("students", selStudentLive.id, f)}
+                    onOpen={openAttachment}
                   />
                   <h4 style={{ color:"#6d7f92", fontSize:13, marginBottom:12, fontWeight:600 }}>История занятий</h4>
                   {vLessons.filter(l=>l.studentId===selStudentLive.id).map(l=>(
@@ -5570,6 +5596,7 @@ ${contextSummary}`;
                     uploading={uploadingFile}
                     onUpload={(file)=>uploadAttachment("candidates", c.id, file)}
                     onDelete={(f)=>deleteAttachment("candidates", c.id, f)}
+                    onOpen={openAttachment}
                   />
                 </div>
               </div>
